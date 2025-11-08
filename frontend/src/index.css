@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
+@font-face {
+  font-family: 'Yekan';
+  src: url('/fonts/Yekan.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background-color: white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure direction is RTL throughout */
+html[dir='rtl'] {
+  direction: rtl;
+}
