@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>hesabpak frontend</title>
+  </head>
+  <body>
+    <h1>hesabpak frontend</h1>
+    <p id="msg">Loading message from backend...</p>
+    <script>
+      async function load() {
+        try {
+          const res = await fetch('/api/hello-proxy');
+          const json = await res.json();
+          document.getElementById('msg').textContent = JSON.stringify(json);
+        } catch (e) {
+          document.getElementById('msg').textContent = 'Error: ' + e;
+        }
+      }
+      load();
+    </script>
+  </body>
+</html>
