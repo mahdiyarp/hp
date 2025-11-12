@@ -19,7 +19,7 @@ from .search import search_multi, suggest_live
 from .schemas import ProductCreate, ProductOut, PersonCreate, PersonOut
 from . import external_search
 from .schemas import ExternalSearchRequest, ExternalProduct, SaveExternalProductRequest
-from .schemas import AssistantRequest, AssistantResponse, AssistantToggle
+from .schemas import AssistantRequest, AssistantResponse, AssistantToggle, OTPVerifyRequest, OTPSetupResponse, OTPDisableRequest
 from .exports import export_invoice_pdf, export_invoice_csv, export_invoice_excel, EXPORT_DIR
 from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
@@ -69,6 +69,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             log_request(request, response, username=uname)
         except Exception:
             pass
+        return response
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -185,9 +186,12 @@ def time_sync(payload: schemas.TimeSyncCreate, session: Session = Depends(db.get
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/users", response_model=schemas.User)
+@app.post("/api/users", response_model=schemas.UserOut)
 def create_user(user: schemas.UserCreate, session: Session = Depends(db.get_db)):
-    return crud.create_user(session, user)
+    try:
+        return crud.create_user(session, user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/api/users")
@@ -197,22 +201,32 @@ def list_users(session: Session = Depends(db.get_db)):
 
 @app.post('/api/auth/register', response_model=schemas.UserOut)
 def register(user_in: schemas.UserCreate, session: Session = Depends(db.get_db)):
-    existing = crud.get_user_by_username(session, user_in.username)
-    if existing:
-        raise HTTPException(status_code=400, detail='Username already registered')
-    user = crud.create_user(session, user_in)
-    return user
+    try:
+        user = crud.create_user(session, user_in)
+        return user
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post('/api/auth/login', response_model=schemas.Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(db.get_db)):
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(db.get_db)):
     user = crud.authenticate_user(session, form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=400, detail='Incorrect username or password')
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail='User disabled')
+    form = await request.form()
+    otp_code = form.get('otp')
+    if user.otp_enabled:
+        otp_secret = security.decrypt_value(user.otp_secret) if user.otp_secret else None
+        if not otp_code:
+            raise HTTPException(status_code=428, detail='OTP required')
+        if not otp_secret or not security.verify_otp(otp_secret, otp_code):
+            raise HTTPException(status_code=400, detail='Invalid OTP')
     access_token = security.create_access_token(user.username, expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
     refresh_token = security.create_refresh_token(user.username)
     crud.set_refresh_token(session, user, refresh_token)
-    return schemas.Token(access_token=access_token, refresh_token=refresh_token)
+    return schemas.Token(access_token=access_token, refresh_token=refresh_token, otp_required=False)
 
 
 @app.post('/api/auth/refresh', response_model=schemas.Token)
@@ -232,13 +246,43 @@ def refresh_token(payload: dict, session: Session = Depends(db.get_db)):
     access_token = security.create_access_token(user.username)
     new_refresh = security.create_refresh_token(user.username)
     crud.set_refresh_token(session, user, new_refresh)
-    return schemas.Token(access_token=access_token, refresh_token=new_refresh)
+    return schemas.Token(access_token=access_token, refresh_token=new_refresh, otp_required=False)
 
 
 @app.post('/api/auth/logout')
 def logout(current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
     crud.revoke_refresh_token(session, current_user)
     return {'ok': True}
+
+
+@app.post('/api/auth/otp/setup', response_model=OTPSetupResponse)
+def otp_setup(current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    secret = security.generate_otp_secret()
+    crud.set_user_otp_secret(session, current_user, secret, enabled=False)
+    uri = security.generate_otp_uri(current_user.username, secret)
+    return OTPSetupResponse(secret=secret, uri=uri)
+
+
+@app.post('/api/auth/otp/verify')
+def otp_verify(payload: OTPVerifyRequest, current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    otp_secret = security.decrypt_value(current_user.otp_secret) if current_user.otp_secret else None
+    if not otp_secret:
+        raise HTTPException(status_code=400, detail='OTP secret not generated')
+    if not security.verify_otp(otp_secret, payload.code):
+        raise HTTPException(status_code=400, detail='Invalid OTP code')
+    crud.enable_user_otp(session, current_user)
+    return {'otp_enabled': True}
+
+
+@app.post('/api/auth/otp/disable')
+def otp_disable(payload: OTPDisableRequest, current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    if current_user.otp_enabled:
+        if payload.code:
+            otp_secret = security.decrypt_value(current_user.otp_secret) if current_user.otp_secret else None
+            if not otp_secret or not security.verify_otp(otp_secret, payload.code):
+                raise HTTPException(status_code=400, detail='Invalid OTP code')
+        crud.disable_user_otp(session, current_user)
+    return {'otp_enabled': False}
 
 
 # Example protected route
@@ -293,7 +337,8 @@ def list_invoices(q: Optional[str] = None, db: Session = Depends(db.get_db), cur
     # load items for each
     out = []
     for inv in invs:
-        items = db.SessionLocal().query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+        # use the current request DB session to load related items
+        items = db.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
         inv.items = items
         out.append(inv)
     return out
@@ -750,7 +795,7 @@ def api_search_live(q: Optional[str] = None, index: Optional[str] = 'products', 
 
 
 @app.post("/api/products", response_model=ProductOut)
-def api_create_product(p: ProductCreate, db: Session = Depends(get_db), current: models.User = Depends(get_current_user)):
+def api_create_product(p: ProductCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # basic RBAC: only Accountant or Admin can create products
     require_roles(["Admin", "Accountant"])(current)
     prod = crud.create_product(db, p)
@@ -758,7 +803,7 @@ def api_create_product(p: ProductCreate, db: Session = Depends(get_db), current:
 
 
 @app.get("/api/products")
-def api_get_products(q: Optional[str] = None, db: Session = Depends(get_db), current: models.User = Depends(get_current_user)):
+def api_get_products(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # viewers and above can list
     require_roles(["Admin", "Accountant", "Cashier", "Viewer"])(current)
     return crud.get_products(db, q=q)
@@ -863,7 +908,8 @@ def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', db: Sessi
 @app.get('/api/exports/shared/{token}')
 def download_shared_file(token: str):
     # public download of shared file if not expired
-    sf = crud.get_shared_file_by_token(db.DB.SessionLocal(), token)
+    # create a short-lived session to lookup the shared file
+    sf = crud.get_shared_file_by_token(DB.SessionLocal(), token)
     if not sf:
         raise HTTPException(status_code=404, detail='not found')
     from datetime import datetime
@@ -884,13 +930,57 @@ def print_invoice_html(invoice_id: int):
 
 
 @app.post("/api/persons", response_model=PersonOut)
-def api_create_person(p: PersonCreate, db: Session = Depends(get_db), current: models.User = Depends(get_current_user)):
+def api_create_person(p: PersonCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(["Admin", "Accountant"])(current)
     person = crud.create_person(db, p)
     return person
 
 
 @app.get("/api/persons")
-def api_get_persons(q: Optional[str] = None, db: Session = Depends(get_db), current: models.User = Depends(get_current_user)):
+def api_get_persons(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(["Admin", "Accountant", "Cashier", "Viewer"])(current)
     return crud.get_persons(db, q=q)
+
+
+@app.get('/api/financial/auto-context')
+def get_financial_auto_context(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Get smart financial context - auto-creates current financial year and provides date suggestions"""
+    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
+    try:
+        from .financial_automation import auto_determine_financial_context, get_smart_date_suggestions
+        
+        context = auto_determine_financial_context(db)
+        suggestions = get_smart_date_suggestions(db)
+        
+        return {
+            "context": context,
+            "date_suggestions": suggestions,
+            "blockchain_ready": True,  # هنگامی که در آینده با blockchain ادغام شود
+            "auto_managed": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/api/financial/smart-year')
+def create_smart_financial_year(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Auto-create financial year based on current Jalali calendar"""
+    require_roles(['Admin'])(current)
+    try:
+        from .financial_automation import get_or_create_current_financial_year
+        
+        fy = get_or_create_current_financial_year(db)
+        
+        return {
+            "financial_year": {
+                "id": fy.id,
+                "name": fy.name,
+                "start_date": fy.start_date.isoformat() if fy.start_date else None,
+                "end_date": fy.end_date.isoformat() if fy.end_date else None,
+                "is_closed": fy.is_closed
+            },
+            "auto_created": True,
+            "blockchain_compatible": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

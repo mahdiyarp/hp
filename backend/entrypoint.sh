@@ -21,7 +21,8 @@ do
 done
 
 echo "Running migrations"
-alembic upgrade head
+# Use 'heads' to apply all head revisions (handles multiple heads in repo history)
+alembic upgrade heads
 
 # optional demo seeding
 if [ "${DEMO_SEED:-}" = "true" ]; then

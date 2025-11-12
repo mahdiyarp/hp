@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.sql import func
 from .db import Base
 
@@ -14,6 +14,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     refresh_token_hash = Column(String(512), nullable=True)
     assistant_enabled = Column(Boolean, nullable=False, default=False)
+    otp_secret = Column(String(64), nullable=True)
+    otp_enabled = Column(Boolean, nullable=False, default=False)
 
 
 class TimeSync(Base):
@@ -40,10 +42,12 @@ class Product(Base):
     id = Column(String(128), primary_key=True, index=True)  # blockchain-based hash id
     name = Column(String(512), nullable=False)
     name_norm = Column(String(512), nullable=False, index=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
     unit = Column(String(64), nullable=True)
     group = Column(String(128), nullable=True)
     description = Column(Text, nullable=True)
     inventory = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class PriceHistory(Base):
@@ -60,9 +64,13 @@ class Person(Base):
     id = Column(String(128), primary_key=True, index=True)
     name = Column(String(512), nullable=False)
     name_norm = Column(String(512), nullable=False, index=True)
+    # Allow code to be nullable for tests and for systems that don't require a code.
+    # Tests create Person instances without `code` currently, so relax the constraint.
+    code = Column(String(64), nullable=True, unique=True, index=True)
     kind = Column(String(32), nullable=True)  # customer, vendor, etc.
     mobile = Column(String(32), nullable=True)
     description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class Invoice(Base):
@@ -109,6 +117,17 @@ class Payment(Base):
     server_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     status = Column(String(32), nullable=False, default='draft')
     note = Column(Text, nullable=True)
+
+
+class Account(Base):
+    __tablename__ = 'accounts'
+    id = Column(String(128), primary_key=True, index=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=False)
+    name_norm = Column(String(255), nullable=False, index=True)
+    kind = Column(String(32), nullable=False)  # cash, bank, pos
+    details = Column(JSON, nullable=True)  # JSON blob for extra info
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class LedgerEntry(Base):
@@ -168,7 +187,9 @@ class Backup(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     size_bytes = Column(Integer, nullable=True)
     note = Column(Text, nullable=True)
-    metadata = Column(Text, nullable=True)  # JSON blob with summary (counts, tables, etc.)
+    # `metadata` is a reserved attribute on declarative base; use `metadata_json` as the
+    # mapped attribute name but keep the DB column name as `metadata` for backward compatibility.
+    metadata_json = Column("metadata", Text, nullable=True)  # JSON blob with summary (counts, tables, etc.)
 
 
 class FinancialYear(Base):

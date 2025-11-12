@@ -19,19 +19,40 @@ export function clearTokens() {
   localStorage.removeItem(REFRESH_KEY)
 }
 
-export async function login(username: string, password: string) {
+type LoginResult =
+  | { otpRequired: true }
+  | {
+      otpRequired: false
+      access_token: string
+      refresh_token: string
+    }
+
+export async function login(username: string, password: string, otp?: string): Promise<LoginResult> {
   const params = new URLSearchParams()
   params.append('username', username)
   params.append('password', password)
+  if (otp) params.append('otp', otp)
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
   })
-  if (!res.ok) throw new Error('Login failed')
+  if (res.status === 428) {
+    return { otpRequired: true }
+  }
+  if (!res.ok) {
+    let message = 'Login failed'
+    try {
+      const err = await res.json()
+      if (err?.detail) message = err.detail
+    } catch (e) {
+      // ignore parse errors
+    }
+    throw new Error(message)
+  }
   const data = await res.json()
   setTokens(data.access_token, data.refresh_token)
-  return data
+  return { otpRequired: !!data.otp_required, access_token: data.access_token, refresh_token: data.refresh_token }
 }
 
 export async function refreshTokens() {
@@ -68,4 +89,41 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
   return res
 }
 
-export default { login, refreshTokens, fetchWithAuth, setTokens, getAccessToken, getRefreshToken, clearTokens }
+export async function requestOtpSetup() {
+  const res = await fetchWithAuth('/api/auth/otp/setup', { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to init OTP setup')
+  return res.json()
+}
+
+export async function verifyOtp(code: string) {
+  const res = await fetchWithAuth('/api/auth/otp/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  if (!res.ok) throw new Error('Failed to verify OTP')
+  return res.json()
+}
+
+export async function disableOtp(code?: string) {
+  const res = await fetchWithAuth('/api/auth/otp/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  if (!res.ok) throw new Error('Failed to disable OTP')
+  return res.json()
+}
+
+export default {
+  login,
+  refreshTokens,
+  fetchWithAuth,
+  setTokens,
+  getAccessToken,
+  getRefreshToken,
+  clearTokens,
+  requestOtpSetup,
+  verifyOtp,
+  disableOtp,
+}

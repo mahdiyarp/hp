@@ -3,9 +3,9 @@ WORKDIR /app
 
 # Install system deps including tesseract and poppler for PDF->image
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends \
-	   build-essential libpq-dev tesseract-ocr libtesseract-dev poppler-utils pkg-config \
-	&& rm -rf /var/lib/apt/lists/*
+	 && apt-get install -y --no-install-recommends \
+		 build-essential libpq-dev tesseract-ocr libtesseract-dev poppler-utils pkg-config libcairo2-dev libffi-dev \
+	 && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

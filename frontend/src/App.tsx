@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { formatNumberFa, isoToJalali } from './utils/num'
-import JalaliDatePicker from './components/JalaliDatePicker'
 import { useAuth } from './context/AuthContext'
 import LoginForm from './components/LoginForm'
+import { retroHeading } from './components/retroTheme'
+import AppShell from './components/layout/AppShell'
+import { modules } from './modules'
+import { getAccessToken } from './services/auth'
 
-type SyncRecord = {
+export type SyncRecord = {
   serverUtc: string
   serverOffsetSeconds: number
   clientUtc: string
@@ -12,6 +14,8 @@ type SyncRecord = {
 
 export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
+  const [smartDateInitialized, setSmartDateInitialized] = useState(false)
+  const { user, logout } = useAuth()
 
   async function syncTime() {
     const before = new Date()
@@ -39,6 +43,34 @@ export default function App() {
     }
   }
 
+  async function initializeSmartDate() {
+    try {
+      const token = getAccessToken()
+      if (!token) {
+        setSmartDateInitialized(true)
+        return
+      }
+
+      const resp = await fetch('/api/financial/auto-context', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      if (resp.ok) {
+        const data = await resp.json()
+        const today = data.context.current_jalali.formatted
+        const todayIso = new Date().toISOString().split('T')[0]
+        
+        localStorage.setItem('hesabpak_selected_date', todayIso)
+        localStorage.setItem('hesabpak_selected_jalali', today)
+        console.log('Smart date auto-initialized:', { today, todayIso })
+      }
+    } catch (error) {
+      console.error('Failed to initialize smart date:', error)
+    } finally {
+      setSmartDateInitialized(true)
+    }
+  }
+
   useEffect(() => {
     const stored = localStorage.getItem('hesabpak_time_sync')
     if (stored) setSync(JSON.parse(stored))
@@ -46,44 +78,70 @@ export default function App() {
     syncTime()
   }, [])
 
-  const { user } = useAuth()
+  useEffect(() => {
+    if (user && sync && !smartDateInitialized) {
+      initializeSmartDate()
+    }
+  }, [user, sync, smartDateInitialized])
+
+  // Fallback timeout - if smart date init takes too long, continue anyway
+  useEffect(() => {
+    if (user) {
+      const timeout = setTimeout(() => {
+        if (!smartDateInitialized) {
+          console.log('Smart date init timeout - continuing anyway')
+          setSmartDateInitialized(true)
+        }
+      }, 3000) // 3 second timeout
+      
+      return () => clearTimeout(timeout)
+    }
+  }, [user, smartDateInitialized])
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-white text-gray-900 flex items-center justify-center p-6">
-        <LoginForm />
+      <div className="min-h-screen bg-gradient-to-br from-[#0f1a21] via-[#182631] to-[#243746] text-[#f5f1e6] flex items-center justify-center p-6">
+        <div className="max-w-5xl w-full flex flex-col-reverse md:flex-row items-center justify-between gap-10">
+          <div className="md:w-1/2 space-y-4 text-right">
+            <p className={`${retroHeading} text-[#d7caa4]`}>HESABPAK CLASSIC CONSOLE</p>
+            <h1 className="text-3xl md:text-4xl font-semibold leading-tight">به سیستم جامع حساب‌پاک خوش آمدید</h1>
+            <p className="text-sm text-[#c3bca5] leading-6">
+              برای دسترسی به داشبورد مرکزی و ابزارهای حسابداری، ابتدا وارد شوید. این محیط بر اساس تم
+              کلاسیک طراحی شده تا با سیستم‌های آرشیوی و کاربران باسابقه هماهنگ بماند.
+            </p>
+            <div className="flex flex-wrap gap-3 text-xs text-[#d7caa4]">
+              <span className="border border-[#d7caa4] px-3 py-1 uppercase tracking-[0.4em]">SYNCED TIME</span>
+              <span className="border border-[#d7caa4] px-3 py-1 uppercase tracking-[0.4em]">RETRO UI MODE</span>
+              <span className="border border-[#d7caa4] px-3 py-1 uppercase tracking-[0.4em]">SECURE ACCESS</span>
+            </div>
+          </div>
+          <div className="md:w-1/2 w-full">
+            <LoginForm />
+          </div>
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-white text-gray-900 flex items-center justify-center p-6">
-      <div className="max-w-xl w-full">
-        <h1 className="text-3xl font-bold mb-4">حساب‌پک — فرانت‌اند</h1>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded mb-4" onClick={syncTime}>همگام‌سازی زمان</button>
-        {sync ? (
-          </div>
+  // Show dashboard when user is logged in and smart date is initialized OR time has passed
+  if (smartDateInitialized) {
+    return (
+      <AppShell
+        modules={modules}
+        sync={sync}
+        user={user ? { username: user.username, role: user.role } : null}
+        onLogout={logout}
+      />
+    )
+  }
 
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold mb-2">انتخابگر تاریخ جلالی</h2>
-            <JalaliDatePicker onChange={(iso) => {
-              if (iso) {
-                localStorage.setItem('hesabpak_selected_date', iso)
-              }
-            }} />
-            <div className="mt-3 text-sm">
-              ذخیره‌شده (ISO UTC): {localStorage.getItem('hesabpak_selected_date') ?? '-'}
-            </div>
-          </div>
-            <p className="mb-2">زمان سرور (ISO UTC): {sync.serverUtc}</p>
-            <p className="mb-2">نمایش جلالی سرور: {isoToJalali(sync.serverUtc)}</p>
-            <p className="mb-2">زمان کلاینت (ISO UTC): {sync.clientUtc}</p>
-            <p className="mb-2">نمایش جلالی کلاینت: {isoToJalali(sync.clientUtc)}</p>
-            <p className="text-sm text-gray-600">اختلاف ثانیه سرور از UTC: {sync.serverOffsetSeconds}</p>
-          </div>
-        ) : (
-          <p>در حال بارگذاری همگام‌سازی زمان...</p>
-        )}
+  // Show loading while initializing
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+        <p>در حال راه‌اندازی سیستم هوشمند...</p>
+        <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
       </div>
     </div>
   )

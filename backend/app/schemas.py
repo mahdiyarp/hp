@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any
 from typing import Literal
 
 
@@ -19,6 +19,7 @@ class UserOut(BaseModel):
     full_name: Optional[str]
     role: str
     is_active: bool
+    otp_enabled: bool
 
     class Config:
         orm_mode = True
@@ -27,12 +28,26 @@ class UserOut(BaseModel):
 class Token(BaseModel):
     access_token: str
     refresh_token: str
+    otp_required: bool = False
     token_type: str = 'bearer'
 
 
 class TokenPayload(BaseModel):
     sub: str
     exp: int
+
+
+class OTPSetupResponse(BaseModel):
+    secret: str
+    uri: str
+
+
+class OTPVerifyRequest(BaseModel):
+    code: str
+
+
+class OTPDisableRequest(BaseModel):
+    code: Optional[str] = None
 
 
 class TimeSyncBase(BaseModel):
@@ -57,6 +72,7 @@ class ProductBase(BaseModel):
     unit: Optional[str] = None
     group: Optional[str] = None
     description: Optional[str] = None
+    code: Optional[str] = None
 
 
 class ProductCreate(ProductBase):
@@ -65,6 +81,8 @@ class ProductCreate(ProductBase):
 
 class ProductOut(ProductBase):
     id: str
+    code: str
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -86,6 +104,7 @@ class PersonBase(BaseModel):
     kind: Optional[str] = None
     mobile: Optional[str] = None
     description: Optional[str] = None
+    code: Optional[str] = None
 
 
 class PersonCreate(PersonBase):
@@ -94,6 +113,28 @@ class PersonCreate(PersonBase):
 
 class PersonOut(PersonBase):
     id: str
+    code: str
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class AccountBase(BaseModel):
+    name: str
+    kind: Literal['cash', 'bank', 'pos']
+    details: Optional[Any] = None
+    code: Optional[str] = None
+
+
+class AccountCreate(AccountBase):
+    pass
+
+
+class AccountOut(AccountBase):
+    id: str
+    code: str
+    created_at: datetime
 
     class Config:
         orm_mode = True

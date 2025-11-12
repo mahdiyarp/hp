@@ -11,16 +11,28 @@ from .normalizer import normalize_for_search
 import hashlib
 import json
 from . import search as search_client
+from .security import encrypt_value
+
+
+def _normalize_username(raw: str) -> str:
+    return normalize_for_search(raw or '')
 
 
 def create_user(db: Session, user: schemas.UserCreate):
     from .security import get_password_hash
+    username_norm = _normalize_username(user.username)
+    if not username_norm:
+        raise ValueError('Username required')
+    existing = get_user_by_username(db, user.username)
+    if existing:
+        raise ValueError('Username already exists')
     db_user = models.User(
-        username=user.username,
+        username=username_norm,
         email=user.email,
         full_name=user.full_name,
         hashed_password=get_password_hash(user.password),
         role=user.role or 'Viewer',
+        is_active=True,
     )
     db.add(db_user)
     db.commit()
@@ -160,7 +172,8 @@ def get_time_syncs(db: Session, limit: int = 100):
 
 
 def get_user_by_username(db: Session, username: str):
-    return db.query(models.User).filter(models.User.username == username).first()
+    uname = _normalize_username(username)
+    return db.query(models.User).filter(func.lower(models.User.username) == uname).first()
 
 
 def get_user(db: Session, user_id: int):
@@ -197,11 +210,45 @@ def set_refresh_token(db: Session, user: models.User, refresh_token: str):
     return user
 
 
+def clear_refresh_token(db: Session, user: models.User):
+    user.refresh_token_hash = None
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def verify_refresh_token(db: Session, user: models.User, refresh_token: str) -> bool:
     from .security import verify_password
     if not user.refresh_token_hash:
         return False
     return verify_password(refresh_token, user.refresh_token_hash)
+
+
+def set_user_otp_secret(db: Session, user: models.User, secret: Optional[str], enabled: bool = False):
+    user.otp_secret = encrypt_value(secret) if secret else None
+    user.otp_enabled = bool(enabled and secret)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def enable_user_otp(db: Session, user: models.User):
+    user.otp_enabled = True
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def disable_user_otp(db: Session, user: models.User):
+    user.otp_secret = None
+    user.otp_enabled = False
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def revoke_refresh_token(db: Session, user: models.User):
@@ -576,7 +623,8 @@ def create_backup(db: Session, created_by: Optional[int] = None, kind: str = 'ma
         with open(fpath, 'w', encoding='utf-8') as fh:
             json.dump(payload, fh, ensure_ascii=False, default=str)
         size = os.path.getsize(fpath)
-        bk = models.Backup(filename=fname, file_path=fpath, kind=kind, created_by=created_by, size_bytes=size, note=note, metadata=json.dumps(meta, ensure_ascii=False))
+        # store meta counts in the `metadata` DB column; the ORM attribute is `metadata_json`
+        bk = models.Backup(filename=fname, file_path=fpath, kind=kind, created_by=created_by, size_bytes=size, note=note, metadata_json=json.dumps(meta, ensure_ascii=False))
         db.add(bk)
         db.commit()
         db.refresh(bk)

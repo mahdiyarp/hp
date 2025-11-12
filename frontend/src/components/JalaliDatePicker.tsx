@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { parseJalaliInput, PERSIAN_MONTHS, currentJalaliYear } from '../utils/date'
+import {
+  retroBadge,
+  retroHeading,
+  retroInput,
+  retroLabel,
+  retroPanelPadded,
+  retroButton,
+  retroMuted,
+} from './retroTheme'
 
 type Props = {
   valueIso?: string | null
@@ -62,38 +71,78 @@ export default function JalaliDatePicker({ valueIso = null, onChange }: Props) {
   }, [y, m, d])
 
   return (
-    <div className="p-4 border rounded">
-      <form onSubmit={onManualSubmit} className="mb-3">
-        <label className="block text-sm mb-1">ورودی دستی تاریخ (مثال: 10/8 یا 1404/10/08)</label>
-        <div className="flex gap-2">
-          <input
-            value={manual}
-            onChange={e => setManual(e.target.value)}
-            className="flex-1 border px-2 py-1 rounded"
-            placeholder="مثال: 10/8 یا 1404/10/08"
-          />
-          <button className="px-3 bg-green-600 text-white rounded" type="submit">اعمال</button>
+    <div className={`${retroPanelPadded} space-y-5`} dir="rtl">
+      <header className="space-y-2">
+        <p className={retroHeading}>انتخابگر تاریخ جلالی</p>
+        <p className={`text-xs ${retroMuted}`}>
+          تاریخ دلخواه خود را به‌صورت دستی وارد کنید یا از گزینه‌های سریع سال، ماه و روز استفاده نمایید.
+          خروجی به‌صورت استاندارد ISO برای ثبت در سیستم آماده می‌شود.
+        </p>
+      </header>
+
+      <form onSubmit={onManualSubmit} className="space-y-3">
+        <div>
+          <label className={retroLabel}>ورودی دستی تاریخ</label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              value={manual}
+              onChange={e => setManual(e.target.value)}
+              className={`${retroInput} flex-1`}
+              placeholder="مثال: 10/08 یا 1404/10/08"
+            />
+            <button className={`${retroButton} sm:w-32`} type="submit">
+              اعمال
+            </button>
+          </div>
+          <p className={`mt-2 text-[11px] ${retroMuted}`}>
+            ماه و روز تک‌رقمی را نیز می‌توانید با جداکننده «/» وارد کنید؛ سیستم به‌طور خودکار کامل می‌کند.
+          </p>
         </div>
       </form>
 
-      <div className="mb-3">
-        <label className="block text-sm mb-1">انتخاب سریع (سال/ماه/روز)</label>
-        <div className="flex gap-2">
-          <select value={y} onChange={e => setY(Number(e.target.value))} className="border px-2 py-1 rounded">
-            {years.map(yr => <option key={yr} value={yr}>{yr}</option>)}
-          </select>
-          <select value={m} onChange={e => setM(Number(e.target.value))} className="border px-2 py-1 rounded">
-            {PERSIAN_MONTHS.map((mn, i) => (
-              <option key={i} value={i+1}>{`${String(i+1).padStart(2,'0')} - ${mn}`}</option>
-            ))}
-          </select>
-          <input value={d} onChange={e => setD(Number(e.target.value))} type="number" min={1} max={31} className="w-20 border px-2 py-1 rounded" />
+      <div className="space-y-3">
+        <label className={retroLabel}>انتخاب سریع (سال / ماه / روز)</label>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="space-y-2">
+            <span className={`${retroHeading} text-[11px]`}>سال</span>
+            <select value={y} onChange={e => setY(Number(e.target.value))} className={`${retroInput} w-full`}>
+              {years.map(yr => (
+                <option key={yr} value={yr}>
+                  {yr}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <span className={`${retroHeading} text-[11px]`}>ماه</span>
+            <select value={m} onChange={e => setM(Number(e.target.value))} className={`${retroInput} w-full`}>
+              {PERSIAN_MONTHS.map((mn, i) => (
+                <option key={mn} value={i + 1}>
+                  {`${String(i + 1).padStart(2, '0')} - ${mn}`}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <span className={`${retroHeading} text-[11px]`}>روز</span>
+            <input
+              value={d}
+              onChange={e => setD(Number(e.target.value))}
+              type="number"
+              min={1}
+              max={31}
+              className={`${retroInput} w-full`}
+            />
+          </div>
         </div>
       </div>
 
-      <div>
-        <div className="text-sm text-gray-600">انتخاب شده (جلالی): {selectedJalali ?? '-'}</div>
-        <div className="text-sm text-gray-600">خروجی ISO-UTC: {selectedIso ?? '-'}</div>
+      <div className="border-t border-dashed border-[#c5bca5] pt-4 space-y-3">
+        <p className={retroHeading}>خروجی انتخاب شده</p>
+        <div className="flex flex-wrap gap-2">
+          <span className={retroBadge}>تاریخ جلالی: {selectedJalali ?? '-'}</span>
+          <span className={retroBadge}>ISO UTC: {selectedIso ?? '-'}</span>
+        </div>
       </div>
     </div>
   )
