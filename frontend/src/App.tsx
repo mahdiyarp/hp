@@ -5,10 +5,16 @@ import { retroHeading } from './components/retroTheme'
 import AppShell from './components/layout/AppShell'
 import { modules } from './modules'
 import { getAccessToken } from './services/auth'
+import { parseJalaliInput } from './utils/date'
 
 export type SyncRecord = {
   serverUtc: string
   serverOffsetSeconds: number
+  serverOffset: string | null
+  serverLocal: string | null
+  jalali: string | null
+  epochMs: number | null
+  latencyMs: number | null
   clientUtc: string
 }
 
@@ -24,9 +30,15 @@ export default function App() {
     const after = new Date()
     // choose client time as arrival time (after)
     const clientUtc = after.toISOString()
+    const latencyMs = after.getTime() - before.getTime()
     const record = {
       serverUtc: server.utc,
-      serverOffsetSeconds: server.server_offset_seconds,
+      serverOffsetSeconds: Number(server.server_offset_seconds ?? 0),
+      serverOffset: server.server_offset ?? null,
+      serverLocal: server.server_local ?? null,
+      jalali: server.jalali ?? null,
+      epochMs: typeof server.epoch_ms === 'number' ? server.epoch_ms : null,
+      latencyMs: Number.isFinite(latencyMs) ? latencyMs : null,
       clientUtc,
     }
     localStorage.setItem('hesabpak_time_sync', JSON.stringify(record))
@@ -57,11 +69,18 @@ export default function App() {
       
       if (resp.ok) {
         const data = await resp.json()
-        const today = data.context.current_jalali.formatted
-        const todayIso = new Date().toISOString().split('T')[0]
-        
+        const today = data?.context?.current_jalali?.formatted
+        let todayIso = new Date().toISOString().split('T')[0]
+        if (typeof today === 'string') {
+          const parsed = parseJalaliInput(today)
+          if (parsed?.iso) {
+            todayIso = parsed.iso.slice(0, 10)
+          }
+        }
         localStorage.setItem('hesabpak_selected_date', todayIso)
-        localStorage.setItem('hesabpak_selected_jalali', today)
+        if (typeof today === 'string') {
+          localStorage.setItem('hesabpak_selected_jalali', today)
+        }
         console.log('Smart date auto-initialized:', { today, todayIso })
       }
     } catch (error) {
@@ -73,7 +92,23 @@ export default function App() {
 
   useEffect(() => {
     const stored = localStorage.getItem('hesabpak_time_sync')
-    if (stored) setSync(JSON.parse(stored))
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        setSync({
+          serverUtc: parsed.serverUtc ?? parsed.server_utc ?? new Date().toISOString(),
+          serverOffsetSeconds: Number(parsed.serverOffsetSeconds ?? parsed.server_offset_seconds ?? 0),
+          serverOffset: parsed.serverOffset ?? parsed.server_offset ?? null,
+          serverLocal: parsed.serverLocal ?? parsed.server_local ?? null,
+          jalali: parsed.jalali ?? null,
+          epochMs: typeof parsed.epochMs === 'number' ? parsed.epochMs : parsed.epoch_ms ?? null,
+          latencyMs: typeof parsed.latencyMs === 'number' ? parsed.latencyMs : null,
+          clientUtc: parsed.clientUtc ?? parsed.client_utc ?? new Date().toISOString(),
+        })
+      } catch (e) {
+        console.warn('Failed to parse stored sync record', e)
+      }
+    }
     // perform an immediate sync
     syncTime()
   }, [])

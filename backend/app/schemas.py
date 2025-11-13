@@ -164,6 +164,7 @@ class InvoiceCreate(BaseModel):
     party_id: Optional[str] = None
     party_name: Optional[str] = None
     client_time: Optional[datetime] = None
+    client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     items: List[InvoiceItemCreate]
     note: Optional[str] = None
 
@@ -197,6 +198,7 @@ class PaymentBase(BaseModel):
     reference: Optional[str] = None
     due_date: Optional[datetime] = None
     client_time: Optional[datetime] = None
+    client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     note: Optional[str] = None
 
 

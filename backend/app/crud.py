@@ -4,6 +4,7 @@ from typing import Optional, List
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
 from datetime import timedelta
+import jdatetime
 import requests
 import math
 from .schemas import ProductCreate, ProductOut, PersonCreate
@@ -270,12 +271,13 @@ def _generate_invoice_number(db: Session, invoice_type: str) -> str:
 def create_invoice_manual(db: Session, inv: schemas.InvoiceCreate) -> models.Invoice:
     # create invoice record without invoice_number, then set number using id
     server_time = datetime.now(timezone.utc)
+    client_time = inv.client_time or server_time
     invoice = models.Invoice(
         invoice_type=inv.invoice_type,
         mode=inv.mode or 'manual',
         party_id=inv.party_id,
         party_name=inv.party_name,
-        client_time=inv.client_time,
+        client_time=client_time,
         server_time=server_time,
         status='draft',
         note=inv.note,
@@ -285,8 +287,28 @@ def create_invoice_manual(db: Session, inv: schemas.InvoiceCreate) -> models.Inv
     db.refresh(invoice)
 
     # set invoice_number based on date + id
-    date_part = server_time.strftime('%Y%m%d')
-    invoice.invoice_number = f"{inv.invoice_type[:1].upper() if inv.invoice_type else 'I'}-{date_part}-{invoice.id:06d}"
+    reference_dt = client_time or server_time
+    # ensure naive datetime for jdatetime conversion
+    ref_for_calendar = reference_dt
+    if isinstance(ref_for_calendar, datetime) and ref_for_calendar.tzinfo is not None:
+        ref_for_calendar = ref_for_calendar.astimezone(timezone.utc).replace(tzinfo=None)
+    if isinstance(reference_dt, datetime):
+        if reference_dt.tzinfo is None:
+            ref_aware = reference_dt.replace(tzinfo=timezone.utc)
+        else:
+            ref_aware = reference_dt.astimezone(timezone.utc)
+    else:
+        ref_aware = server_time
+    date_part = ref_aware.strftime('%Y%m%d')
+    if inv.client_calendar == 'jalali':
+        try:
+            jdt = jdatetime.datetime.fromgregorian(datetime=ref_for_calendar)
+            date_part = jdt.strftime('%Y%m%d')
+        except Exception:
+            # fallback gracefully to gregorian date_part
+            date_part = reference_dt.astimezone(timezone.utc).strftime('%Y%m%d')
+    prefix = inv.invoice_type[:1].upper() if inv.invoice_type else 'I'
+    invoice.invoice_number = f"{prefix}-{date_part}-{invoice.id:06d}"
     # add items
     subtotal = 0
     for it in inv.items:
@@ -405,6 +427,7 @@ def _generate_payment_number(db: Session, direction: str) -> str:
 
 def create_payment_manual(db: Session, p: schemas.PaymentCreate) -> models.Payment:
     server_time = datetime.now(timezone.utc)
+    client_time = p.client_time or server_time
     pay = models.Payment(
         direction=p.direction,
         mode=p.mode or 'manual',
@@ -413,7 +436,7 @@ def create_payment_manual(db: Session, p: schemas.PaymentCreate) -> models.Payme
         method=p.method,
         amount=int(p.amount),
         reference=p.reference,
-        client_time=p.client_time,
+        client_time=client_time,
         server_time=server_time,
         status='draft',
         note=p.note,
@@ -421,8 +444,26 @@ def create_payment_manual(db: Session, p: schemas.PaymentCreate) -> models.Payme
     db.add(pay)
     db.commit()
     db.refresh(pay)
-    date_part = server_time.strftime('%Y%m%d')
-    pay.payment_number = f"{pay.direction[:1].upper()}-{date_part}-{pay.id:06d}"
+    reference_dt = client_time or server_time
+    ref_for_calendar = reference_dt
+    if isinstance(ref_for_calendar, datetime) and ref_for_calendar.tzinfo is not None:
+        ref_for_calendar = ref_for_calendar.astimezone(timezone.utc).replace(tzinfo=None)
+    if isinstance(reference_dt, datetime):
+        if reference_dt.tzinfo is None:
+            ref_aware = reference_dt.replace(tzinfo=timezone.utc)
+        else:
+            ref_aware = reference_dt.astimezone(timezone.utc)
+    else:
+        ref_aware = server_time
+    date_part = ref_aware.strftime('%Y%m%d')
+    if p.client_calendar == 'jalali':
+        try:
+            jdt = jdatetime.datetime.fromgregorian(datetime=ref_for_calendar)
+            date_part = jdt.strftime('%Y%m%d')
+        except Exception:
+            date_part = ref_aware.strftime('%Y%m%d')
+    prefix = pay.direction[:1].upper()
+    pay.payment_number = f"{prefix}-{date_part}-{pay.id:06d}"
     db.add(pay)
     db.commit()
     db.refresh(pay)

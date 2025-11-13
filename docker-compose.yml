@@ -8,8 +8,6 @@ services:
       POSTGRES_DB: hesabpak
     volumes:
       - db_data:/var/lib/postgresql/data
-    ports:
-      - '5432:5432'
 
   backend:
     build:
@@ -17,8 +15,6 @@ services:
     container_name: hesabpak_backend
     env_file:
       - ./backend/.env
-    ports:
-      - '8000:8000'
     depends_on:
       - db
     restart: unless-stopped

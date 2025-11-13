@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet } from '../services/api'
+import { apiGet, apiPost } from '../services/api'
 import { formatNumberFa } from '../utils/num'
 import {
   retroBadge,
@@ -18,8 +18,16 @@ interface Product {
   name: string
   group: string | null
   unit: string | null
-  inventory: number | null
+  inventory: number | null | undefined
   description?: string | null
+}
+
+type ProductFormState = {
+  name: string
+  unit: string
+  group: string
+  code: string
+  description: string
 }
 
 export default function InventoryModule({ smartDate }: ModuleComponentProps) {
@@ -28,6 +36,19 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [showForm, setShowForm] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [formSuccess, setFormSuccess] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+
+  const emptyForm: ProductFormState = {
+    name: '',
+    unit: '',
+    group: '',
+    code: '',
+    description: '',
+  }
+  const [productForm, setProductForm] = useState<ProductFormState>(emptyForm)
 
   useEffect(() => {
     loadProducts()
@@ -44,6 +65,51 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       setError('امکان دریافت فهرست محصولات وجود ندارد.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleProductChange = (field: keyof ProductFormState, value: string) => {
+    setProductForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const resetForm = () => {
+    setProductForm(emptyForm)
+    setFormError(null)
+    setFormSuccess(null)
+  }
+
+  const submitProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!productForm.name.trim()) {
+      setFormError('نام کالا را وارد کنید.')
+      return
+    }
+    setCreating(true)
+    setFormError(null)
+    try {
+      const payload = {
+        name: productForm.name.trim(),
+        unit: productForm.unit.trim() || undefined,
+        group: productForm.group.trim() || undefined,
+        description: productForm.description.trim() || undefined,
+        code: productForm.code.trim() || undefined,
+      }
+      const created = await apiPost<Product>('/api/products', payload)
+      const normalized: Product = {
+        ...created,
+        inventory: (created as Product).inventory ?? 0,
+      }
+      setProducts(prev => [normalized, ...prev])
+      setProductForm(emptyForm)
+      setFormSuccess('کالا با موفقیت ثبت شد.')
+    } catch (err) {
+      if (err instanceof Error) {
+        setFormError(err.message)
+      } else {
+        setFormError('ثبت کالا با خطا مواجه شد.')
+      }
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -104,7 +170,15 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={loadProducts}>
               بروزرسانی موجودی
             </button>
-            <button className={retroButton}>افزودن کالای جدید</button>
+            <button
+              className={retroButton}
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+            >
+              افزودن کالای جدید
+            </button>
             <button className={retroButton}>ورود انبار</button>
           </div>
         </header>
@@ -124,6 +198,106 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
           </div>
         </div>
       </section>
+
+      {showForm && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <p className={retroHeading}>فرم ثبت کالا</p>
+              <h3 className="text-lg font-semibold mt-2">افزودن کالای جدید به سیستم</h3>
+            </div>
+            <button
+              className={retroButton}
+              onClick={() => {
+                resetForm()
+                setShowForm(false)
+              }}
+            >
+              بستن فرم
+            </button>
+          </header>
+
+          <form className="space-y-4" onSubmit={submitProduct}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>نام کالا *</label>
+                <input
+                  value={productForm.name}
+                  onChange={e => handleProductChange('name', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="مانند: لپ‌تاپ مدل X"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>کد کالا</label>
+                <input
+                  value={productForm.code}
+                  onChange={e => handleProductChange('code', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="اختیاری"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>واحد اندازه‌گیری</label>
+                <input
+                  value={productForm.unit}
+                  onChange={e => handleProductChange('unit', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="عدد / کیلو / بسته..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>گروه کالا</label>
+                <input
+                  value={productForm.group}
+                  onChange={e => handleProductChange('group', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="مثلاً: الکترونیک"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={retroHeading}>توضیحات</label>
+              <textarea
+                value={productForm.description}
+                onChange={e => handleProductChange('description', e.target.value)}
+                className={`${retroInput} w-full h-24`}
+                placeholder="ویژگی‌ها یا یادداشت‌های مهم"
+              />
+            </div>
+
+            {formError && (
+              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+                {formError}
+              </div>
+            )}
+            {formSuccess && (
+              <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
+                {formSuccess}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
+                {creating ? 'در حال ثبت...' : 'ثبت کالا'}
+              </button>
+              <button
+                type="button"
+                className={`${retroButton} !bg-[#5b4a2f]`}
+                onClick={resetForm}
+                disabled={creating}
+              >
+                پاک‌سازی فرم
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
@@ -194,4 +368,3 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     </div>
   )
 }
-

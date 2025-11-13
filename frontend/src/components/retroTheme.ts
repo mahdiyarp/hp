@@ -9,7 +9,7 @@ export const retroHeading =
 export const retroLabel =
   'text-[11px] uppercase tracking-[0.4em] text-[#7a6b4f] mb-2 block'
 export const retroInput =
-  'bg-[#f6f1df] border border-[#bfb69f] text-[#2e2720] placeholder:text-[#7a6b4f] px-3 py-2 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#154b5f] focus:border-[#154b5f] transition'
+  'bg-[#f6f1df] border border-[#bfb69f] text-[#2e2720] placeholder:text-[#7a6b4f] px-3 py-2 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#154b5f] focus:border-[#154b5f] transition font-[Yekan]'
 export const retroBadge =
   'inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.3em] border border-[#bfb69f] bg-[#f6f1df] px-3 py-1'
 export const retroSurface = 'bg-[#e9e4d8] text-[#2e2720]'

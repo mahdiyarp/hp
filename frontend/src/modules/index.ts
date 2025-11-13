@@ -3,9 +3,10 @@ import SalesModule from './SalesModule'
 import FinanceModule from './FinanceModule'
 import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
-import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
+import ReportsModule from './ReportsModule'
+import SearchModule from './SearchModule'
 
 export const modules: ModuleDefinition[] = [
   {
@@ -51,6 +52,13 @@ export const modules: ModuleDefinition[] = [
     badge: 'ANALYTICS',
   },
   {
+    id: 'search',
+    label: 'جستجوی هوشمند',
+    description: 'جستجوی یکپارچه در کالاها، فاکتورها و پرداخت‌ها',
+    component: SearchModule,
+    badge: 'SEARCH',
+  },
+  {
     id: 'system',
     label: 'تنظیمات سیستم',
     description: 'تاریخ هوشمند، بکاپ‌ها، یکپارچه‌سازی و لاگ‌ها',
@@ -58,4 +66,3 @@ export const modules: ModuleDefinition[] = [
     badge: 'SYSTEM',
   },
 ]
-

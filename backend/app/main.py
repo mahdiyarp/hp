@@ -7,6 +7,7 @@ import tempfile
 import shutil
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
+import jdatetime
 from typing import List, Optional
 import os
 
@@ -165,14 +166,27 @@ def hello():
 
 @app.get("/api/time/now")
 def time_now():
-    # return server UTC timestamp and server offset
-    now = datetime.now(timezone.utc)
-    # offset from UTC in seconds (server local tz may equal UTC inside container)
-    offset_seconds = int(now.utcoffset().total_seconds()) if now.utcoffset() is not None else 0
+    # return server time snapshots with Jalali representation
+    local_now = datetime.now().astimezone()
+    utc_now = local_now.astimezone(timezone.utc)
+    offset_delta = local_now.utcoffset()
+    offset_seconds = int(offset_delta.total_seconds()) if offset_delta is not None else 0
+    sign = '+' if offset_seconds >= 0 else '-'
+    total_minutes = abs(offset_seconds) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    offset_str = f"{sign}{hours:02d}:{minutes:02d}"
+    try:
+        jalali_now = jdatetime.datetime.fromgregorian(datetime=local_now.replace(tzinfo=None))
+        jalali_str = jalali_now.strftime("%Y/%m/%d %H:%M:%S")
+    except Exception:
+        jalali_str = None
     return {
-        "utc": now.isoformat(),
+        "utc": utc_now.isoformat(),
+        "server_local": local_now.isoformat(),
         "server_offset_seconds": offset_seconds,
-        "server_offset": f"{offset_seconds // 3600:+03d}:{abs(offset_seconds % 3600) // 60:02d}",
+        "server_offset": offset_str,
+        "jalali": jalali_str,
+        "epoch_ms": int(utc_now.timestamp() * 1000),
     }
 
 

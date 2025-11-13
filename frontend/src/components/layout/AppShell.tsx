@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { retroBadge, retroButton, retroHeading, retroPanel } from '../retroTheme'
+import { retroBadge, retroButton, retroHeading, retroPanel, retroMuted } from '../retroTheme'
 import type { SyncRecord } from '../../App'
+import GlobalSearch from '../GlobalSearch'
+import { formatNumberFa, toPersianDigits } from '../../utils/num'
 
 export interface SmartDateState {
   isoDate: string | null
@@ -58,17 +60,6 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     jalali: localStorage.getItem(SMART_DATE_JALALI_KEY),
   })
 
-  useEffect(() => {
-    const handler = () => {
-      const hash = window.location.hash.replace('#', '')
-      if (hash && moduleMap.has(hash)) {
-        setActiveModuleId(hash)
-      }
-    }
-    window.addEventListener('hashchange', handler)
-    return () => window.removeEventListener('hashchange', handler)
-  }, [moduleMap])
-
   const navigate = useCallback(
     (id: string) => {
       if (!moduleMap.has(id)) return
@@ -77,6 +68,31 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     },
     [moduleMap],
   )
+
+  useEffect(() => {
+    const handler = () => {
+      const hash = window.location.hash.replace('#', '')
+      if (hash && moduleMap.has(hash)) {
+        setActiveModuleId(hash)
+      }
+    }
+    window.addEventListener('hashchange', handler)
+    
+    // Listen for custom module switch events
+    const handleModuleSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent
+      const targetModule = customEvent.detail?.module
+      if (targetModule && moduleMap.has(targetModule)) {
+        navigate(targetModule)
+      }
+    }
+    window.addEventListener('switch-module', handleModuleSwitch)
+    
+    return () => {
+      window.removeEventListener('hashchange', handler)
+      window.removeEventListener('switch-module', handleModuleSwitch)
+    }
+  }, [moduleMap, navigate])
 
   const handleSmartDateChange = useCallback((next: SmartDateState) => {
     setSmartDate(next)
@@ -100,6 +116,13 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
 
   const activeModule = moduleMap.get(activeModuleId) ?? modules[0]
   const ActiveComponent = activeModule?.component
+
+  const clockDriftMs = useMemo(() => {
+    if (!sync?.epochMs) return null
+    const clientMs = Date.parse(sync.clientUtc)
+    if (Number.isNaN(clientMs)) return null
+    return Math.round(clientMs - sync.epochMs)
+  }, [sync])
 
   return (
     <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex">
@@ -185,17 +208,37 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
                     {smartDate.isoDate ? `ISO: ${smartDate.isoDate}` : 'ISO TBD'}
                   </span>
                 </div>
-              </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className={`${retroPanel} px-4 py-3 text-xs`}>
-                <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
-                <p className="mt-1">
-                  {sync?.serverUtc
-                    ? sync.serverUtc.slice(0, 19).replace('T', ' ')
-                    : 'در انتظار همگام‌سازی'}
+          </div>
+          <div className="mt-2">
+            <GlobalSearch onNavigate={navigate} />
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
+              <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
+              <p>
+                {sync?.serverUtc
+                  ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
+                  : 'در انتظار همگام‌سازی'}
+              </p>
+              {sync?.serverLocal && (
+                <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
+              )}
+              {sync?.jalali && <p>JALALI: {sync.jalali}</p>}
+              <p className={`text-[#7a6b4f]`}>
+                اختلاف منطقه: {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
+              </p>
+              {clockDriftMs !== null && (
+                <p className={`text-[#7a6b4f]`}>
+                  اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
                 </p>
-              </div>
+              )}
+              {sync?.latencyMs !== null && (
+                <p className={`text-[#7a6b4f]`}>
+                  تاخیر شبکه: {formatNumberFa(sync.latencyMs)} میلی‌ثانیه
+                </p>
+              )}
+            </div>
               <div className="flex sm:flex-row flex-col gap-2 text-xs">
                 <button className={`${retroButton} !tracking-[0.3em]`} onClick={onLogout}>
                   خروج از سیستم
@@ -234,4 +277,3 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     </div>
   )
 }
-
