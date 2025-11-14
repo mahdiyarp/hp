@@ -22,6 +22,39 @@ interface Product {
   description?: string | null
 }
 
+interface ProductMovement {
+  id: number
+  invoice_id: number
+  invoice_number: string
+  invoice_date: string
+  direction: string
+  type: string
+  quantity: number
+  quantity_change: number
+  unit_price: number
+  total_price: number
+  stock_before: number
+  stock_after: number
+  party: {
+    id: string
+    name: string
+    kind: string | null
+  } | null
+  status: string
+}
+
+interface ProductMovementData {
+  product: {
+    id: string
+    name: string
+    unit: string | null
+    group: string | null
+    current_stock: number
+  }
+  movements: ProductMovement[]
+  total_movements: number
+}
+
 type ProductFormState = {
   name: string
   unit: string
@@ -40,6 +73,9 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [movementData, setMovementData] = useState<ProductMovementData | null>(null)
+  const [loadingMovement, setLoadingMovement] = useState(false)
 
   const emptyForm: ProductFormState = {
     name: '',
@@ -111,6 +147,48 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     } finally {
       setCreating(false)
     }
+  }
+
+  const loadProductMovement = async (product: Product) => {
+    setSelectedProduct(product)
+    setLoadingMovement(true)
+    setMovementData(null)
+    try {
+      const data = await apiGet<ProductMovementData>(`/api/products/${product.id}/movement`)
+      setMovementData(data)
+    } catch (err) {
+      console.error('Failed to load product movement:', err)
+      setError('خطا در دریافت گردش کالا')
+    } finally {
+      setLoadingMovement(false)
+    }
+  }
+
+  const exportMovement = () => {
+    if (!movementData) return
+    
+    const csv = [
+      ['تاریخ', 'نوع', 'طرف حساب', 'تعداد', 'قیمت واحد', 'مبلغ کل', 'موجودی قبل', 'موجودی بعد', 'فاکتور'].join('\t'),
+      ...movementData.movements.map(m => [
+        new Date(m.invoice_date).toLocaleDateString('fa-IR'),
+        m.type,
+        m.party?.name || '-',
+        m.quantity_change > 0 ? `+${m.quantity}` : `-${m.quantity}`,
+        m.unit_price,
+        m.total_price,
+        m.stock_before,
+        m.stock_after,
+        m.invoice_number,
+      ].join('\t'))
+    ].join('\n')
+    
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `گردش-کالا-${movementData.product.name}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const groups = useMemo(() => {
@@ -345,7 +423,11 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             </thead>
             <tbody>
               {filtered.map(prod => (
-                <tr key={prod.id} className="border-b border-[#d9cfb6]">
+                <tr 
+                  key={prod.id} 
+                  className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer"
+                  onClick={() => loadProductMovement(prod)}
+                >
                   <td className="px-3 py-2">
                     {prod.name}
                     {prod.description && (
@@ -356,7 +438,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                   </td>
                   <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
                   <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(prod.inventory ?? 0)}</td>
+                  <td className="px-3 py-2 text-left font-semibold">{formatNumberFa(prod.inventory ?? 0)}</td>
                 </tr>
               ))}
             </tbody>
@@ -365,6 +447,144 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
           <div className="text-xs text-[#7a6b4f]">کالایی با شرایط فعلی یافت نشد.</div>
         )}
       </section>
+
+      {/* Product Movement Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`${retroPanelPadded} max-w-6xl w-full max-h-[90vh] overflow-y-auto space-y-4`}>
+            <header className="flex items-center justify-between gap-3 sticky top-0 bg-[#fdf7e6] pb-3 border-b border-[#c5bca5]">
+              <div>
+                <p className={retroHeading}>گردش کالا</p>
+                <h3 className="text-xl font-semibold mt-2">{selectedProduct.name}</h3>
+                <p className="text-xs text-[#7a6b4f] mt-1">
+                  {selectedProduct.group && `گروه: ${selectedProduct.group} | `}
+                  واحد: {selectedProduct.unit || 'عدد'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {movementData && (
+                  <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={exportMovement}>
+                    خروجی CSV
+                  </button>
+                )}
+                <button
+                  className={`${retroButton} !bg-[#5b4a2f]`}
+                  onClick={() => {
+                    setSelectedProduct(null)
+                    setMovementData(null)
+                  }}
+                >
+                  بستن
+                </button>
+              </div>
+            </header>
+
+            {loadingMovement ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="space-y-3 text-center">
+                  <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+                  <p className={`${retroHeading} text-[#1f2e3b]`}>در حال بارگذاری گردش کالا...</p>
+                </div>
+              </div>
+            ) : movementData ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                    <p className={retroHeading}>موجودی فعلی</p>
+                    <p className="text-2xl font-semibold text-blue-700">
+                      {formatNumberFa(movementData.product.current_stock)} {movementData.product.unit || 'عدد'}
+                    </p>
+                  </div>
+                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                    <p className={retroHeading}>تعداد تراکنش‌ها</p>
+                    <p className="text-2xl font-semibold">
+                      {formatNumberFa(movementData.total_movements)}
+                    </p>
+                  </div>
+                </div>
+
+                {movementData.movements.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                      <thead>
+                        <tr>
+                          <th className={retroTableHeader}>تاریخ</th>
+                          <th className={retroTableHeader}>نوع</th>
+                          <th className={retroTableHeader}>طرف حساب</th>
+                          <th className={retroTableHeader}>تعداد</th>
+                          <th className={retroTableHeader}>قیمت واحد</th>
+                          <th className={retroTableHeader}>مبلغ کل</th>
+                          <th className={retroTableHeader}>موجودی قبل</th>
+                          <th className={retroTableHeader}>موجودی بعد</th>
+                          <th className={retroTableHeader}>سند</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movementData.movements.map(movement => (
+                          <tr key={movement.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
+                            <td className="px-3 py-2 text-xs whitespace-nowrap">
+                              {new Date(movement.invoice_date).toLocaleDateString('fa-IR')}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`${retroBadge} ${movement.direction === 'out' ? 'border-red-600 text-red-700' : 'border-green-600 text-green-700'}`}>
+                                {movement.type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {movement.party ? (
+                                <div>
+                                  <span className="font-semibold">{movement.party.name}</span>
+                                  <span className="block text-[10px] text-[#7a6b4f]">
+                                    {movement.party.kind === 'customer' ? 'مشتری' : movement.party.kind === 'supplier' ? 'تأمین‌کننده' : 'سایر'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[#7a6b4f]">-</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono">
+                              <span className={movement.quantity_change > 0 ? 'text-green-700' : 'text-red-700'}>
+                                {movement.quantity_change > 0 ? '+' : ''}{formatNumberFa(movement.quantity)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono text-xs">
+                              {formatNumberFa(movement.unit_price)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono font-semibold">
+                              {formatNumberFa(movement.total_price)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono text-xs text-[#7a6b4f]">
+                              {formatNumberFa(movement.stock_before)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono font-semibold text-blue-700">
+                              {formatNumberFa(movement.stock_after)}
+                            </td>
+                            <td className="px-3 py-2 text-xs">
+                              <button 
+                                className="text-blue-700 underline hover:text-blue-900"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.open(`/api/invoices/${movement.invoice_id}/export`, '_blank')
+                                }}
+                              >
+                                {movement.invoice_number}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-[#7a6b4f] py-8">
+                    هیچ تراکنشی برای این کالا ثبت نشده است.
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

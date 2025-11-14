@@ -1068,6 +1068,78 @@ def api_products_external_save(payload: SaveExternalProductRequest, session: Ses
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get('/api/products/{product_id}/movement')
+def product_movement(product_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Get movement history for a product with invoice and party details"""
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    
+    # Get product details
+    product = session.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail='Product not found')
+    
+    # Get all invoice items for this product
+    invoice_items = session.query(models.InvoiceItem).filter(
+        models.InvoiceItem.product_id == product_id
+    ).order_by(models.InvoiceItem.id.desc()).all()
+    
+    movements = []
+    current_stock = product.inventory or 0
+    
+    for item in invoice_items:
+        invoice = session.query(models.Invoice).filter(models.Invoice.id == item.invoice_id).first()
+        if not invoice:
+            continue
+            
+        person = None
+        if invoice.party_id:
+            person = session.query(models.Person).filter(models.Person.id == invoice.party_id).first()
+        
+        # Determine movement type based on invoice type
+        is_sale = invoice.invoice_type == 'sale'
+        is_purchase = invoice.invoice_type == 'purchase'
+        quantity_change = -item.quantity if is_sale else item.quantity if is_purchase else 0
+        
+        movements.append({
+            'id': item.id,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice.invoice_number,
+            'invoice_date': (invoice.client_time or invoice.server_time).isoformat() if (invoice.client_time or invoice.server_time) else None,
+            'invoice_type': invoice.invoice_type,
+            'direction': 'out' if is_sale else 'in' if is_purchase else 'neutral',
+            'type': 'فروش' if is_sale else 'خرید' if is_purchase else 'سایر',
+            'quantity': item.quantity,
+            'quantity_change': quantity_change,
+            'unit_price': item.unit_price,
+            'total_price': item.total or (item.unit_price * item.quantity),
+            'party': {
+                'id': person.id,
+                'name': person.name,
+                'kind': person.kind,
+            } if person else None,
+            'status': invoice.status,
+        })
+    
+    # Calculate running stock (from most recent backwards)
+    running_stock = current_stock
+    for movement in movements:
+        movement['stock_after'] = running_stock
+        running_stock -= movement['quantity_change']
+        movement['stock_before'] = running_stock
+    
+    return {
+        'product': {
+            'id': product.id,
+            'name': product.name,
+            'unit': product.unit,
+            'group': product.group,
+            'current_stock': current_stock,
+        },
+        'movements': movements,
+        'total_movements': len(movements),
+    }
+
+
 @app.post('/api/assistant/query', response_model=AssistantResponse)
 def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # execute assistant command on behalf of the current user if enabled
