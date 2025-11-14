@@ -30,6 +30,12 @@ class RoleCreate(BaseModel):
     description: Optional[str] = None
 
 
+class PermissionCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    module: Optional[str] = None
+
+
 # User schemas
 class UserCreate(BaseModel):
     username: str

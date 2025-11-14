@@ -25,6 +25,7 @@ from .exports import export_invoice_pdf, export_invoice_csv, export_invoice_exce
 from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
+from .sms import send_sms, SUPPORTED_PROVIDERS
 
 DB = db
 
@@ -1219,6 +1220,71 @@ def product_movement(product_id: str, session: Session = Depends(db.get_db), cur
     }
 
 
+@app.get('/api/sms/providers', response_model=list[schemas.IntegrationConfigOut])
+def list_sms_providers(session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
+    cfgs = session.query(models.IntegrationConfig).filter(models.IntegrationConfig.provider.in_(list(SUPPORTED_PROVIDERS))).all()
+    out = []
+    for c in cfgs:
+        out.append({
+            'id': c.id,
+            'name': c.name,
+            'provider': c.provider,
+            'enabled': c.enabled,
+            'api_key': None,
+            'config': c.config,
+            'last_updated': c.last_updated,
+        })
+    return out
+
+
+@app.post('/api/sms/send')
+def api_sms_send(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
+    to = (payload or {}).get('to')
+    msg = (payload or {}).get('message')
+    provider = (payload or {}).get('provider')
+    if not to or not msg:
+        raise HTTPException(status_code=400, detail='to and message required')
+    ok, info = send_sms(session, to, msg, provider)
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    try:
+        log_activity(session, current.username if hasattr(current, 'username') else None, f"ارسال پیامک به {to}")
+    except Exception:
+        pass
+    return {"ok": True, "detail": info}
+
+
+@app.post('/api/sms/register-user', response_model=schemas.UserOut)
+def api_sms_register_user(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
+    import secrets, string
+    username = (payload or {}).get('username')
+    mobile = (payload or {}).get('mobile')
+    full_name = (payload or {}).get('full_name')
+    role_id = (payload or {}).get('role_id')
+    if not username or not mobile:
+        raise HTTPException(status_code=400, detail='username and mobile required')
+    alphabet = string.ascii_letters + string.digits
+    temp_pass = ''.join(secrets.choice(alphabet) for _ in range(10))
+    try:
+        u = crud.create_user(session, schemas.UserCreate(username=username, password=temp_pass, full_name=full_name, role_id=role_id, email=None))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    msg = f"کاربر شما در حساب‌پاک ایجاد شد.\nنام کاربری: {username}\nرمز عبور: {temp_pass}"
+    ok, info = send_sms(session, mobile, msg, None)
+    if not ok:
+        try:
+            session.delete(u)
+            session.commit()
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f'SMS failed: {info}')
+    try:
+        log_activity(session, current.username if hasattr(current, 'username') else None, f"ایجاد کاربر {username} و ارسال پیامک")
+    except Exception:
+        pass
+    return u
+
+
 @app.post('/api/assistant/query', response_model=AssistantResponse)
 def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # execute assistant command on behalf of the current user if enabled
@@ -1365,12 +1431,77 @@ async def list_roles(current: models.User = Depends(require_roles(role_ids=[1]))
     return crud.get_all_roles(session)
 
 
+@app.post('/api/roles', response_model=schemas.RoleOut)
+def create_role(payload: schemas.RoleCreate, current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    r = models.Role(name=payload.name, description=payload.description)
+    session.add(r)
+    session.commit()
+    session.refresh(r)
+    return r
+
+
+@app.patch('/api/roles/{rid}', response_model=schemas.RoleOut)
+def update_role(rid: int, payload: schemas.RoleCreate, current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    r = session.query(models.Role).filter(models.Role.id == rid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail='role not found')
+    if payload.name:
+        r.name = payload.name
+    r.description = payload.description
+    session.add(r)
+    session.commit()
+    session.refresh(r)
+    return r
+
+
+@app.delete('/api/roles/{rid}')
+def delete_role(rid: int, current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    r = session.query(models.Role).filter(models.Role.id == rid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail='role not found')
+    session.delete(r)
+    session.commit()
+    return {"ok": True}
+
+
+@app.get('/api/roles/{rid}/permissions', response_model=List[schemas.PermissionOut])
+def get_role_permissions(rid: int, current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    r = session.query(models.Role).filter(models.Role.id == rid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail='role not found')
+    return r.permissions
+
+
+@app.post('/api/roles/{rid}/permissions')
+def set_role_permissions(rid: int, permission_ids: List[int], current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    r = session.query(models.Role).filter(models.Role.id == rid).first()
+    if not r:
+        raise HTTPException(status_code=404, detail='role not found')
+    perms = session.query(models.Permission).filter(models.Permission.id.in_(permission_ids or [])).all()
+    r.permissions = perms
+    session.add(r)
+    session.commit()
+    return {"ok": True, "count": len(perms)}
+
+
 @app.get('/api/permissions', response_model=List[schemas.PermissionOut])
 async def list_permissions(module: Optional[str] = None, current: models.User = Depends(require_roles(role_names=['Admin'])), session: Session = Depends(db.get_db)):
     """لیست تمام permissions - فقط Admin"""
     if module:
         return crud.get_permissions_by_module(session, module)
     return crud.get_all_permissions(session)
+
+
+@app.post('/api/permissions', response_model=schemas.PermissionOut)
+def create_permission(payload: schemas.PermissionCreate, current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    existing = session.query(models.Permission).filter(models.Permission.name == payload.name).first()
+    if existing:
+        return existing
+    p = models.Permission(name=payload.name, description=payload.description, module=payload.module)
+    session.add(p)
+    session.commit()
+    session.refresh(p)
+    return p
 
 
 @app.get('/api/users', response_model=List[schemas.UserOut])
