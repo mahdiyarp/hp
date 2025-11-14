@@ -378,6 +378,8 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           </div>
         </div>
       </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <p className={retroHeading}>System Console</p>
