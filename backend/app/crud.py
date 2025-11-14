@@ -52,7 +52,7 @@ def create_user(session: Session, user: schemas.UserCreate):
     username_norm = _normalize_username(user.username)
     if not username_norm:
         raise ValueError('Username required')
-    existing = get_user_by_username(db, user.username)
+    existing = get_user_by_username(session, user.username)
     if existing:
         raise ValueError('Username already exists')
     
@@ -113,7 +113,7 @@ def create_product(session: Session, p: ProductCreate) -> models.Product:
         from .activity_logger import log_activity
         uname = None
         # best-effort map: no session access to find user here; API layer should pass username when possible
-        log_activity(db, uname, f"ایجاد کالا: {product.name} (id={product.id})", path=f"/api/products", method='POST', status_code=201, detail={'product_id': product.id})
+        log_activity(session, uname, f"ایجاد کالا: {product.name} (id={product.id})", path=f"/api/products", method='POST', status_code=201, detail={'product_id': product.id})
     except Exception:
         pass
     return product
@@ -138,7 +138,7 @@ def create_product_from_external(session: Session, external: dict, unit: Optiona
     }
     full_desc = desc + '\n\n' + json.dumps(meta, ensure_ascii=False)
     p = ProductCreate(name=title, unit=unit, group=group, description=full_desc)
-    prod = create_product(db, p)
+    prod = create_product(session, p)
     # optional price history
     try:
         price = external.get('price')
@@ -178,7 +178,7 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
         pass
     try:
         from .activity_logger import log_activity
-        log_activity(db, None, f"ایجاد شخص: {person.name} (id={person.id})", path=f"/api/persons", method='POST', status_code=201, detail={'person_id': person.id})
+        log_activity(session, None, f"ایجاد شخص: {person.name} (id={person.id})", path=f"/api/persons", method='POST', status_code=201, detail={'person_id': person.id})
     except Exception:
         pass
     return person
@@ -233,7 +233,7 @@ def set_assistant_enabled(session: Session, user_id: int, enabled: bool):
 
 def authenticate_user(session: Session, username: str, password: str):
     from .security import verify_password
-    user = get_user_by_username(db, username)
+    user = get_user_by_username(session, username)
     if not user:
         return None
     if not verify_password(password, user.hashed_password):
@@ -391,7 +391,7 @@ def create_invoice_manual(session: Session, inv: schemas.InvoiceCreate) -> model
         from .activity_logger import log_activity
         # use party_name or party_id for context
         who = inv.party_name or inv.party_id or None
-        log_activity(db, who, f"صدور فاکتور {invoice.invoice_number}", path=f"/api/invoices/manual", method='POST', status_code=201, detail={'invoice_id': invoice.id})
+        log_activity(session, who, f"صدور فاکتور {invoice.invoice_number}", path=f"/api/invoices/manual", method='POST', status_code=201, detail={'invoice_id': invoice.id})
     except Exception:
         pass
     return invoice
@@ -466,7 +466,7 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
         # sale: debit AR/Cash, credit Sales (or COGS/Inventory)
         # purchase: debit Expense/Inventory, credit AP/Cash
         if inv.invoice_type == 'sale':
-            create_ledger_entry(db,
+            create_ledger_entry(session,
                                 ref_type='invoice',
                                 ref_id=str(inv.id),
                                 debit_account='AccountsReceivable',
@@ -477,7 +477,7 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
                                 description=f'Sale Invoice {inv.invoice_number}',
                                 tracking_code=inv.tracking_code)
         elif inv.invoice_type == 'purchase':
-            create_ledger_entry(db,
+            create_ledger_entry(session,
                                 ref_type='invoice',
                                 ref_id=str(inv.id),
                                 debit_account='Inventory',
@@ -493,7 +493,7 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
     
     try:
         from .activity_logger import log_activity
-        log_activity(db, inv.party_name or None, f"تأیید/پایان فاکتور {inv.invoice_number}", path=f"/api/invoices/{inv.id}/finalize", method='POST', status_code=200, detail={'invoice_id': inv.id})
+        log_activity(session, inv.party_name or None, f"تأیید/پایان فاکتور {inv.invoice_number}", path=f"/api/invoices/{inv.id}/finalize", method='POST', status_code=200, detail={'invoice_id': inv.id})
     except Exception:
         pass
     return inv
@@ -579,7 +579,7 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         pass
     try:
         from .activity_logger import log_activity
-        log_activity(db, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
+        log_activity(session, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
     except Exception:
         pass
     return pay
@@ -614,7 +614,7 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
         if pay.direction == 'in':
             # receipt: debit Cash/Bank, credit AccountsReceivable
             acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
-            create_ledger_entry(db, 
+            create_ledger_entry(session, 
                                 ref_type='payment', 
                                 ref_id=str(pay.id), 
                                 debit_account=acct, 
@@ -627,7 +627,7 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
         else:
             # payment out: debit AccountsPayable/Expense, credit Cash/Bank
             acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
-            create_ledger_entry(db, 
+            create_ledger_entry(session, 
                                 ref_type='payment', 
                                 ref_id=str(pay.id), 
                                 debit_account='Expenses', 
@@ -643,7 +643,7 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     
     try:
         from .activity_logger import log_activity
-        log_activity(db, pay.party_name or None, f"تأیید/پست پرداخت {pay.payment_number}", path=f"/api/payments/{pay.id}/finalize", method='POST', status_code=200, detail={'payment_id': pay.id})
+        log_activity(session, pay.party_name or None, f"تأیید/پست پرداخت {pay.payment_number}", path=f"/api/payments/{pay.id}/finalize", method='POST', status_code=200, detail={'payment_id': pay.id})
     except Exception:
         pass
     
@@ -791,7 +791,7 @@ def create_backup(session: Session, created_by: Optional[int] = None, kind: str 
         session.refresh(bk)
         try:
             from .activity_logger import log_activity
-            log_activity(db, None, f"ایجاد بکاپ {fname}", path=f"/api/backups/manual", method='POST', status_code=201, detail={'backup_id': bk.id})
+            log_activity(session, None, f"ایجاد بکاپ {fname}", path=f"/api/backups/manual", method='POST', status_code=201, detail={'backup_id': bk.id})
         except Exception:
             pass
         return bk
@@ -867,10 +867,10 @@ def close_financial_year(session: Session, fy_id: int, create_rollover: bool = T
         # if positive balance (debit), credit the account and debit RetainedEarnings
         try:
             if bal > 0:
-                create_ledger_entry(db, ref_type='closing', ref_id=str(fy.id), debit_account='RetainedEarnings', credit_account=acct, amount=int(bal), description=f'Closing {acct} for FY {fy.name}')
+                create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account='RetainedEarnings', credit_account=acct, amount=int(bal), description=f'Closing {acct} for FY {fy.name}')
             else:
                 # negative balance (credit), debit the account and credit RetainedEarnings
-                create_ledger_entry(db, ref_type='closing', ref_id=str(fy.id), debit_account=acct, credit_account='RetainedEarnings', amount=int(abs(bal)), description=f'Closing {acct} for FY {fy.name}')
+                create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account=acct, credit_account='RetainedEarnings', amount=int(abs(bal)), description=f'Closing {acct} for FY {fy.name}')
             rollover[acct] = int(bal)
         except Exception:
             pass
@@ -883,7 +883,7 @@ def close_financial_year(session: Session, fy_id: int, create_rollover: bool = T
     session.refresh(fy)
     try:
         from .activity_logger import log_activity
-        log_activity(db, None, f"بستن سال مالی {fy.name}", path=f"/api/financial-years/{fy.id}/close", method='POST', status_code=200, detail={'closed_by': closed_by})
+        log_activity(session, None, f"بستن سال مالی {fy.name}", path=f"/api/financial-years/{fy.id}/close", method='POST', status_code=200, detail={'closed_by': closed_by})
     except Exception:
         pass
     return fy
@@ -977,7 +977,7 @@ def dashboard_summary(session: Session):
     # cash balances by method
     cash_balances = {}
     for m in ['cash', 'bank', 'pos']:
-        cash_balances[m] = report_cash_balance(db, method=m).get('balance', 0)
+        cash_balances[m] = report_cash_balance(session, method=m).get('balance', 0)
     return {
         'invoices': {'today': invoices_today, '7days': invoices_7, 'month': invoices_month},
         'receipts_today': int(receipts_total),
