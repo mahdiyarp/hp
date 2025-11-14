@@ -5,7 +5,7 @@ from . import models
 from .security import decrypt_value
 
 
-SUPPORTED_PROVIDERS = {"kavenegar", "ghasedak"}
+SUPPORTED_PROVIDERS = {"kavenegar", "ghasedak", "ippanel"}
 
 
 def _pick_config(session, provider_or_name: Optional[str] = None) -> Optional[models.IntegrationConfig]:
@@ -53,6 +53,14 @@ def send_sms(session, to: str, message: str, provider_or_name: Optional[str] = N
             if r.status_code in (200, 201):
                 return True, "sent"
             return False, f"ghasedak status {r.status_code}"
+        if provider == "ippanel":
+            url = "https://api.ippanel.com/api/v1/sms/send"
+            headers = {"Authorization": f"Bearer {api_key}"}
+            data = {"sender": "", "recipient": to, "message": message}
+            r = requests.post(url, headers=headers, json=data, timeout=7)
+            if r.status_code in (200, 201):
+                return True, "sent"
+            return False, f"ippanel status {r.status_code}"
         return False, f"unsupported provider {provider}"
     except Exception as e:
         return False, str(e)

@@ -351,6 +351,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={smsCfg.provider} onChange={e=>setSmsCfg({...smsCfg, provider: e.target.value})}>
               <option value="kavenegar">kavenegar</option>
               <option value="ghasedak">ghasedak</option>
+              <option value="ippanel">ippanel</option>
             </select>
             <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="API Key" value={smsCfg.api_key} onChange={e=>setSmsCfg({...smsCfg, api_key: e.target.value})} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={smsCfg.enabled} onChange={e=>setSmsCfg({...smsCfg, enabled: e.target.checked})}/> فعال</label>
