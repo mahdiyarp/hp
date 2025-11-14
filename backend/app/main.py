@@ -525,15 +525,94 @@ def persons_balances(session: Session = Depends(db.get_db), current: models.User
 
 @app.get('/api/ledger/party/{party_id}')
 def party_ledger(party_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Viewer'])(current)
-    # Get all ledger entries for a party and calculate net debit/credit
-    entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == party_id).all()
-    debit_total = sum(e.amount for e in entries if e.debit_account in ['Expenses', 'Inventory', 'Cash', 'Bank', 'POS', 'AccountsReceivable'])
-    credit_total = sum(e.amount for e in entries if e.credit_account in ['Expenses', 'Inventory', 'Cash', 'Bank', 'POS', 'AccountsPayable', 'Sales'])
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
+    
+    # Get person details
+    person = session.query(models.Person).filter(models.Person.id == party_id).first()
+    if not person:
+        raise HTTPException(status_code=404, detail='Person not found')
+    
+    # Get all ledger entries for this party
+    ledger_entries = session.query(models.LedgerEntry).filter(
+        models.LedgerEntry.party_id == party_id
+    ).order_by(models.LedgerEntry.entry_date.desc()).all()
+    
+    # Enrich entries with related invoice/payment details
+    enriched_entries = []
+    for entry in ledger_entries:
+        entry_data = {
+            'id': entry.id,
+            'description': entry.description,
+            'debit_account': entry.debit_account,
+            'credit_account': entry.credit_account,
+            'amount': entry.amount,
+            'entry_date': entry.entry_date.isoformat() if entry.entry_date else None,
+            'ref_type': entry.ref_type,
+            'ref_id': entry.ref_id,
+            'invoice': None,
+            'payment': None,
+        }
+        
+        # Try to find related invoice
+        if entry.ref_type == 'invoice' and entry.ref_id:
+            try:
+                invoice_id = int(entry.ref_id)
+                invoice = session.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+                if invoice:
+                    entry_data['invoice'] = {
+                        'id': invoice.id,
+                        'invoice_number': invoice.invoice_number,
+                        'issue_date': (invoice.client_time or invoice.server_time).isoformat() if (invoice.client_time or invoice.server_time) else None,
+                        'total_amount': invoice.total or 0,
+                        'status': invoice.status,
+                    }
+            except (ValueError, TypeError):
+                pass
+        
+        # Try to find related payment
+        if entry.ref_type == 'payment' and entry.ref_id:
+            try:
+                payment_id = int(entry.ref_id)
+                payment = session.query(models.Payment).filter(models.Payment.id == payment_id).first()
+                if payment:
+                    entry_data['payment'] = {
+                        'id': payment.id,
+                        'amount': payment.amount,
+                        'payment_date': (payment.client_time or payment.server_time).isoformat() if (payment.client_time or payment.server_time) else None,
+                        'method': payment.method,
+                        'reference': payment.reference,
+                    }
+            except (ValueError, TypeError):
+                pass
+        
+        enriched_entries.append(entry_data)
+    
+    # Calculate running balance
+    running_balance = 0
+    for entry in reversed(enriched_entries):
+        if entry['debit_account'] == 'AccountsReceivable':
+            running_balance += entry['amount']
+        elif entry['credit_account'] == 'AccountsReceivable':
+            running_balance -= entry['amount']
+        entry['running_balance'] = running_balance
+    
+    enriched_entries.reverse()
+    
+    # Calculate totals
+    debit_total = sum(e['amount'] for e in enriched_entries if e['debit_account'] == 'AccountsReceivable')
+    credit_total = sum(e['amount'] for e in enriched_entries if e['credit_account'] == 'AccountsReceivable')
     net_balance = debit_total - credit_total
+    
     return {
         'party_id': party_id,
-        'entries': entries,
+        'person': {
+            'id': person.id,
+            'name': person.name,
+            'kind': person.kind,
+            'mobile': person.mobile,
+            'code': person.code,
+        },
+        'entries': enriched_entries,
         'debit_total': debit_total,
         'credit_total': credit_total,
         'net_balance': net_balance,
