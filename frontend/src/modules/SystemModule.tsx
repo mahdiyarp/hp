@@ -300,7 +300,17 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={selectedRoleId ?? ''} onChange={e=>{
               const rid = e.target.value? parseInt(e.target.value): null
               setSelectedRoleId(rid)
-              setRolePermIds([])
+              if (rid) {
+                const r = roles.find(x=>x.id===rid) as (Role & { permissions?: Permission[] }) | undefined
+                if (r && (r as any).permissions) {
+                  const ids = ((r as any).permissions as Permission[]).map(p=>p.id)
+                  setRolePermIds(ids)
+                } else {
+                  setRolePermIds([])
+                }
+              } else {
+                setRolePermIds([])
+              }
             }}>
               <option value="">انتخاب نقش...</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
