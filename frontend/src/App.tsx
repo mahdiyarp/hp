@@ -20,6 +20,7 @@ export type SyncRecord = {
 
 export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
+  const [version, setVersion] = useState<string | null>(null)
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
   const { user, modules: userModules, logout } = useAuth()
 
@@ -111,6 +112,12 @@ export default function App() {
     }
     // perform an immediate sync
     syncTime()
+    // fetch version
+    fetch('/api/version')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && data.version) setVersion(data.version)
+      }).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -155,6 +162,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      {version && <div className="fixed bottom-2 right-2 text-xs text-[#d7caa4]">v{version}</div>}
     )
   }
 
@@ -172,6 +180,7 @@ export default function App() {
         user={user ? { username: user.username, role: user.role } : null}
         onLogout={logout}
       />
+      {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
     )
   }
 
@@ -184,5 +193,6 @@ export default function App() {
         <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
       </div>
     </div>
+    {version && <div className="fixed bottom-2 right-2 text-xs text-[#6b7280]">v{version}</div>}
   )
 }

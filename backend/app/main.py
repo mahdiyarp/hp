@@ -24,6 +24,7 @@ from .schemas import AssistantRequest, AssistantResponse, AssistantToggle, OTPVe
 from .exports import export_invoice_pdf, export_invoice_csv, export_invoice_excel, EXPORT_DIR
 from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
+from .version import get_version_info
 
 DB = db
 
@@ -202,6 +203,14 @@ def time_now():
         "jalali": jalali_str,
         "epoch_ms": int(utc_now.timestamp() * 1000),
     }
+
+
+@app.get('/api/version')
+def api_version():
+    try:
+        return get_version_info()
+    except Exception:
+        return {"version": "unknown"}
 
 
 @app.post("/api/time/sync", response_model=schemas.TimeSync)
