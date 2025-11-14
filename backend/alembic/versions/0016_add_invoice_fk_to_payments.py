@@ -1,7 +1,7 @@
 """add invoice foreign key to payments
 
-Revision ID: 0016_add_invoice_fk_to_payments
-Revises: 0015_master_data_accounts
+Revision ID: 0016
+Revises: 0015
 Create Date: 2025-11-14 00:00:00.000000
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0016_add_invoice_fk_to_payments'
-down_revision = '0015_master_data_accounts'
+revision = '0016'
+down_revision = '0015'
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
-"""add created_at updated_at to users
+"""add timestamps to users
 
-Revision ID: 0021_add_timestamps_to_users
-Revises: 0020_user_roles_permissions
+Revision ID: 0021
+Revises: 0020
 Create Date: 2024-11-14 01:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '0021_add_timestamps_to_users'
-down_revision = '0020_user_roles_permissions'
+revision = '0021'
+down_revision = '0020'
 branch_labels = None
 depends_on = None
 

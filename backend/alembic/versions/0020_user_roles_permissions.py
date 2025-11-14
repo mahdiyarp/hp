@@ -1,7 +1,7 @@
 """Add roles and permissions system
 
-Revision ID: 0020_user_roles_permissions
-Revises: 0019_product_id
+Revision ID: 0020
+Revises: 0019
 Create Date: 2025-11-14 01:30:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0020_user_roles_permissions'
-down_revision = '0019_product_id'
+revision = '0020'
+down_revision = '0019'
 branch_labels = None
 depends_on = None
 

@@ -1,15 +1,15 @@
 """create ledger_entries table
 
-Revision ID: 0007_ledger
-Revises: 0006_payments
+Revision ID: 0007
+Revises: 0006
 Create Date: 2025-11-08 02:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0007_ledger'
-down_revision = '0006_payments'
+revision = '0007'
+down_revision = '0006'
 branch_labels = None
 depends_on = None
 

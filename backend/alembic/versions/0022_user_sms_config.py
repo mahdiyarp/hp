@@ -1,7 +1,7 @@
 """add user sms config table
 
-Revision ID: 0022_user_sms_config
-Revises: 0021_add_timestamps_to_users
+Revision ID: 0022
+Revises: 0021
 Create Date: 2025-11-14
 
 """
@@ -11,8 +11,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision = '0022_user_sms_config'
-down_revision = '0021_add_timestamps_to_users'
+revision = '0022'
+down_revision = '0021'
 branch_labels = None
 depends_on = None
 

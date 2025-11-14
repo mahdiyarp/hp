@@ -37,6 +37,30 @@ def seed():
         else:
             print("[SEED] Admin user already exists", flush=True)
 
+        # Create developer user if doesn't exist
+        print("[SEED] Checking for developer user", flush=True)
+        developer = session.query(models.User).filter(models.User.username == 'developer').first()
+        if not developer:
+            print("[SEED] Developer user not found, creating", flush=True)
+            # Get Admin role (should be ID 1 based on migrations)
+            admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
+            role_id = admin_role.id if admin_role else 1
+            developer = models.User(
+                username='developer',
+                email='developer@hesabpak.local',
+                full_name='Developer User',
+                mobile='09123506545',
+                hashed_password=get_password_hash('09123506545'),
+                role='Admin',
+                role_id=role_id,
+                is_active=True
+            )
+            session.add(developer)
+            session.commit()
+            print("[SEED] Created developer user", flush=True)
+        else:
+            print("[SEED] Developer user already exists", flush=True)
+
         # Create 10 products (skip duplicates)
         print("[SEED] Creating products", flush=True)
         products = []

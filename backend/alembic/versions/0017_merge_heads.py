@@ -1,14 +1,16 @@
 """merge ledger and master data/payment fk heads
 
-Revision ID: 0017_merge_heads
-Revises: 0007_ledger, 0016_add_invoice_fk_to_payments
+Revision ID: 0017
+Revises: 0007, 0016
 Create Date: 2025-11-14 00:10:00.000000
 """
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = '0017_merge_heads'
-down_revision = ('0007_ledger', '0016_add_invoice_fk_to_payments')
+revision = '0017'
+down_revision = ('0007', '0016')
+branch_labels = None
+depends_on = None
 branch_labels = None
 depends_on = None
 

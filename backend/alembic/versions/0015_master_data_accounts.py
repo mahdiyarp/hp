@@ -1,7 +1,7 @@
 """master data extensions: codes and accounts
 
-Revision ID: 0015_master_data_accounts
-Revises: 0014_add_otp_fields
+Revision ID: 0015
+Revises: 0014
 Create Date: 2025-11-09 04:10:00.000000
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0015_master_data_accounts'
-down_revision = '0014_add_otp_fields'
+revision = '0015'
+down_revision = '0014'
 branch_labels = None
 depends_on = None
 

@@ -1,15 +1,15 @@
 """add due_date to payments
 
-Revision ID: 0008_payments_due_date
-Revises: 0006_payments
+Revision ID: 0008
+Revises: 0007
 Create Date: 2025-11-08 02:20:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0008_payments_due_date'
-down_revision = '0006_payments'
+revision = '0008'
+down_revision = '0007'
 branch_labels = None
 depends_on = None
 

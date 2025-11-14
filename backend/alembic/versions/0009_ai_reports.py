@@ -1,15 +1,15 @@
 """create ai_reports table
 
-Revision ID: 0009_ai_reports
-Revises: 0008_payments_due_date
+Revision ID: 0009
+Revises: 0008
 Create Date: 2025-11-08 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0009_ai_reports'
-down_revision = '0008_payments_due_date'
+revision = '0009'
+down_revision = '0008'
 branch_labels = None
 depends_on = None
 

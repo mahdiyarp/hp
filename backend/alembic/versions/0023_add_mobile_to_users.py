@@ -1,4 +1,4 @@
-"""add mobile to users table
+"""add mobile to users
 
 Revision ID: 0023
 Revises: 0022
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0023_add_mobile_to_users'
-down_revision = '0022_user_sms_config'
+revision = '0023'
+down_revision = '0022'
 branch_labels = None
 depends_on = None
 

@@ -1,7 +1,7 @@
-"""add_product_id_to_invoice_items
+"""add product_id to invoice items
 
-Revision ID: 0019_product_id
-Revises: 0018_add_tracking_code
+Revision ID: 0019
+Revises: 0018
 Create Date: 2025-11-14 00:00:00.000000
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0019_product_id'
-down_revision = '0018_add_tracking_code'
+revision = '0019'
+down_revision = '0018'
 branch_labels = None
 depends_on = None
 

@@ -1,15 +1,15 @@
 """add auth fields and audit_logs
 
-Revision ID: 0003_add_auth_and_audit
-Revises: 0002_add_timesync
+Revision ID: 0003
+Revises: 0002
 Create Date: 2025-11-08 00:30:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0003_add_auth_and_audit'
-down_revision = '0002_add_timesync'
+revision = '0003'
+down_revision = '0002'
 branch_labels = None
 depends_on = None
 
