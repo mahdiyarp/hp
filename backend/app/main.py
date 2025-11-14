@@ -2219,6 +2219,27 @@ async def update_customer_group(
     return updated
 
 
+@app.patch('/api/customer-groups/{group_id}', response_model=schemas.CustomerGroupOut)
+async def patch_customer_group(
+    group_id: int,
+    payload: schemas.CustomerGroupUpdate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """
+    به‌روزرسانی جزئی گروه مشتری
+    """
+    group = crud.get_customer_group(session, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail='گروه یافت نشد')
+    
+    if group.created_by_user_id != current.id:
+        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را تغییر دهد')
+    
+    updated = crud.update_customer_group(session, group_id, payload)
+    return updated
+
+
 @app.delete('/api/customer-groups/{group_id}')
 async def delete_customer_group(
     group_id: int,

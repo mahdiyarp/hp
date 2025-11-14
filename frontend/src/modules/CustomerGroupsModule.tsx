@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useI18n } from '../i18n/I18nContext';
-import { api } from '../services/api';
+import { apiGet, apiPost, apiPatch, apiDelete } from '../services/api';
 
 interface CustomerGroup {
   id: number;
@@ -42,8 +42,8 @@ export const CustomerGroupsModule: React.FC = () => {
   const loadGroups = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/api/customer-groups');
-      setGroups(response.data);
+      const response = await apiGet<CustomerGroup[]>('/api/customer-groups');
+      setGroups(response);
     } catch (error) {
       console.error('Error loading groups:', error);
     } finally {
@@ -53,8 +53,8 @@ export const CustomerGroupsModule: React.FC = () => {
 
   const loadPersons = async () => {
     try {
-      const response = await api.get('/api/persons');
-      setPersons(response.data);
+      const response = await apiGet<Person[]>('/api/persons');
+      setPersons(response);
     } catch (error) {
       console.error('Error loading persons:', error);
     }
@@ -68,9 +68,9 @@ export const CustomerGroupsModule: React.FC = () => {
 
     try {
       if (editingGroup) {
-        await api.put(`/api/customer-groups/${editingGroup.id}`, formData);
+        await apiPatch(`/api/customer-groups/${editingGroup.id}`, formData);
       } else {
-        await api.post('/api/customer-groups', formData);
+        await apiPost('/api/customer-groups', formData);
       }
       loadGroups();
       resetForm();
@@ -82,10 +82,10 @@ export const CustomerGroupsModule: React.FC = () => {
   };
 
   const handleDelete = async (groupId: number) => {
-    if (!window.confirm(t('are_you_sure'))) return;
+    if (!window.confirm(t('delete_confirm'))) return;
 
     try {
-      await api.delete(`/api/customer-groups/${groupId}`);
+      await apiDelete(`/api/customer-groups/${groupId}`);
       loadGroups();
     } catch (error) {
       console.error('Error deleting group:', error);
@@ -100,7 +100,7 @@ export const CustomerGroupsModule: React.FC = () => {
     }
 
     try {
-      await api.post(`/api/customer-groups/${selectedGroupId}/members/${selectedMemberId}`);
+      await apiPost(`/api/customer-groups/${selectedGroupId}/members/${selectedMemberId}`, {});
       loadGroups();
       setSelectedMemberId('');
     } catch (error) {
@@ -110,10 +110,10 @@ export const CustomerGroupsModule: React.FC = () => {
   };
 
   const handleRemoveMember = async (groupId: number, personId: string) => {
-    if (!window.confirm(t('are_you_sure'))) return;
+    if (!window.confirm(t('delete_confirm'))) return;
 
     try {
-      await api.delete(`/api/customer-groups/${groupId}/members/${personId}`);
+      await apiDelete(`/api/customer-groups/${groupId}/members/${personId}`);
       loadGroups();
     } catch (error) {
       console.error('Error removing member:', error);
@@ -182,7 +182,7 @@ export const CustomerGroupsModule: React.FC = () => {
 
             <div>
               <label className="block text-sm font-medium mb-1">
-                {t('description')}
+                {t('group_description')}
               </label>
               <textarea
                 value={formData.description}
