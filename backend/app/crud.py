@@ -1164,3 +1164,103 @@ def update_user_preferences(session: Session, user_id: int,
     session.refresh(prefs)
     return prefs
 
+
+# ==================== Device Login CRUD ====================
+
+def get_or_create_device_login(session: Session, user_id: int, device_id: str,
+                               ip_address: Optional[str] = None,
+                               user_agent: Optional[str] = None) -> models.DeviceLogin:
+    """دریافت یا ایجاد device login"""
+    device = session.query(models.DeviceLogin).filter(
+        models.DeviceLogin.user_id == user_id,
+        models.DeviceLogin.device_id == device_id,
+        models.DeviceLogin.is_active == True
+    ).first()
+    
+    if device:
+        return device
+    
+    # Create new device login
+    device = models.DeviceLogin(
+        user_id=user_id,
+        device_id=device_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        is_active=True
+    )
+    session.add(device)
+    session.commit()
+    session.refresh(device)
+    return device
+
+
+def get_user_active_devices(session: Session, user_id: int) -> list[models.DeviceLogin]:
+    """دریافت دستگاه‌های فعال کاربر"""
+    return session.query(models.DeviceLogin).filter(
+        models.DeviceLogin.user_id == user_id,
+        models.DeviceLogin.is_active == True
+    ).all()
+
+
+def get_device_login(session: Session, device_id: int) -> Optional[models.DeviceLogin]:
+    """دریافت device login"""
+    return session.query(models.DeviceLogin).filter(
+        models.DeviceLogin.id == device_id
+    ).first()
+
+
+def logout_device(session: Session, device_id: int) -> bool:
+    """خروج از دستگاه"""
+    device = get_device_login(session, device_id)
+    if not device:
+        return False
+    
+    device.is_active = False
+    device.logout_at = func.now()
+    session.commit()
+    return True
+
+
+def increment_otp_attempt(session: Session, device_id: int) -> models.DeviceLogin:
+    """افزایش تلاش‌های OTP"""
+    device = get_device_login(session, device_id)
+    if device:
+        device.otp_attempts += 1
+        device.otp_failed_count += 1
+        
+        # Lock after 3 failed attempts for 1 hour
+        if device.otp_failed_count >= 3:
+            device.otp_locked_until = func.now() + timedelta(hours=1)
+        
+        session.commit()
+        session.refresh(device)
+    
+    return device
+
+
+def reset_otp_attempts(session: Session, device_id: int) -> models.DeviceLogin:
+    """بازنشانی تلاش‌های OTP پس از تأیید موفق"""
+    device = get_device_login(session, device_id)
+    if device:
+        device.otp_failed_count = 0
+        device.otp_locked_until = None
+        session.commit()
+        session.refresh(device)
+    
+    return device
+
+
+def is_device_otp_locked(session: Session, device_id: int) -> bool:
+    """بررسی اینکه آیا دستگاه برای OTP قفل است"""
+    device = get_device_login(session, device_id)
+    if not device or not device.otp_locked_until:
+        return False
+    
+    # Check if lockout has expired
+    if datetime.now(timezone.utc) > device.otp_locked_until:
+        device.otp_locked_until = None
+        session.commit()
+        return False
+    
+    return True
+

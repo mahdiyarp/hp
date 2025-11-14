@@ -1834,3 +1834,51 @@ async def update_user_preferences(
     prefs = crud.update_user_preferences(session, current.id, payload)
     return prefs
 
+
+@app.get('/api/security/devices', response_model=List[schemas.DeviceLoginOut])
+async def get_user_devices(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت دستگاه‌های فعال کاربر"""
+    devices = crud.get_user_active_devices(session, current.id)
+    return devices
+
+
+@app.delete('/api/security/devices/{device_id}')
+async def logout_from_device(
+    device_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """خروج از دستگاه مشخص"""
+    device = crud.get_device_login(session, device_id)
+    
+    if not device:
+        raise HTTPException(status_code=404, detail='دستگاه یافت نشد')
+    
+    if device.user_id != current.id:
+        raise HTTPException(status_code=403, detail='مجاز به حذف این دستگاه نیستید')
+    
+    success = crud.logout_device(session, device_id)
+    
+    if success:
+        log_activity(session, current.id, f'/api/security/devices/{device_id}', 'DELETE', 200, f'خروج از دستگاه {device_id}')
+        return {'detail': 'شما از این دستگاه خارج شدید'}
+    
+    raise HTTPException(status_code=500, detail='خروج ناموفق بود')
+
+
+@app.get('/api/security/login-history')
+async def get_login_history(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db),
+    limit: int = 20
+):
+    """دریافت تاریخچه‌ی ورود کاربر"""
+    devices = session.query(models.DeviceLogin).filter(
+        models.DeviceLogin.user_id == current.id
+    ).order_by(models.DeviceLogin.login_at.desc()).limit(limit).all()
+    
+    return devices
+

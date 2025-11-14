@@ -536,3 +536,23 @@ class UserPreferencesUpdate(BaseModel):
     auto_convert_currency: Optional[bool] = None
     theme_preference: Optional[str] = None
 
+
+class DeviceLoginOut(BaseModel):
+    id: int
+    user_id: int
+    device_id: str
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+    country: Optional[str]
+    city: Optional[str]
+    login_at: datetime
+    logout_at: Optional[datetime]
+    is_active: bool
+    otp_attempts: int
+    otp_failed_count: int
+    otp_locked_until: Optional[datetime]
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+

@@ -289,3 +289,23 @@ class UserPreferences(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     user = relationship('User', backref='preferences')
+
+
+class DeviceLogin(Base):
+    __tablename__ = 'device_logins'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    device_id = Column(String(128), nullable=False, index=True)  # UA fingerprint hash
+    ip_address = Column(String(45), nullable=True, index=True)  # IPv4 or IPv6
+    user_agent = Column(String(512), nullable=True)
+    country = Column(String(2), nullable=True)  # ISO country code
+    city = Column(String(128), nullable=True)
+    login_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    logout_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    otp_attempts = Column(Integer, nullable=False, default=0)
+    otp_failed_count = Column(Integer, nullable=False, default=0)
+    otp_locked_until = Column(DateTime(timezone=True), nullable=True)  # Lockout time
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    user = relationship('User', backref='device_logins')
