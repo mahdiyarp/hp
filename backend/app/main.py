@@ -492,6 +492,37 @@ def account_balances(session: Session = Depends(db.get_db), current: models.User
     return {'balances': balances}
 
 
+@app.get('/api/persons/balances')
+def persons_balances(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Get debit/credit balances for all persons"""
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
+    
+    # Get all persons
+    persons = session.query(models.Person).all()
+    
+    # Calculate balances for each person
+    result = []
+    for person in persons:
+        entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == str(person.id)).all()
+        
+        # Calculate debit (receivable - customer owes us)
+        debit_total = sum(e.amount for e in entries if e.debit_account == 'AccountsReceivable')
+        # Calculate credit (payable - we owe them)
+        credit_total = sum(e.amount for e in entries if e.credit_account == 'AccountsReceivable')
+        
+        # Net balance: positive = they owe us (debtor), negative = we owe them (creditor)
+        net_balance = debit_total - credit_total
+        
+        result.append({
+            'person_id': str(person.id),
+            'debit': debit_total,
+            'credit': credit_total,
+            'balance': net_balance
+        })
+    
+    return {'balances': result}
+
+
 @app.get('/api/ledger/party/{party_id}')
 def party_ledger(party_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Viewer'])(current)

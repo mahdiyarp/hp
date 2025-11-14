@@ -22,14 +22,32 @@ interface Person {
   created_at: string
 }
 
+interface PersonBalance {
+  person_id: string
+  debit: number
+  credit: number
+  balance: number
+}
+
+interface PersonWithBalance extends Person {
+  debit: number
+  credit: number
+  balance: number
+}
+
 type KindFilter = 'all' | 'customer' | 'supplier' | 'other'
+type SortField = 'name' | 'debit' | 'credit' | 'balance' | 'created_at'
+type SortOrder = 'asc' | 'desc'
 
 export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   const [people, setPeople] = useState<Person[]>([])
+  const [balances, setBalances] = useState<PersonBalance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -45,6 +63,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
 
   useEffect(() => {
     loadPeople()
+    loadBalances()
   }, [])
 
   async function loadPeople() {
@@ -58,6 +77,24 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       setError('امکان دریافت طرف‌های حساب وجود ندارد.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadBalances() {
+    try {
+      const data = await apiGet<{ balances: PersonBalance[] }>('/api/persons/balances')
+      setBalances(data.balances)
+    } catch (err) {
+      console.error('Failed to load balances:', err)
+    }
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
     }
   }
 
@@ -102,8 +139,20 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
     }
   }
 
+  const peopleWithBalances = useMemo(() => {
+    return people.map(p => {
+      const balance = balances.find(b => b.person_id === p.id)
+      return {
+        ...p,
+        debit: balance?.debit ?? 0,
+        credit: balance?.credit ?? 0,
+        balance: balance?.balance ?? 0,
+      } as PersonWithBalance
+    })
+  }, [people, balances])
+
   const filtered = useMemo(() => {
-    return people.filter(p => {
+    let result = peopleWithBalances.filter(p => {
       if (kindFilter !== 'all') {
         const kind = p.kind ?? 'other'
         if (kind !== kindFilter) return false
@@ -114,7 +163,35 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       }
       return true
     })
-  }, [people, kindFilter, search])
+
+    // Sort
+    result.sort((a, b) => {
+      let aVal: any = a[sortField]
+      let bVal: any = b[sortField]
+
+      // Handle null values
+      if (aVal === null || aVal === undefined) aVal = ''
+      if (bVal === null || bVal === undefined) bVal = ''
+
+      // For numeric fields
+      if (sortField === 'debit' || sortField === 'credit' || sortField === 'balance') {
+        aVal = Number(aVal) || 0
+        bVal = Number(bVal) || 0
+      }
+
+      // For date fields
+      if (sortField === 'created_at') {
+        aVal = new Date(aVal).getTime()
+        bVal = new Date(bVal).getTime()
+      }
+
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return result
+  }, [peopleWithBalances, kindFilter, search, sortField, sortOrder])
 
   if (loading) {
     return (
@@ -145,7 +222,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={loadPeople}>
+            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => { loadPeople(); loadBalances(); }}>
               بروزرسانی فهرست
             </button>
             <button
@@ -316,35 +393,73 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
         </div>
 
         {filtered.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>نام</th>
-                <th className={retroTableHeader}>نوع</th>
-                <th className={retroTableHeader}>کد</th>
-                <th className={retroTableHeader}>موبایل</th>
-                <th className={retroTableHeader}>توضیح</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(person => (
-                <tr key={person.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">
-                    {person.name}
-                    <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                      ثبت: {new Date(person.created_at).toLocaleDateString('fa-IR')}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">{person.kind ?? 'سایر'}</td>
-                  <td className="px-3 py-2">{person.code ?? '-'}</td>
-                  <td className="px-3 py-2">{person.mobile ?? '-'}</td>
-                  <td className="px-3 py-2 text-xs text-[#7a6b4f]">
-                    {person.description ?? '---'}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+              <thead>
+                <tr>
+                  <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('name')}>
+                    نام {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th className={retroTableHeader}>نوع</th>
+                  <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('debit')}>
+                    بدهکار {sortField === 'debit' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('credit')}>
+                    بستانکار {sortField === 'credit' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('balance')}>
+                    مانده {sortField === 'balance' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th className={retroTableHeader}>کد</th>
+                  <th className={retroTableHeader}>موبایل</th>
+                  <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('created_at')}>
+                    تاریخ ثبت {sortField === 'created_at' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map(person => (
+                  <tr key={person.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
+                    <td className="px-3 py-2 font-semibold">
+                      {person.name}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {person.kind === 'customer' ? 'مشتری' : person.kind === 'supplier' ? 'تأمین‌کننده' : 'سایر'}
+                    </td>
+                    <td className="px-3 py-2 text-left font-mono">
+                      {person.debit > 0 ? (
+                        <span className="text-red-700">{formatNumberFa(person.debit)}</span>
+                      ) : (
+                        <span className="text-[#7a6b4f]">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left font-mono">
+                      {person.credit > 0 ? (
+                        <span className="text-green-700">{formatNumberFa(person.credit)}</span>
+                      ) : (
+                        <span className="text-[#7a6b4f]">-</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left font-mono font-semibold">
+                      {person.balance !== 0 ? (
+                        <span className={person.balance > 0 ? 'text-red-700' : 'text-green-700'}>
+                          {formatNumberFa(Math.abs(person.balance))}
+                          {person.balance > 0 ? ' (بده)' : ' (بستان)'}
+                        </span>
+                      ) : (
+                        <span className="text-[#7a6b4f]">تسویه</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{person.code ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs">{person.mobile ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs text-[#7a6b4f]">
+                      {new Date(person.created_at).toLocaleDateString('fa-IR')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="text-xs text-[#7a6b4f]">مخاطبی با شرایط فعلی یافت نشد.</div>
         )}
