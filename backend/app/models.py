@@ -1,6 +1,37 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .db import Base
+
+
+class Role(Base):
+    __tablename__ = 'roles'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False, unique=True)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    users = relationship('User', back_populates='role_obj')
+    permissions = relationship('Permission', secondary='role_permissions', back_populates='roles')
+
+
+class Permission(Base):
+    __tablename__ = 'permissions'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, unique=True, index=True)
+    description = Column(String(255), nullable=True)
+    module = Column(String(50), nullable=True, index=True)  # sales, finance, people, inventory, settings
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    roles = relationship('Role', secondary='role_permissions', back_populates='permissions')
+
+
+class RolePermission(Base):
+    __tablename__ = 'role_permissions'
+    id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey('roles.id', ondelete='CASCADE'), nullable=False, index=True)
+    permission_id = Column(Integer, ForeignKey('permissions.id', ondelete='CASCADE'), nullable=False, index=True)
+    __table_args__ = (UniqueConstraint('role_id', 'permission_id', name='uq_role_permission'),)
 
 
 class User(Base):
@@ -10,12 +41,29 @@ class User(Base):
     email = Column(String(254), unique=True, index=True, nullable=True)
     full_name = Column(String(254), nullable=True)
     hashed_password = Column(String(512), nullable=False)
-    role = Column(String(50), nullable=False, default='Viewer')
+    role = Column(String(50), nullable=False, default='Viewer')  # Legacy field for backwards compatibility
+    role_id = Column(Integer, ForeignKey('roles.id'), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     refresh_token_hash = Column(String(512), nullable=True)
     assistant_enabled = Column(Boolean, nullable=False, default=False)
     otp_secret = Column(String(64), nullable=True)
     otp_enabled = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    role_obj = relationship('Role', back_populates='users')
+    
+    def has_permission(self, permission_name: str) -> bool:
+        """بررسی اینکه آیا کاربر دارای permission است"""
+        if self.role_obj is None:
+            return False
+        return any(p.name == permission_name for p in self.role_obj.permissions)
+    
+    def has_module_access(self, module: str) -> bool:
+        """بررسی دسترسی به یک ماژول"""
+        if self.role_obj is None:
+            return False
+        return any(p.module == module for p in self.role_obj.permissions)
 
 
 class TimeSync(Base):
@@ -87,6 +135,7 @@ class Invoice(Base):
     subtotal = Column(Integer, nullable=True)
     tax = Column(Integer, nullable=True)
     total = Column(Integer, nullable=True)
+    tracking_code = Column(String(64), nullable=True, index=True)
     note = Column(Text, nullable=True)
 
 
@@ -94,11 +143,14 @@ class InvoiceItem(Base):
     __tablename__ = 'invoice_items'
     id = Column(Integer, primary_key=True, index=True)
     invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=False)
+    product_id = Column(String(128), ForeignKey('products.id'), nullable=True)
     description = Column(String(1024), nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
     unit = Column(String(64), nullable=True)
     unit_price = Column(Integer, nullable=False)
     total = Column(Integer, nullable=False)
+    
+    product = relationship('Product', backref='invoice_items')
 
 
 class Payment(Base):
@@ -112,11 +164,15 @@ class Payment(Base):
     method = Column(String(64), nullable=True)  # cash, bank, pos, other
     amount = Column(Integer, nullable=False)
     reference = Column(String(256), nullable=True)
+    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=True, index=True)
     due_date = Column(DateTime(timezone=True), nullable=True)
     client_time = Column(DateTime(timezone=True), nullable=True)
     server_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     status = Column(String(32), nullable=False, default='draft')
     note = Column(Text, nullable=True)
+    tracking_code = Column(String(64), nullable=True, index=True)
+
+    invoice = relationship('Invoice', backref='payments')
 
 
 class Account(Base):
@@ -142,6 +198,7 @@ class LedgerEntry(Base):
     party_id = Column(String(128), nullable=True)
     party_name = Column(String(512), nullable=True)
     description = Column(Text, nullable=True)
+    tracking_code = Column(String(64), nullable=True, index=True)
 
 
 class AIReport(Base):

@@ -13,6 +13,57 @@ import {
   retroMuted,
 } from '../components/retroTheme'
 
+interface Payment {
+  id: number
+  payment_number: string | null
+  direction: string
+  party_name: string | null
+  amount: number
+  status: string
+  server_time: string
+}
+
+function RelatedPayments({ invoiceId, invoiceNumber }: { invoiceId: number; invoiceNumber: string | null }) {
+  const [payments, setPayments] = useState<Payment[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!invoiceId) return
+    setLoading(true)
+    apiGet<Payment[]>(`/api/invoices/${invoiceId}/payments`)
+      .then(setPayments)
+      .catch(() => setPayments([]))
+      .finally(() => setLoading(false))
+  }, [invoiceId])
+
+  if (loading) return <div className="text-xs text-[#7a6b4f] py-2">در حال بارگذاری پرداخت‌های مرتبط...</div>
+  if (payments.length === 0) return null
+
+  return (
+    <div className="border-t border-[#c5bca5] pt-3 mt-3">
+      <h4 className="text-sm font-semibold text-[#2e2720] mb-2">پرداخت‌های مرتبط با این فاکتور:</h4>
+      <div className="space-y-2">
+        {payments.map(p => (
+          <div key={p.id} className="flex justify-between items-center text-xs bg-[#f8f5ee] px-3 py-2 rounded border border-[#e5ddc5]">
+            <div>
+              <span className="font-semibold">{toPersianDigits(p.payment_number || `#${p.id}`)}</span>
+              {' • '}
+              <span className={p.direction === 'in' ? 'text-green-700' : 'text-red-700'}>
+                {p.direction === 'in' ? 'دریافت' : 'پرداخت'}
+              </span>
+            </div>
+            <div className="text-left">
+              <span className="font-semibold">{formatPrice(p.amount, 'ریال')}</span>
+              {' • '}
+              <span className="text-[#7a6b4f]">{p.status}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 interface Invoice {
   id: number
   invoice_number: string | null
@@ -46,6 +97,7 @@ type InvoiceItemForm = {
   quantity: number
   unit: string
   unit_price: number
+  product_id?: string | null
 }
 
 type InvoiceFormState = {
@@ -70,7 +122,7 @@ interface ProductOption {
 
 type InvoiceDetail = Invoice & { items: InvoiceItemRow[] }
 
-const emptyItem: InvoiceItemForm = { description: '', quantity: 1, unit: '', unit_price: 0 }
+const emptyItem: InvoiceItemForm = { description: '', quantity: 1, unit: '', unit_price: 0, product_id: undefined }
 
 function computeTimeDeltaSeconds(serverIso: string | null, clientIso: string | null | undefined) {
   if (!serverIso || !clientIso) return null
@@ -111,6 +163,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [nextActionModal, setNextActionModal] = useState<{
     invoiceType: 'sale' | 'purchase'
     invoiceData: {
+      id: number
       invoice_number: string | null
       party_name: string
       total: number
@@ -122,6 +175,17 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     purchase: 'فاکتور خرید',
     proforma: 'پیش‌فاکتور',
   }
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ invoice_id: number }>
+      if (custom.detail?.invoice_id) {
+        openInvoiceDetail(custom.detail.invoice_id)
+      }
+    }
+    window.addEventListener('open-invoice-detail', handler)
+    return () => window.removeEventListener('open-invoice-detail', handler)
+  }, [])
 
   useEffect(() => {
     loadInvoices()
@@ -378,6 +442,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
           quantity: Number(item.quantity),
           unit: item.unit.trim() || undefined,
           unit_price: Number(item.unit_price),
+          product_id: item.product_id || undefined,
         })),
       }
       const created = await apiPost<Invoice>('/api/invoices/manual', payload)
@@ -405,6 +470,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
           setNextActionModal({
             invoiceType: selectedType,
             invoiceData: {
+              id: created.id,
               invoice_number: created.invoice_number,
               party_name: invoiceForm.party_name,
               total: created.total || 0,
@@ -618,6 +684,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                                 ? {
                                     ...row,
                                     unit: matched.unit || row.unit,
+                                    product_id: matched.id || row.product_id,
                                   }
                                 : row,
                             )
@@ -794,8 +861,23 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                   <td className="px-3 py-2">
                     {toPersianDigits(inv.invoice_number || `#${inv.id}`)}
                     <span className="block text-[10px] text-[#7a6b4f] mt-1">حالت: {inv.mode}</span>
+                    {(inv as any).tracking_code && (
+                      <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">
+                        📍 {(inv as any).tracking_code}
+                      </span>
+                    )}
                   </td>
-                  <td className="px-3 py-2">{inv.invoice_type}</td>
+                  <td className="px-3 py-2">
+                    <span className={
+                      inv.invoice_type === 'sale'
+                        ? 'text-green-700 font-semibold'
+                        : inv.invoice_type === 'purchase'
+                        ? 'text-blue-700 font-semibold'
+                        : 'text-gray-600 italic'
+                    }>
+                      {invoiceTypeTitles[inv.invoice_type as InvoiceFormState['invoice_type']] || inv.invoice_type}
+                    </span>
+                  </td>
                   <td className="px-3 py-2">{inv.party_name ?? 'نامشخص'}</td>
                   <td className="px-3 py-2 text-left">
                     {formatCurrencyFa(inv.total || 0, 'ریال', false).numeric} <span className="text-xs">ریال</span>
@@ -848,6 +930,17 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
             <div className="flex flex-wrap gap-2">
               {invoiceDetail && (
                 <>
+                  {(invoiceDetail as any).tracking_code && (
+                    <button
+                      className={`${retroButton} !bg-purple-700 text-[11px]`}
+                      onClick={() => {
+                        const code = (invoiceDetail as any).tracking_code
+                        window.open(`/trace/${code}`, '_blank')
+                      }}
+                    >
+                      🔍 ردگیری
+                    </button>
+                  )}
                   {invoiceDetail.status !== 'final' && (
                     <button
                       className={`${retroButton} !bg-[#2d5b2d] text-[11px]`}
@@ -955,6 +1048,10 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 <p>جمع کل قبل از مالیات: {formatPrice(invoiceDetail.subtotal ?? 0, 'ریال')}</p>
                 <p>مبلغ کل نهایی: {formatPrice(invoiceDetail.total ?? 0, 'ریال')}</p>
               </div>
+
+              {invoiceDetail && (
+                <RelatedPayments invoiceId={invoiceDetail.id} invoiceNumber={invoiceDetail.invoice_number} />
+              )}
             </>
           )}
         </section>
@@ -979,18 +1076,25 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                   className={`${retroButton} !bg-[#2d5b2d] text-sm`}
                   onClick={() => {
                     const data = nextActionModal.invoiceData
-                    window.dispatchEvent(new CustomEvent('finance-prefill', {
-                      detail: {
-                        direction: nextActionModal.invoiceType === 'sale' ? 'in' : 'out',
-                        party_name: data.party_name,
-                        amount: data.total,
-                        reference: data.invoice_number,
-                        note: data.note || `بابت فاکتور ${data.invoice_number}`,
-                      }
-                    }))
                     setNextActionModal(null)
-                    const event = new CustomEvent('switch-module', { detail: { module: 'finance' } })
-                    window.dispatchEvent(event)
+                    
+                    // First switch to finance module
+                    const switchEvent = new CustomEvent('switch-module', { detail: { module: 'finance' } })
+                    window.dispatchEvent(switchEvent)
+                    
+                    // Then prefill the form after module is mounted (100ms delay)
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('finance-prefill', {
+                        detail: {
+                          invoice_id: data.id,
+                          direction: nextActionModal.invoiceType === 'sale' ? 'in' : 'out',
+                          party_name: data.party_name,
+                          amount: data.total,
+                          reference: data.invoice_number,
+                          note: data.note || `بابت فاکتور ${data.invoice_number}`,
+                        }
+                      }))
+                    }, 100)
                   }}
                 >
                   {nextActionModal.invoiceType === 'sale' ? 'ثبت دریافت' : 'ثبت پرداخت'}

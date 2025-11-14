@@ -84,7 +84,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
         username = payload.get('sub')
         if username is None:
             raise HTTPException(status_code=401, detail='Invalid authentication')
-    except Exception:
+    except Exception as e:
         raise HTTPException(status_code=401, detail='Invalid token')
     user = crud.get_user_by_username(session, username)
     if not user:
@@ -93,9 +93,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
 
 
 @app.get('/api/admin/activity', response_model=list[schemas.ActivityLogOut])
-def list_activity(q: Optional[str] = None, user_id: Optional[int] = None, start: Optional[str] = None, end: Optional[str] = None, limit: Optional[int] = 100, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    qs = db.query(models.AuditLog).order_by(models.AuditLog.created_at.desc())
+def list_activity(q: Optional[str] = None, user_id: Optional[int] = None, start: Optional[str] = None, end: Optional[str] = None, limit: Optional[int] = 100, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    qs = session.query(models.AuditLog).order_by(models.AuditLog.created_at.desc())
     if q:
         qs = qs.filter(models.AuditLog.detail.ilike(f"%{q}%"))
     if user_id:
@@ -118,25 +118,25 @@ def list_activity(q: Optional[str] = None, user_id: Optional[int] = None, start:
 
 
 @app.get('/api/admin/activity/{aid}', response_model=schemas.ActivityLogOut)
-def get_activity(aid: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    a = db.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
+def get_activity(aid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    a = session.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
     if not a:
         raise HTTPException(status_code=404, detail='Activity not found')
     return a
 
 
 @app.patch('/api/admin/activity/{aid}', response_model=schemas.ActivityLogOut)
-def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    a = db.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
+def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    a = session.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
     if not a:
         raise HTTPException(status_code=404, detail='Activity not found')
     if payload.detail is not None:
         a.detail = payload.detail
-    db.add(a)
-    db.commit()
-    db.refresh(a)
+    session.add(a)
+    session.commit()
+    session.refresh(a)
     # also write to file log to reflect edit
     try:
         log_activity(None, current.username if current else None, f"ویرایش لاگ {aid}", path=f"/api/admin/activity/{aid}", method='PATCH', status_code=200, detail={'edited_by': current.username})
@@ -145,10 +145,24 @@ def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, db: Session = D
     return a
 
 
-def require_roles(roles: List[str]):
-    def _dependency(current_user = Depends(get_current_user)):
-        if current_user.role not in roles:
-            raise HTTPException(status_code=403, detail='Insufficient permissions')
+def require_roles(role_ids: List[int] = None, role_names: List[str] = None):
+    """بررسی دسترسی بر اساس role ID یا نام
+    
+    استفاده:
+    - require_roles(role_ids=[1])  # فقط Admin (ID=1)
+    - require_roles(role_names=['Admin'])  # فقط Admin (نام)
+    """
+    def _dependency(current_user: models.User = Depends(get_current_user)):
+        if not current_user.role_id:
+            raise HTTPException(status_code=403, detail='کاربر نقشی ندارد')
+        
+        if role_ids and current_user.role_id not in role_ids:
+            raise HTTPException(status_code=403, detail='شما دسترسی ندارید')
+        
+        if role_names and current_user.role_obj:
+            if current_user.role_obj.name not in role_names:
+                raise HTTPException(status_code=403, detail='شما دسترسی ندارید')
+        
         return current_user
     return _dependency
 
@@ -206,11 +220,6 @@ def create_user(user: schemas.UserCreate, session: Session = Depends(db.get_db))
         return crud.create_user(session, user)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-
-
-@app.get("/api/users")
-def list_users(session: Session = Depends(db.get_db)):
-    return crud.get_users(session)
 
 
 @app.post('/api/auth/register', response_model=schemas.UserOut)
@@ -301,7 +310,7 @@ def otp_disable(payload: OTPDisableRequest, current_user = Depends(get_current_u
 
 # Example protected route
 @app.get('/api/admin-only')
-def admin_only(user = Depends(require_roles(['Admin']))):
+def admin_only(user = Depends(require_roles(role_names=['Admin']))):
     return {'msg': f'Hello {user.username}, you are admin.'}
 
 
@@ -311,10 +320,10 @@ def me(current_user = Depends(get_current_user)):
 
 
 @app.post('/api/invoices/manual', response_model=InvoiceOut)
-def create_invoice_manual(payload: InvoiceCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def create_invoice_manual(payload: InvoiceCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # require at least Cashier
-    require_roles(['Admin', 'Accountant', 'Cashier'])(current)
-    inv = crud.create_invoice_manual(db, payload)
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    inv = crud.create_invoice_manual(session, payload)
     return inv
 
 
@@ -338,52 +347,67 @@ def parse_invoice_upload(file: UploadFile = File(...), current: models.User = De
 
 
 @app.post('/api/invoices/from-draft', response_model=InvoiceOut)
-def create_invoice_from_draft(payload: InvoiceCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier'])(current)
-    inv = crud.create_invoice_manual(db, payload)
+def create_invoice_from_draft(payload: InvoiceCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    inv = crud.create_invoice_manual(session, payload)
     return inv
 
 
 @app.get('/api/invoices', response_model=list[InvoiceOut])
-def list_invoices(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    invs = crud.get_invoices(db, q=q)
+def list_invoices(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    invs = crud.get_invoices(session, q=q)
     # load items for each
     out = []
     for inv in invs:
         # use the current request DB session to load related items
-        items = db.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+        inv.items = items
+        out.append(inv)
+    return out
+
+
+@app.get('/api/invoices/open-for-payment', response_model=list[InvoiceOut])
+def list_open_invoices(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    # Return invoices that are not fully paid (draft or final, and either no payments or payments < total)
+    invs = session.query(models.Invoice).filter(
+        models.Invoice.status.in_(['draft', 'final'])
+    ).order_by(models.Invoice.server_time.desc()).limit(100).all()
+    out = []
+    for inv in invs:
+        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
         inv.items = items
         out.append(inv)
     return out
 
 
 @app.get('/api/integrations', response_model=list[schemas.IntegrationConfigOut])
-def list_integrations(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
+def list_integrations(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     return crud.get_integrations(db)
 
 
 @app.post('/api/integrations', response_model=schemas.IntegrationConfigOut)
-def upsert_integration(payload: schemas.IntegrationConfigIn, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    i = crud.upsert_integration(db, payload)
+def upsert_integration(payload: schemas.IntegrationConfigIn, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    i = crud.upsert_integration(session, payload)
     return i
 
 
 @app.patch('/api/integrations/{iid}/toggle', response_model=schemas.IntegrationConfigOut)
-def toggle_integration(iid: int, enabled: bool, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    i = crud.set_integration_enabled(db, iid, enabled)
+def toggle_integration(iid: int, enabled: bool, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    i = crud.set_integration_enabled(session, iid, enabled)
     if not i:
         raise HTTPException(status_code=404, detail='Integration not found')
     return i
 
 
 @app.post('/api/integrations/{iid}/refresh', response_model=schemas.IntegrationRefreshResult)
-def refresh_integration_endpoint(iid: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    integ = crud.get_integration(db, iid)
+def refresh_integration_endpoint(iid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    integ = crud.get_integration(session, iid)
     if not integ:
         raise HTTPException(status_code=404, detail='Integration not found')
     stat = external_search.aggregate_search if integ.provider in ('digikala', 'torob', 'emalls') else None
@@ -402,31 +426,94 @@ def refresh_integration_endpoint(iid: int, db: Session = Depends(db.get_db), cur
 
 
 @app.get('/api/invoices/{invoice_id}', response_model=InvoiceOut)
-def get_invoice(invoice_id: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    inv = crud.get_invoice(db, invoice_id)
+def get_invoice(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    inv = crud.get_invoice(session, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail='Invoice not found')
     # ensure items loaded
-    items = db.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
     inv.items = items
     return inv
 
 
-@app.patch('/api/invoices/{invoice_id}', response_model=InvoiceOut)
-def patch_invoice(invoice_id: int, payload: dict, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    inv = crud.update_invoice(db, invoice_id, payload)
+@app.get('/api/invoices/{invoice_id}/payments', response_model=list[PaymentOut])
+def get_invoice_payments(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    inv = crud.get_invoice(session, invoice_id)
     if not inv:
         raise HTTPException(status_code=404, detail='Invoice not found')
-    items = db.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+    # Find payments where reference matches invoice_number
+    payments = session.query(models.Payment).filter(
+        models.Payment.reference.ilike(f'%{inv.invoice_number}%')
+    ).all()
+    return payments
+
+@app.get('/api/trace/{tracking_code}')
+def trace_chain(tracking_code: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    invoice = session.query(models.Invoice).filter(models.Invoice.tracking_code == tracking_code).first()
+    payments = session.query(models.Payment).filter(models.Payment.tracking_code == tracking_code).all()
+    ledger = session.query(models.LedgerEntry).filter(models.LedgerEntry.tracking_code == tracking_code).all()
+    items = []
+    if invoice:
+        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == invoice.id).all()
+    return {
+        'tracking_code': tracking_code,
+        'invoice': invoice,
+        'payments': payments,
+        'ledger_entries': ledger,
+        'items': items,
+    }
+
+
+@app.get('/api/ledger/account-balances')
+def account_balances(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Viewer'])(current)
+    # Calculate account balances: debit - credit per account
+    all_entries = session.query(models.LedgerEntry).all()
+    balances = {}
+    for entry in all_entries:
+        if entry.debit_account not in balances:
+            balances[entry.debit_account] = 0
+        if entry.credit_account not in balances:
+            balances[entry.credit_account] = 0
+        balances[entry.debit_account] += entry.amount
+        balances[entry.credit_account] -= entry.amount
+    return {'balances': balances}
+
+
+@app.get('/api/ledger/party/{party_id}')
+def party_ledger(party_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Viewer'])(current)
+    # Get all ledger entries for a party and calculate net debit/credit
+    entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == party_id).all()
+    debit_total = sum(e.amount for e in entries if e.debit_account in ['Expenses', 'Inventory', 'Cash', 'Bank', 'POS', 'AccountsReceivable'])
+    credit_total = sum(e.amount for e in entries if e.credit_account in ['Expenses', 'Inventory', 'Cash', 'Bank', 'POS', 'AccountsPayable', 'Sales'])
+    net_balance = debit_total - credit_total
+    return {
+        'party_id': party_id,
+        'entries': entries,
+        'debit_total': debit_total,
+        'credit_total': credit_total,
+        'net_balance': net_balance,
+    }
+
+
+@app.patch('/api/invoices/{invoice_id}', response_model=InvoiceOut)
+def patch_invoice(invoice_id: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    inv = crud.update_invoice(session, invoice_id, payload)
+    if not inv:
+        raise HTTPException(status_code=404, detail='Invoice not found')
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
     inv.items = items
     return inv
 
 
 @app.post('/api/invoices/{invoice_id}/finalize', response_model=InvoiceOut)
-def finalize_invoice(invoice_id: int, payload: dict = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
+def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     client_time = None
     if payload and isinstance(payload, dict):
         ct = payload.get('client_time')
@@ -436,18 +523,18 @@ def finalize_invoice(invoice_id: int, payload: dict = None, db: Session = Depend
                 client_time = datetime.fromisoformat(ct)
             except Exception:
                 client_time = None
-    inv = crud.finalize_invoice(db, invoice_id, client_time=client_time)
+    inv = crud.finalize_invoice(session, invoice_id, client_time=client_time)
     if not inv:
         raise HTTPException(status_code=404, detail='Invoice not found')
-    items = db.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
     inv.items = items
     return inv
 
 
 @app.post('/api/payments/manual', response_model=schemas.PaymentOut)
-def create_payment_manual(payload: schemas.PaymentCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier'])(current)
-    pay = crud.create_payment_manual(db, payload)
+def create_payment_manual(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    pay = crud.create_payment_manual(session, payload)
     return pay
 
 
@@ -470,40 +557,40 @@ def parse_payment_upload(file: UploadFile = File(...), current: models.User = De
 
 
 @app.post('/api/payments/from-draft', response_model=schemas.PaymentOut)
-def create_payment_from_draft(payload: schemas.PaymentCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier'])(current)
-    pay = crud.create_payment_manual(db, payload)
+def create_payment_from_draft(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    pay = crud.create_payment_manual(session, payload)
     return pay
 
 
 @app.get('/api/payments', response_model=list[schemas.PaymentOut])
-def list_payments(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    pays = crud.get_payments(db, q=q)
+def list_payments(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    pays = crud.get_payments(session, q=q)
     return pays
 
 
 @app.get('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
-def get_payment(payment_id: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    p = crud.get_payment(db, payment_id)
+def get_payment(payment_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    p = crud.get_payment(session, payment_id)
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
     return p
 
 
 @app.patch('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
-def patch_payment(payment_id: int, payload: dict, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    p = crud.update_invoice(db, payment_id, payload)  # reuse generic update helper
+def patch_payment(payment_id: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    p = crud.update_invoice(session, payment_id, payload)  # reuse generic update helper
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
     return p
 
 
 @app.post('/api/payments/{payment_id}/finalize', response_model=schemas.PaymentOut)
-def finalize_payment_endpoint(payment_id: int, payload: dict = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
+def finalize_payment_endpoint(payment_id: int, payload: dict = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     client_time = None
     if payload and isinstance(payload, dict):
         ct = payload.get('client_time')
@@ -513,7 +600,7 @@ def finalize_payment_endpoint(payment_id: int, payload: dict = None, db: Session
                 client_time = datetime.fromisoformat(ct)
             except Exception:
                 client_time = None
-    p = crud.finalize_payment(db, payment_id, client_time=client_time)
+    p = crud.finalize_payment(session, payment_id, client_time=client_time)
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
     return p
@@ -578,9 +665,9 @@ def _parse_natural_query(q: str):
 
 
 @app.post('/api/reports/query')
-def reports_query(payload: dict, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def reports_query(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     """Accepts {'q': '...'} and returns invoices matching a small set of parsed filters."""
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     q = payload.get('q') if isinstance(payload, dict) else None
     if not q:
         raise HTTPException(status_code=400, detail='q required')
@@ -588,7 +675,7 @@ def reports_query(payload: dict, db: Session = Depends(db.get_db), current: mode
     # fetch invoices in date range
     start = filters.get('start')
     end = filters.get('end')
-    invs = crud.get_invoices(db, q=None, limit=500)
+    invs = crud.get_invoices(session, q=None, limit=500)
     res = []
     for inv in invs:
         ok = True
@@ -610,77 +697,77 @@ def reports_query(payload: dict, db: Session = Depends(db.get_db), current: mode
 
 
 @app.get('/api/reports/pnl')
-def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
+def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
-    out = crud.report_pnl(db, start=s, end=e)
+    out = crud.report_pnl(session, start=s, end=e)
     return out
 
 
 @app.get('/api/reports/person')
-def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
+def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
-    out = crud.report_person_turnover(db, party_id=party_id, party_name=party_name, start=s, end=e)
+    out = crud.report_person_turnover(session, party_id=party_id, party_name=party_name, start=s, end=e)
     return out
 
 
 @app.get('/api/reports/stock')
-def reports_stock(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    out = crud.report_stock_valuation(db)
+def reports_stock(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    out = crud.report_stock_valuation(session)
     return out
 
 
 @app.get('/api/reports/cash')
-def reports_cash(method: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    out = crud.report_cash_balance(db, method=method)
+def reports_cash(method: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    out = crud.report_cash_balance(session, method=method)
     return out
 
 
 @app.get('/api/dashboard/summary')
-def dashboard_summary(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    out = crud.dashboard_summary(db)
+def dashboard_summary(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    out = crud.dashboard_summary(session)
     return out
 
 
 @app.get('/api/dashboard/sales-trends')
-def dashboard_sales_trends(days: Optional[int] = 30, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
-    out = crud.dashboard_sales_trends(db, days=days)
+def dashboard_sales_trends(days: Optional[int] = 30, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    out = crud.dashboard_sales_trends(session, days=days)
     return out
 
 
 @app.get('/api/dashboard/old-stock')
-def dashboard_old_stock(days: Optional[int] = 90, min_qty: Optional[int] = 1, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    out = crud.dashboard_old_stock(db, days=days, min_qty=min_qty)
+def dashboard_old_stock(days: Optional[int] = 90, min_qty: Optional[int] = 1, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    out = crud.dashboard_old_stock(session, days=days, min_qty=min_qty)
     return out
 
 
 @app.get('/api/dashboard/checks-due')
-def dashboard_checks_due(within_days: Optional[int] = 14, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    out = crud.dashboard_checks_due(db, within_days=within_days)
+def dashboard_checks_due(within_days: Optional[int] = 14, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    out = crud.dashboard_checks_due(session, within_days=within_days)
     return out
 
 
 @app.get('/api/dashboard/prices')
-def dashboard_prices(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant', 'Viewer'])(current)
+def dashboard_prices(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Viewer'])(current)
     out = crud.dashboard_currency_prices()
     return out
 
 
 @app.post('/api/search')
-def api_search(payload: dict, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin','Accountant','Cashier','Viewer'])(current)
+def api_search(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     q = payload.get('q') if isinstance(payload, dict) else None
     if not q:
         raise HTTPException(status_code=400, detail='q required')
@@ -695,8 +782,8 @@ def api_search(payload: dict, db: Session = Depends(db.get_db), current: models.
 
 
 @app.post('/api/admin/ai_reports/run', response_model=schemas.AIReportOut)
-def run_ai_report(start: Optional[str] = None, end: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
+def run_ai_report(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
     from .ai_analyzer import analyze_period, run_and_persist
     from datetime import datetime
     s = None
@@ -711,37 +798,37 @@ def run_ai_report(start: Optional[str] = None, end: Optional[str] = None, db: Se
             e = datetime.fromisoformat(end)
         except Exception:
             e = None
-    rep = run_and_persist(db, start=s, end=e)
+    rep = run_and_persist(session, start=s, end=e)
     return rep
 
 
 @app.get('/api/admin/ai_reports', response_model=list[schemas.AIReportOut])
-def list_ai_reports(limit: Optional[int] = 50, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    reps = crud.get_ai_reports(db, limit=int(limit or 50))
+def list_ai_reports(limit: Optional[int] = 50, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    reps = crud.get_ai_reports(session, limit=int(limit or 50))
     return reps
 
 
 @app.post('/api/backups/manual', response_model=schemas.BackupOut)
-def manual_backup(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
+def manual_backup(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
     try:
-        bk = crud.create_backup(db, created_by=current.id, kind='manual', note=f'Manual backup by {current.username}')
+        bk = crud.create_backup(session, created_by=current.id, kind='manual', note=f'Manual backup by {current.username}')
         return bk
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get('/api/backups', response_model=list[schemas.BackupOut])
-def list_backups(limit: Optional[int] = 100, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    return crud.list_backups(db, limit=int(limit or 100))
+def list_backups(limit: Optional[int] = 100, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    return crud.list_backups(session, limit=int(limit or 100))
 
 
 @app.get('/api/backups/{bid}/download')
-def download_backup(bid: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    bk = crud.get_backup(db, bid)
+def download_backup(bid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    bk = crud.get_backup(session, bid)
     if not bk:
         raise HTTPException(status_code=404, detail='Backup not found')
     from fastapi.responses import FileResponse
@@ -749,51 +836,51 @@ def download_backup(bid: int, db: Session = Depends(db.get_db), current: models.
 
 
 @app.post('/api/financial-years', response_model=schemas.FinancialYearOut)
-def create_financial_year(payload: schemas.FinancialYearIn, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
+def create_financial_year(payload: schemas.FinancialYearIn, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
     try:
-        fy = crud.create_financial_year(db, name=payload.name, start_date=payload.start_date.isoformat(), end_date=payload.end_date.isoformat() if payload.end_date else None)
+        fy = crud.create_financial_year(session, name=payload.name, start_date=payload.start_date.isoformat(), end_date=payload.end_date.isoformat() if payload.end_date else None)
         return fy
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get('/api/financial-years', response_model=list[schemas.FinancialYearOut])
-def list_financial_years(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    return crud.get_financial_years(db)
+def list_financial_years(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    return crud.get_financial_years(session)
 
 
 @app.post('/api/financial-years/{fid}/close', response_model=schemas.FinancialYearOut)
-def close_financial_year_endpoint(fid: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
-    fy = crud.close_financial_year(db, fid, create_rollover=True, closed_by=current.id)
+def close_financial_year_endpoint(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    fy = crud.close_financial_year(session, fid, create_rollover=True, closed_by=current.id)
     if not fy:
         raise HTTPException(status_code=404, detail='Financial year not found')
     return fy
 
 
 @app.get('/api/admin/ai_reports/{rid}', response_model=schemas.AIReportOut)
-def get_ai_report(rid: int, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin', 'Accountant'])(current)
-    r = crud.get_ai_report(db, rid)
+def get_ai_report(rid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    r = crud.get_ai_report(session, rid)
     if not r:
         raise HTTPException(status_code=404, detail='Report not found')
     return r
 
 
 @app.patch('/api/admin/ai_reports/{rid}', response_model=schemas.AIReportOut)
-def review_ai_report(rid: int, payload: schemas.AIReportReview, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin'])(current)
+def review_ai_report(rid: int, payload: schemas.AIReportReview, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
     status = payload.status
     if status not in ['approved', 'dismissed', 'reviewed']:
         raise HTTPException(status_code=400, detail='invalid status')
-    rep = crud.review_ai_report(db, rid, status=status, reviewer_id=current.id if hasattr(current, 'id') else None)
+    rep = crud.review_ai_report(session, rid, status=status, reviewer_id=current.id if hasattr(current, 'id') else None)
     if not rep:
         raise HTTPException(status_code=404, detail='Report not found')
     # log the review action
     try:
-        log_activity(db, current.username if hasattr(current, 'username') else None, f"بررسی گزارش هوش مصنوعی {rid} - وضعیت: {status}", path=f"/api/admin/ai_reports/{rid}", method='PATCH', status_code=200, detail={'note': payload.note})
+        log_activity(session, current.username if hasattr(current, 'username') else None, f"بررسی گزارش هوش مصنوعی {rid} - وضعیت: {status}", path=f"/api/admin/ai_reports/{rid}", method='PATCH', status_code=200, detail={'note': payload.note})
     except Exception:
         pass
     return rep
@@ -801,7 +888,7 @@ def review_ai_report(rid: int, payload: schemas.AIReportReview, db: Session = De
 
 @app.get('/api/search/live')
 def api_search_live(q: Optional[str] = None, index: Optional[str] = 'products', limit: Optional[int] = 7, current: models.User = Depends(get_current_user)):
-    require_roles(['Admin','Accountant','Cashier','Viewer'])(current)
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     if not q:
         return {'hits': []}
     hits = suggest_live(q, index=index, limit=limit)
@@ -809,18 +896,18 @@ def api_search_live(q: Optional[str] = None, index: Optional[str] = 'products', 
 
 
 @app.post("/api/products", response_model=ProductOut)
-def api_create_product(p: ProductCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_create_product(p: ProductCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # basic RBAC: only Accountant or Admin can create products
-    require_roles(["Admin", "Accountant"])(current)
-    prod = crud.create_product(db, p)
+    require_roles(role_names=["Admin", "Accountant"])(current)
+    prod = crud.create_product(session, p)
     return prod
 
 
 @app.get("/api/products")
-def api_get_products(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_get_products(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # viewers and above can list
-    require_roles(["Admin", "Accountant", "Cashier", "Viewer"])(current)
-    return crud.get_products(db, q=q)
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
+    return crud.get_products(session, q=q)
 
 
 
@@ -829,7 +916,7 @@ def api_products_external_search(payload: ExternalSearchRequest, current: models
     """Search external Iranian marketplaces (Digikala, Torob, Emalls) and return aggregated results.
     This is best-effort scraping and may be rate-limited or blocked by the remote sites.
     """
-    require_roles(["Admin","Accountant","Cashier","Viewer"])(current)
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
     q = payload.q
     sources = payload.sources
     limit = int(payload.limit or 6)
@@ -841,11 +928,11 @@ def api_products_external_search(payload: ExternalSearchRequest, current: models
 
 
 @app.post('/api/products/external/save', response_model=ProductOut)
-def api_products_external_save(payload: SaveExternalProductRequest, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_products_external_save(payload: SaveExternalProductRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     """Save an external product result as a local product so it can be used in invoices.
     The external metadata is embedded into the product description as JSON. Optionally a price history entry is added.
     """
-    require_roles(["Admin","Accountant"])(current)
+    require_roles(role_names=["Admin", "Accountant"])(current)
     try:
         external = {
             'source': payload.source,
@@ -856,18 +943,18 @@ def api_products_external_save(payload: SaveExternalProductRequest, db: Session 
             'description': payload.description,
             'link': payload.link,
         }
-        prod = crud.create_product_from_external(db, external=external, unit=payload.unit, group=payload.group, create_price_history=payload.create_price_history)
+        prod = crud.create_product_from_external(session, external=external, unit=payload.unit, group=payload.group, create_price_history=payload.create_price_history)
         return prod
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post('/api/assistant/query', response_model=AssistantResponse)
-def api_assistant_query(payload: AssistantRequest, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # execute assistant command on behalf of the current user if enabled
     res = None
     try:
-        res = __import__('app.ai_assistant', fromlist=['']).run_assistant(db, current, payload.text)
+        res = __import__('app.ai_assistant', fromlist=['']).run_assistant(session, current, payload.text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     if not isinstance(res, dict):
@@ -877,13 +964,13 @@ def api_assistant_query(payload: AssistantRequest, db: Session = Depends(db.get_
 
 
 @app.post('/api/assistant/toggle', response_model=schemas.UserOut)
-def api_assistant_toggle(payload: AssistantToggle, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_assistant_toggle(payload: AssistantToggle, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # allow user to toggle their own assistant
     try:
-        u = crud.set_assistant_enabled(db, current.id, bool(payload.enabled))
+        u = crud.set_assistant_enabled(session, current.id, bool(payload.enabled))
         # log action
         try:
-            log_activity(db, current.username if hasattr(current, 'username') else None, f"تغییر وضعیت دستیار به {payload.enabled}")
+            log_activity(session, current.username if hasattr(current, 'username') else None, f"تغییر وضعیت دستیار به {payload.enabled}")
         except Exception:
             pass
         return u
@@ -892,15 +979,15 @@ def api_assistant_toggle(payload: AssistantToggle, db: Session = Depends(db.get_
 
 
 @app.post('/api/exports/invoice/{invoice_id}')
-def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(['Admin','Accountant','Cashier'])(current)
+def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
     try:
         if format == 'pdf':
-            path = export_invoice_pdf(db, invoice_id)
+            path = export_invoice_pdf(session, invoice_id)
         elif format == 'csv':
-            path = export_invoice_csv(db, invoice_id)
+            path = export_invoice_csv(session, invoice_id)
         elif format in ('xls','xlsx'):
-            path = export_invoice_excel(db, invoice_id)
+            path = export_invoice_excel(session, invoice_id)
         else:
             raise HTTPException(status_code=400, detail='unsupported format')
         # create share token
@@ -910,7 +997,7 @@ def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', db: Sessi
         # default expiry 24h
         from datetime import datetime, timedelta
         expires = datetime.utcnow() + timedelta(hours=24)
-        sf = crud.create_shared_file(db, token=token, file_path=path, filename=filename, created_by=current.id, expires_at=expires.isoformat())
+        sf = crud.create_shared_file(session, token=token, file_path=path, filename=filename, created_by=current.id, expires_at=expires.isoformat())
         link = f"/api/exports/shared/{token}"
         return {'token': token, 'download_url': link, 'expires_at': sf.expires_at}
     except HTTPException:
@@ -944,27 +1031,27 @@ def print_invoice_html(invoice_id: int):
 
 
 @app.post("/api/persons", response_model=PersonOut)
-def api_create_person(p: PersonCreate, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(["Admin", "Accountant"])(current)
-    person = crud.create_person(db, p)
+def api_create_person(p: PersonCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=["Admin", "Accountant"])(current)
+    person = crud.create_person(session, p)
     return person
 
 
 @app.get("/api/persons")
-def api_get_persons(q: Optional[str] = None, db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(["Admin", "Accountant", "Cashier", "Viewer"])(current)
-    return crud.get_persons(db, q=q)
+def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
+    return crud.get_persons(session, q=q)
 
 
 @app.get('/api/financial/auto-context')
-def get_financial_auto_context(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def get_financial_auto_context(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     """Get smart financial context - auto-creates current financial year and provides date suggestions"""
-    require_roles(['Admin', 'Accountant', 'Cashier', 'Viewer'])(current)
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     try:
         from .financial_automation import auto_determine_financial_context, get_smart_date_suggestions
         
-        context = auto_determine_financial_context(db)
-        suggestions = get_smart_date_suggestions(db)
+        context = auto_determine_financial_context(session)
+        suggestions = get_smart_date_suggestions(session)
         
         return {
             "context": context,
@@ -977,13 +1064,13 @@ def get_financial_auto_context(db: Session = Depends(db.get_db), current: models
 
 
 @app.post('/api/financial/smart-year')
-def create_smart_financial_year(db: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def create_smart_financial_year(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     """Auto-create financial year based on current Jalali calendar"""
-    require_roles(['Admin'])(current)
+    require_roles(role_names=['Admin'])(current)
     try:
         from .financial_automation import get_or_create_current_financial_year
         
-        fy = get_or_create_current_financial_year(db)
+        fy = get_or_create_current_financial_year(session)
         
         return {
             "financial_year": {
@@ -998,3 +1085,133 @@ def create_smart_financial_year(db: Session = Depends(db.get_db), current: model
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Users Management Endpoints ====================
+
+@app.get('/api/roles', response_model=List[schemas.RoleOut])
+async def list_roles(current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
+    """لیست تمام نقش ها - فقط Admin"""
+    return crud.get_all_roles(session)
+
+
+@app.get('/api/permissions', response_model=List[schemas.PermissionOut])
+async def list_permissions(module: Optional[str] = None, current: models.User = Depends(require_roles(role_names=['Admin'])), session: Session = Depends(db.get_db)):
+    """لیست تمام permissions - فقط Admin"""
+    if module:
+        return crud.get_permissions_by_module(session, module)
+    return crud.get_all_permissions(session)
+
+
+@app.get('/api/users', response_model=List[schemas.UserOut])
+async def list_users(current: models.User = Depends(require_roles(role_names=['Admin'])), session: Session = Depends(db.get_db)):
+    """لیست تمام کاربران - فقط Admin"""
+    users = session.query(models.User).all()
+    return users
+
+
+@app.post('/api/users', response_model=schemas.UserOut)
+async def create_user_endpoint(
+    user: schemas.UserCreate,
+    current: models.User = Depends(require_roles(role_names=['Admin'])),
+    session: Session = Depends(db.get_db)
+):
+    """ایجاد کاربر جدید - فقط Admin"""
+    
+    # بررسی وجود کاربر
+    existing = crud.get_user_by_username(session, user.username)
+    if existing:
+        raise HTTPException(status_code=400, detail='نام کاربری از قبل موجود است')
+    
+    # ایجاد کاربر جدید
+    from .security import get_password_hash
+    db_user = models.User(
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        hashed_password=get_password_hash(user.password),
+        role_id=user.role_id,
+        role='User',  # Legacy field
+        is_active=True
+    )
+    session.add(db_user)
+    session.commit()
+    session.refresh(db_user)
+    
+    log_activity(session, current.id, f'/api/users', 'POST', 201, f'کاربر {user.username} ایجاد شد')
+    return db_user
+
+
+@app.patch('/api/users/{user_id}', response_model=schemas.UserOut)
+async def update_user(
+    user_id: int,
+    update_data: schemas.UserUpdate,
+    current: models.User = Depends(require_roles(role_names=['Admin'])),
+    session: Session = Depends(db.get_db)
+):
+    """ویرایش کاربر - فقط Admin"""
+    
+    user = session.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='کاربر یافت نشد')
+    
+    update_dict = update_data.dict(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(user, key, value)
+    
+    session.commit()
+    session.refresh(user)
+    
+    log_activity(session, current.id, f'/api/users/{user_id}', 'PATCH', 200, f'کاربر {user.username} ویرایش شد')
+    return user
+
+
+@app.delete('/api/users/{user_id}')
+async def delete_user(
+    user_id: int,
+    current: models.User = Depends(require_roles(role_names=['Admin'])),
+    session: Session = Depends(db.get_db)
+):
+    """حذف کاربر - فقط Admin"""
+    
+    if user_id == current.id:
+        raise HTTPException(status_code=400, detail='نمی‌توانید خودتان را حذف کنید')
+    
+    user = session.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail='کاربر یافت نشد')
+    
+    username = user.username
+    session.delete(user)
+    session.commit()
+    
+    log_activity(session, current.id, f'/api/users/{user_id}', 'DELETE', 200, f'کاربر {username} حذف شد')
+    return {'detail': 'کاربر حذف شد'}
+
+
+@app.get('/api/current-user/permissions', response_model=List[schemas.PermissionOut])
+async def get_current_user_permissions(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت permissions کاربر فعلی"""
+    if current.role_id:
+        role = crud.get_role(session, current.role_id)
+        if role:
+            return role.permissions
+    return []
+
+
+@app.get('/api/current-user/modules', response_model=List[str])
+async def get_current_user_modules(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت ماژول های قابل دسترس برای کاربر فعلی"""
+    if current.role_id:
+        role = crud.get_role(session, current.role_id)
+        if role:
+            modules = set(p.module for p in role.permissions if p.module)
+            return list(modules)
+    return []
+

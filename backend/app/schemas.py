@@ -4,12 +4,39 @@ from typing import Optional, List, Any
 from typing import Literal
 
 
+# Role و Permission schemas
+class PermissionOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    module: Optional[str]
+    
+    class Config:
+        orm_mode = True
+
+
+class RoleOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    permissions: List[PermissionOut] = []
+    
+    class Config:
+        orm_mode = True
+
+
+class RoleCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+# User schemas
 class UserCreate(BaseModel):
     username: str
     password: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
-    role: Optional[str] = 'Viewer'
+    role_id: Optional[int] = None  # New field for role assignment
 
 
 class UserOut(BaseModel):
@@ -18,17 +45,27 @@ class UserOut(BaseModel):
     email: Optional[EmailStr]
     full_name: Optional[str]
     role: str
+    role_id: Optional[int]
     is_active: bool
     otp_enabled: bool
+    role_obj: Optional[RoleOut] = None
 
     class Config:
         orm_mode = True
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    role_id: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class Token(BaseModel):
     access_token: str
     refresh_token: str
     otp_required: bool = False
+    user: Optional[UserOut] = None
     token_type: str = 'bearer'
 
 
@@ -145,6 +182,7 @@ class InvoiceItemBase(BaseModel):
     quantity: int = 1
     unit: Optional[str] = None
     unit_price: int
+    product_id: Optional[str] = None
 
 
 class InvoiceItemCreate(InvoiceItemBase):
@@ -183,6 +221,8 @@ class InvoiceOut(BaseModel):
     tax: Optional[int]
     total: Optional[int]
     items: List[InvoiceItemOut]
+    related_payments: Optional[List[int]] = None
+    tracking_code: Optional[str] = None
 
     class Config:
         orm_mode = True
@@ -196,10 +236,12 @@ class PaymentBase(BaseModel):
     method: Optional[str] = None
     amount: int
     reference: Optional[str] = None
+    invoice_id: Optional[int] = None
     due_date: Optional[datetime] = None
     client_time: Optional[datetime] = None
     client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     note: Optional[str] = None
+    tracking_code: Optional[str] = None
 
 
 class PaymentCreate(PaymentBase):
@@ -211,6 +253,7 @@ class PaymentOut(PaymentBase):
     payment_number: Optional[str]
     server_time: datetime
     status: str
+    tracking_code: Optional[str] = None
 
     class Config:
         orm_mode = True

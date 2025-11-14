@@ -52,6 +52,7 @@ interface PaymentFormState {
   reference: string
   due_date: string
   note: string
+  invoice_id?: number
 }
 
 export default function FinanceModule({ smartDate }: ModuleComponentProps) {
@@ -68,6 +69,8 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [creating, setCreating] = useState(false)
   const [persons, setPersons] = useState<PersonOption[]>([])
   const [peopleLoading, setPeopleLoading] = useState(false)
+  const [openInvoices, setOpenInvoices] = useState<any[]>([])
+  const [invoicesLoading, setInvoicesLoading] = useState(false)
   const emptyForm: PaymentFormState = {
     direction: 'in',
     method: 'cash',
@@ -78,15 +81,19 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     note: '',
   }
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(emptyForm)
+  const [showLedger, setShowLedger] = useState(false)
+  const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([] as any)
+  const [ledgerParty, setLedgerParty] = useState<string>('')
 
   useEffect(() => {
     loadData()
     loadPersons()
+    loadOpenInvoices()
     
     // Listen for prefill events from invoice module
     const handlePrefill = (e: Event) => {
       const customEvent = e as CustomEvent
-      const { direction, party_name, amount, reference, note } = customEvent.detail
+      const { invoice_id, direction, party_name, amount, reference, note } = customEvent.detail
       setPaymentForm({
         direction: direction || 'in',
         method: 'cash',
@@ -95,6 +102,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         reference: reference || '',
         due_date: '',
         note: note || '',
+        invoice_id: invoice_id,
       })
       setShowForm(true)
       setFormError(null)
@@ -104,6 +112,32 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     window.addEventListener('finance-prefill', handlePrefill)
     return () => window.removeEventListener('finance-prefill', handlePrefill)
   }, [])
+
+  const openPartyLedger = (party: string) => {
+    const related = payments.filter(p => p.party_name === party)
+    setLedgerPayments(related as any)
+    setLedgerParty(party)
+    setShowLedger(true)
+  }
+
+  const openInvoiceFromPayment = async (pay: any) => {
+    try {
+      let invoiceId = pay.invoice_id
+      if (!invoiceId && pay.reference) {
+        // attempt lookup by reference (invoice_number)
+        const all = await apiGet<any[]>(`/api/invoices?q=${encodeURIComponent(pay.reference)}`)
+        const match = all.find(inv => inv.invoice_number === pay.reference)
+        if (match) invoiceId = match.id
+      }
+      if (invoiceId) {
+        const ev = new CustomEvent('open-invoice-detail', { detail: { invoice_id: invoiceId } })
+        window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'sales' } }))
+        setTimeout(() => window.dispatchEvent(ev), 150)
+      }
+    } catch (e) {
+      console.error('Failed to open invoice from payment', e)
+    }
+  }
 
   async function loadData(showSpinner = true) {
     if (showSpinner) setLoading(true)
@@ -132,6 +166,18 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       console.warn('Failed to load persons', err)
     } finally {
       setPeopleLoading(false)
+    }
+  }
+
+  async function loadOpenInvoices() {
+    try {
+      setInvoicesLoading(true)
+      const data = await apiGet<any[]>('/api/invoices/open-for-payment').catch(() => [])
+      setOpenInvoices(data ?? [])
+    } catch (err) {
+      console.warn('Failed to load invoices', err)
+    } finally {
+      setInvoicesLoading(false)
     }
   }
 
@@ -199,6 +245,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         note: paymentForm.note.trim() || undefined,
         due_date: due,
         client_time: clientTime,
+        invoice_id: paymentForm.invoice_id,
       }
       await apiPost<Payment>('/api/payments/manual', payload)
       await loadData(false)
@@ -431,6 +478,27 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className={retroHeading}>فاکتور مرتبط (اختیاری)</label>
+              <select
+                value={paymentForm.invoice_id || ''}
+                onChange={e => setPaymentForm(prev => ({ ...prev, invoice_id: e.target.value ? Number(e.target.value) : undefined }))}
+                className={`${retroInput} w-full`}
+              >
+                <option value="">-- انتخاب نکن --</option>
+                {openInvoices.map(inv => (
+                  <option key={inv.id} value={inv.id}>
+                    {inv.invoice_type === 'sale' ? '📤 فروش' : inv.invoice_type === 'purchase' ? '📥 خرید' : '📋'}
+                    {' '}
+                    {inv.invoice_number} ({inv.party_name}) - {inv.total ? `${formatNumberFa(inv.total)} ریال` : '---'}
+                  </option>
+                ))}
+              </select>
+              {invoicesLoading && (
+                <p className="text-[10px] text-[#7a6b4f] mt-1">در حال بارگذاری فاکتورها...</p>
+              )}
+            </div>
+
             {formError && (
               <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
                 {formError}
@@ -516,17 +584,33 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                 <th className={retroTableHeader}>مبلغ</th>
                 <th className={retroTableHeader}>وضعیت</th>
                 <th className={retroTableHeader}>تاریخ</th>
+                <th className={retroTableHeader}>لینک</th>
               </tr>
             </thead>
             <tbody>
               {filteredPayments.map(pay => (
                 <tr key={pay.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">{pay.payment_number ?? `#${pay.id}`}</td>
                   <td className="px-3 py-2">
-                    <span className={`${retroBadge}`}>{pay.direction === 'in' ? 'دریافتی' : 'پرداختی'}</span>
+                    {pay.payment_number ?? `#${pay.id}`}
+                    {(pay as any).tracking_code && (
+                      <span className="block text-[8px] bg-yellow-100 text-yellow-800 px-1 py-0.5 mt-1 rounded truncate">
+                        📍 {(pay as any).tracking_code}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`${retroBadge} ${pay.direction === 'in' ? '!bg-green-700' : '!bg-red-700'}`}>{pay.direction === 'in' ? 'دریافتی' : 'پرداختی'}</span>
                   </td>
                   <td className="px-3 py-2">{pay.method ?? 'نامشخص'}</td>
-                  <td className="px-3 py-2">{pay.party_name ?? 'نامشخص'}</td>
+                  <td className="px-3 py-2">
+                    {pay.party_name ?? 'نامشخص'}
+                    {pay.party_name && (
+                      <button
+                        onClick={() => openPartyLedger(pay.party_name!)}
+                        className="ml-2 text-[10px] underline text-[#1f2e3b] hover:text-[#5b4a2f]"
+                      >گردش</button>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-left">{formatNumberFa(pay.amount)}</td>
                   <td className="px-3 py-2">
                     <span className={`${retroBadge}`}>{pay.status}</span>
@@ -537,6 +621,22 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                       <span className="block text-[10px] text-[#7a6b4f] mt-1">
                         سررسید: {isoToJalali(pay.due_date)}
                       </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-left space-x-1">
+                    {(pay as any).tracking_code && (
+                      <button
+                        onClick={() => window.open(`/trace/${(pay as any).tracking_code}`, '_blank')}
+                        className="text-[11px] px-2 py-1 border border-purple-700 bg-purple-100 hover:bg-purple-200 transition"
+                      >🔍</button>
+                    )}
+                    {(pay as any).invoice_id || pay.reference ? (
+                      <button
+                        onClick={() => openInvoiceFromPayment(pay)}
+                        className="text-[11px] px-2 py-1 border border-[#c5bca5] bg-[#ece5d1] hover:bg-[#e0d6bc] transition"
+                      >فاکتور</button>
+                    ) : (
+                      <span className="text-[10px] text-[#7a6b4f]">---</span>
                     )}
                   </td>
                 </tr>
@@ -591,6 +691,34 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
           <div className="text-xs text-[#7a6b4f]">چکی در بازه انتخابی یافت نشد.</div>
         )}
       </section>
+      {showLedger && ledgerPayments.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowLedger(false)}>
+          <div className={`${retroPanel} max-w-lg w-full mx-4 p-5 space-y-4`} onClick={e => e.stopPropagation()}>
+            <h4 className="text-sm font-semibold">گردش حساب: {ledgerParty}</h4>
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {ledgerPayments.map(p => (
+                <div key={p.id} className="flex justify-between items-center text-xs bg-[#f8f5ee] px-3 py-2 rounded border border-[#e5ddc5]">
+                  <div>
+                    <span className="font-semibold">{p.payment_number || `#${p.id}`}</span>
+                    {' • '}
+                    <span className={p.direction === 'in' ? 'text-green-700' : 'text-red-700'}>
+                      {p.direction === 'in' ? 'دریافت' : 'پرداخت'}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <span className="font-semibold">{formatNumberFa(p.amount)}</span>
+                    {' • '}
+                    <span className="text-[#7a6b4f]">{isoToJalali(p.server_time)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <button className={`${retroButton} text-[11px]`} onClick={() => setShowLedger(false)}>بستن</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -20,9 +20,16 @@ do
   sleep 1
 done
 
-echo "Running migrations"
-# Use 'heads' to apply all head revisions (handles multiple heads in repo history)
-alembic upgrade heads
+echo "Running migrations (multi-branch sequence)"
+set +e
+alembic upgrade 0007_ledger || echo "Ledger branch applied or skipped"
+alembic upgrade 0016_add_invoice_fk_to_payments || echo "Invoice FK applied or skipped"
+alembic upgrade 0017_merge_heads || echo "Merge heads applied or skipped"
+alembic upgrade 0018_add_tracking_code || echo "Tracking code migration applied or skipped"
+alembic upgrade 0019_product_id || echo "Product ID to invoice items applied or skipped"
+alembic upgrade 0020_user_roles_permissions || echo "Roles and permissions migration applied or skipped"
+alembic upgrade 0021_add_timestamps_to_users || echo "Timestamps to users migration applied or skipped"
+set -e
 
 # optional demo seeding
 if [ "${DEMO_SEED:-}" = "true" ]; then

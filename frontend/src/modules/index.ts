@@ -5,17 +5,8 @@ import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
 import SystemModule from './SystemModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
-import ReportsModule from './ReportsModule'
-import SearchModule from './SearchModule'
 
 export const modules: ModuleDefinition[] = [
-  {
-    id: 'dashboard',
-    label: 'داشبورد مرکزی',
-    description: 'نمای کلی وضعیت مالی، موجودی و شاخص‌های کلیدی',
-    component: DashboardModule,
-    badge: 'OVERVIEW',
-  },
   {
     id: 'sales',
     label: 'فروش و اسناد',
@@ -45,21 +36,7 @@ export const modules: ModuleDefinition[] = [
     badge: 'RELATIONS',
   },
   {
-    id: 'reports',
-    label: 'گزارش‌های مالی',
-    description: 'تحلیل سود و زیان، ارزش موجودی و تراز نقدی',
-    component: ReportsModule,
-    badge: 'ANALYTICS',
-  },
-  {
-    id: 'search',
-    label: 'جستجوی هوشمند',
-    description: 'جستجوی یکپارچه در کالاها، فاکتورها و پرداخت‌ها',
-    component: SearchModule,
-    badge: 'SEARCH',
-  },
-  {
-    id: 'system',
+    id: 'settings',
     label: 'تنظیمات سیستم',
     description: 'تاریخ هوشمند، بکاپ‌ها، یکپارچه‌سازی و لاگ‌ها',
     component: SystemModule,

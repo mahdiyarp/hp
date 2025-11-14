@@ -65,3 +65,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   })
 }
 
+export async function apiDelete<T>(path: string, init?: RequestInit) {
+  return apiRequest<T>(path, 'DELETE', init)
+}
+

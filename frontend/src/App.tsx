@@ -21,7 +21,7 @@ export type SyncRecord = {
 export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
-  const { user, logout } = useAuth()
+  const { user, modules: userModules, logout } = useAuth()
 
   async function syncTime() {
     const before = new Date()
@@ -160,9 +160,14 @@ export default function App() {
 
   // Show dashboard when user is logged in and smart date is initialized OR time has passed
   if (smartDateInitialized) {
+    // Filter modules based on user's accessible modules
+    const accessibleModules = modules.filter(mod => 
+      userModules.length === 0 || userModules.includes(mod.id)
+    )
+    
     return (
       <AppShell
-        modules={modules}
+        modules={accessibleModules.length > 0 ? accessibleModules : modules}
         sync={sync}
         user={user ? { username: user.username, role: user.role } : null}
         onLogout={logout}
