@@ -1061,3 +1061,106 @@ def dashboard_currency_prices():
     # cache for 5 minutes by default
     set_cache(cache_key, res, ttl_seconds=300)
     return res
+
+
+# ==================== User SMS Config CRUD ====================
+
+def get_user_sms_config(session: Session, user_id: int) -> Optional[models.UserSmsConfig]:
+    """دریافت تنظیمات SMS کاربر"""
+    return session.query(models.UserSmsConfig).filter(models.UserSmsConfig.user_id == user_id).first()
+
+
+def create_user_sms_config(session: Session, user_id: int, config: schemas.UserSmsConfigCreate) -> models.UserSmsConfig:
+    """ایجاد تنظیمات SMS جدید برای کاربر"""
+    encrypted_key = encrypt_value(config.api_key) if config.api_key else None
+    sms_config = models.UserSmsConfig(
+        user_id=user_id,
+        provider=config.provider or 'ippanel',
+        api_key=encrypted_key,
+        sender_name=config.sender_name,
+        enabled=config.enabled,
+        auto_sms_enabled=config.auto_sms_enabled
+    )
+    session.add(sms_config)
+    session.commit()
+    session.refresh(sms_config)
+    return sms_config
+
+
+def update_user_sms_config(session: Session, user_id: int, config: schemas.UserSmsConfigUpdate) -> Optional[models.UserSmsConfig]:
+    """به‌روز رسانی تنظیمات SMS کاربر"""
+    sms_config = get_user_sms_config(session, user_id)
+    if not sms_config:
+        return None
+    
+    if config.api_key is not None:
+        sms_config.api_key = encrypt_value(config.api_key)
+    if config.sender_name is not None:
+        sms_config.sender_name = config.sender_name
+    if config.provider is not None:
+        sms_config.provider = config.provider
+    if config.enabled is not None:
+        sms_config.enabled = config.enabled
+    if config.auto_sms_enabled is not None:
+        sms_config.auto_sms_enabled = config.auto_sms_enabled
+    
+    session.commit()
+    session.refresh(sms_config)
+    return sms_config
+
+
+def delete_user_sms_config(session: Session, user_id: int) -> bool:
+    """حذف تنظیمات SMS کاربر"""
+    sms_config = get_user_sms_config(session, user_id)
+    if sms_config:
+        session.delete(sms_config)
+        session.commit()
+        return True
+    return False
+
+
+# ==================== User Preferences CRUD ====================
+
+def get_user_preferences(session: Session, user_id: int) -> Optional[models.UserPreferences]:
+    """دریافت تنظیمات کاربر"""
+    return session.query(models.UserPreferences).filter(
+        models.UserPreferences.user_id == user_id
+    ).first()
+
+
+def create_user_preferences(session: Session, user_id: int, 
+                           language: str = 'fa', currency: str = 'irr',
+                           auto_convert: bool = False) -> models.UserPreferences:
+    """ایجاد تنظیمات کاربر جدید"""
+    prefs = models.UserPreferences(
+        user_id=user_id,
+        language=language,
+        currency=currency,
+        auto_convert_currency=auto_convert
+    )
+    session.add(prefs)
+    session.commit()
+    session.refresh(prefs)
+    return prefs
+
+
+def update_user_preferences(session: Session, user_id: int, 
+                           update: schemas.UserPreferencesUpdate) -> Optional[models.UserPreferences]:
+    """به‌روزرسانی تنظیمات کاربر"""
+    prefs = get_user_preferences(session, user_id)
+    if not prefs:
+        return None
+    
+    if update.language is not None:
+        prefs.language = update.language
+    if update.currency is not None:
+        prefs.currency = update.currency
+    if update.auto_convert_currency is not None:
+        prefs.auto_convert_currency = update.auto_convert_currency
+    if update.theme_preference is not None:
+        prefs.theme_preference = update.theme_preference
+    
+    session.commit()
+    session.refresh(prefs)
+    return prefs
+

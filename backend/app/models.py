@@ -40,6 +40,7 @@ class User(Base):
     username = Column(String(150), unique=True, index=True, nullable=False)
     email = Column(String(254), unique=True, index=True, nullable=True)
     full_name = Column(String(254), nullable=True)
+    mobile = Column(String(32), nullable=True, index=True)  # phone number for SMS login
     hashed_password = Column(String(512), nullable=False)
     role = Column(String(50), nullable=False, default='Viewer')  # Legacy field for backwards compatibility
     role_id = Column(Integer, ForeignKey('roles.id'), nullable=True, index=True)
@@ -259,3 +260,32 @@ class FinancialYear(Base):
     closed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     opening_balances = Column(Text, nullable=True)  # JSON: account -> amount
+
+
+class UserSmsConfig(Base):
+    __tablename__ = 'user_sms_configs'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True, index=True)
+    provider = Column(String(50), nullable=False, default='ippanel')  # sms provider
+    api_key = Column(String(512), nullable=True)  # encrypted IPPanel API key or other provider key
+    sender_name = Column(String(128), nullable=True)  # sender ID (for IPPanel)
+    enabled = Column(Boolean, nullable=False, default=False)  # user wants to use own SMS config
+    auto_sms_enabled = Column(Boolean, nullable=False, default=False)  # send auto SMS on invoice/payment events
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    user = relationship('User', backref='sms_config')
+
+
+class UserPreferences(Base):
+    __tablename__ = 'user_preferences'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, unique=True, index=True)
+    language = Column(String(5), nullable=False, default='fa')  # fa, en, ar, ku
+    currency = Column(String(3), nullable=False, default='irr')  # irr, usd, aed
+    auto_convert_currency = Column(Boolean, nullable=False, default=False)
+    theme_preference = Column(String(50), nullable=True, default='default')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    user = relationship('User', backref='preferences')

@@ -50,6 +50,7 @@ class UserOut(BaseModel):
     username: str
     email: Optional[EmailStr]
     full_name: Optional[str]
+    mobile: Optional[str]
     role: str
     role_id: Optional[int]
     is_active: bool
@@ -63,6 +64,7 @@ class UserOut(BaseModel):
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     email: Optional[EmailStr] = None
+    mobile: Optional[str] = None
     role_id: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -449,3 +451,88 @@ class FinancialYearOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+# SMS Configuration schemas
+class UserSmsConfigCreate(BaseModel):
+    api_key: str  # IPPanel API key (will be encrypted)
+    sender_name: Optional[str] = None
+    provider: str = 'ippanel'
+    enabled: bool = False
+    auto_sms_enabled: bool = False
+
+
+class UserSmsConfigUpdate(BaseModel):
+    api_key: Optional[str] = None
+    sender_name: Optional[str] = None
+    provider: Optional[str] = None
+    enabled: Optional[bool] = None
+    auto_sms_enabled: Optional[bool] = None
+
+
+class UserSmsConfigOut(BaseModel):
+    id: int
+    user_id: int
+    provider: str
+    sender_name: Optional[str]
+    enabled: bool
+    auto_sms_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class SmsSendRequest(BaseModel):
+    to: str  # phone number
+    message: str
+
+
+class SmsTestResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class PhoneLoginRequest(BaseModel):
+    phone: str  # mobile number like 09123456789
+
+
+class PhoneLoginResponse(BaseModel):
+    success: bool
+    message: str
+    session_id: Optional[str] = None
+
+
+class PhoneOtpVerifyRequest(BaseModel):
+    session_id: str
+    otp_code: str  # 6-digit OTP code
+
+
+class PhoneOtpVerifyResponse(BaseModel):
+    success: bool
+    access_token: Optional[str] = None
+    token_type: Optional[str] = 'bearer'
+    message: Optional[str] = None
+
+
+class UserPreferencesOut(BaseModel):
+    id: int
+    user_id: int
+    language: str  # fa, en, ar, ku
+    currency: str  # irr, usd, aed
+    auto_convert_currency: bool
+    theme_preference: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class UserPreferencesUpdate(BaseModel):
+    language: Optional[str] = None
+    currency: Optional[str] = None
+    auto_convert_currency: Optional[bool] = None
+    theme_preference: Optional[str] = None
+

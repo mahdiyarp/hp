@@ -9,6 +9,13 @@ import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
   {
+    id: 'dashboard',
+    label: 'داشبورد',
+    description: 'نمایش خلاصه و معمّای خوی معاملات و تحلیل‌های سریع',
+    component: DashboardModule,
+    badge: 'DASHBOARD',
+  },
+  {
     id: 'reports',
     label: 'گزارش‌ها و تحلیل‌ها',
     description: 'سود و زیان، تراز نقدی و ارزش موجودی',

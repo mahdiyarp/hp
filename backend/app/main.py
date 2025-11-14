@@ -351,6 +351,158 @@ def me(current_user = Depends(get_current_user)):
     return current_user
 
 
+@app.post('/api/auth/login-phone', response_model=schemas.PhoneLoginResponse)
+def login_phone(payload: schemas.PhoneLoginRequest, session: Session = Depends(db.get_db)):
+    """
+    درخواست ورود با شماره تلفن.
+    OTP را از طریق SMS ارسال می‌کند.
+    """
+    from .sms import create_otp_session, send_sms as send_sms_func
+    
+    phone = payload.phone.strip()
+    
+    # بررسی شماره تلفن
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='شماره تلفن نامعتبر است')
+    
+    # جستجو برای کاربر با این شماره تلفن
+    user: Optional[models.User] = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail='کاربر با این شماره تلفن یافت نشد')
+    
+    if user and not user.is_active:
+        raise HTTPException(status_code=403, detail='حساب کاربری غیر فعال است')
+    
+    # ایجاد جلسه OTP
+    session_id, otp_code = create_otp_session(phone)
+    
+    # ارسال OTP
+    message = f'کد ورود شما: {otp_code}\nاین کد 5 دقیقه معتبر است.'
+    success, msg = send_sms_func(session, phone, message, user_id=user.id if user else None)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f'خطا در ارسال پیام: {msg}')
+    
+    return schemas.PhoneLoginResponse(
+        success=True,
+        message='کد تأیید از طریق پیام کوتاه ارسال شد',
+        session_id=session_id
+    )
+
+
+@app.post('/api/auth/verify-phone-otp', response_model=schemas.PhoneOtpVerifyResponse)
+def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = Depends(db.get_db)):
+    """
+    تأیید کد OTP و دریافت access token.
+    """
+    from .sms import verify_otp_session
+    
+    is_valid, phone = verify_otp_session(payload.session_id, payload.otp_code)
+    
+    if not is_valid or not phone:
+        raise HTTPException(status_code=400, detail='کد OTP نامعتبر یا منقضی است')
+    
+    # جستجو برای کاربر
+    user: Optional[models.User] = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail='کاربر یافت نشد')
+    
+    # ایجاد access token
+    access_token = security.create_access_token(str(user.username), expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(str(user.username))
+    crud.set_refresh_token(session, user, refresh_token)
+    
+    return schemas.PhoneOtpVerifyResponse(
+        success=True,
+        access_token=access_token,
+        token_type='bearer',
+        message='ورود موفق'
+    )
+
+
+# ==================== User SMS Configuration ====================
+
+@app.get('/api/users/{user_id}/sms-config', response_model=schemas.UserSmsConfigOut)
+def get_user_sms_config(user_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """
+    دریافت تنظیمات SMS کاربر.
+    """
+    if current.id != user_id:  # type: ignore
+        require_permissions(['settings_edit'])(current)
+    config = crud.get_user_sms_config(session, user_id)
+    if not config:
+        raise HTTPException(status_code=404, detail='تنظیمات SMS یافت نشد')
+    return config
+
+
+@app.post('/api/users/{user_id}/sms-config', response_model=schemas.UserSmsConfigOut)
+def create_user_sms_config(user_id: int, payload: schemas.UserSmsConfigCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """
+    ایجاد تنظیمات SMS برای کاربر.
+    """
+    if current.id != user_id:  # type: ignore
+        require_permissions(['settings_edit'])(current)
+    existing = crud.get_user_sms_config(session, user_id)
+    if existing:
+        raise HTTPException(status_code=409, detail='تنظیمات SMS قبلاً ایجاد شده است')
+    config = crud.create_user_sms_config(session, user_id, payload)
+    return config
+
+
+@app.put('/api/users/{user_id}/sms-config', response_model=schemas.UserSmsConfigOut)
+def update_user_sms_config(user_id: int, payload: schemas.UserSmsConfigUpdate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """
+    به‌روز رسانی تنظیمات SMS کاربر.
+    """
+    if current.id != user_id:  # type: ignore
+        require_permissions(['settings_edit'])(current)
+    config = crud.update_user_sms_config(session, user_id, payload)
+    if not config:
+        raise HTTPException(status_code=404, detail='تنظیمات SMS یافت نشد')
+    return config
+
+
+@app.delete('/api/users/{user_id}/sms-config')
+def delete_user_sms_config(user_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):  # type: ignore
+    """
+    حذف تنظیمات SMS کاربر.
+    """
+    if current.id != user_id:  # type: ignore
+        require_permissions(['settings_edit'])(current)
+    if crud.delete_user_sms_config(session, user_id):
+        return {'success': True, 'message': 'تنظیمات حذف شد'}  # type: ignore
+    raise HTTPException(status_code=404, detail='تنظیمات SMS یافت نشد')
+
+
+@app.post('/api/users/{user_id}/sms-test', response_model=schemas.SmsTestResponse)
+def test_user_sms(user_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """
+    ارسال پیام تست برای بررسی تنظیمات SMS.
+    """
+    if current.id != user_id:  # type: ignore
+        require_permissions(['settings_edit'])(current)
+    user = crud.get_user(session, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail='کاربر یافت نشد')
+    if not user.mobile:  # type: ignore
+        raise HTTPException(status_code=400, detail='شماره تلفن کاربر موجود نیست')
+    
+    from .sms import send_sms as send_sms_func
+    message = 'این یک پیام تست از سیستم Hesabpak است.'
+    success, msg = send_sms_func(session, user.mobile, message, user_id=user_id)  # type: ignore
+    
+    return schemas.SmsTestResponse(
+        success=success,
+        message=msg if success else f'خطا: {msg}'
+    )
+
+
 @app.post('/api/invoices/manual', response_model=InvoiceOut)
 def create_invoice_manual(payload: InvoiceCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # require at least Cashier
@@ -1643,4 +1795,42 @@ async def get_current_user_modules(
                 pass
             return list(modules)
     return []
+
+
+@app.get('/api/users/preferences', response_model=schemas.UserPreferencesOut)
+async def get_user_preferences(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت تنظیمات کاربر فعلی"""
+    prefs = crud.get_user_preferences(session, current.id)
+    if not prefs:
+        # ایجاد تنظیمات پیش‌فرض اگر وجود نداشته باشد
+        prefs = crud.create_user_preferences(session, current.id)
+    return prefs
+
+
+@app.put('/api/users/preferences', response_model=schemas.UserPreferencesOut)
+async def update_user_preferences(
+    payload: schemas.UserPreferencesUpdate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """به‌روزرسانی تنظیمات کاربر فعلی"""
+    # Validate language and currency
+    valid_languages = ['fa', 'en', 'ar', 'ku']
+    valid_currencies = ['irr', 'usd', 'aed']
+    
+    if payload.language and payload.language not in valid_languages:
+        raise HTTPException(status_code=400, detail=f'زبان نامعتبر است. موارد قابل قبول: {valid_languages}')
+    
+    if payload.currency and payload.currency not in valid_currencies:
+        raise HTTPException(status_code=400, detail=f'واحد پولی نامعتبر است. موارد قابل قبول: {valid_currencies}')
+    
+    prefs = crud.get_user_preferences(session, current.id)
+    if not prefs:
+        prefs = crud.create_user_preferences(session, current.id)
+    
+    prefs = crud.update_user_preferences(session, current.id, payload)
+    return prefs
 
