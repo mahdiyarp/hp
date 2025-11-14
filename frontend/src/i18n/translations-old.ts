@@ -12,9 +12,6 @@ export const fa = {
   delete: 'حذف',
   close: 'بستن',
   back: 'بازگشت',
-  remove: 'حذف',
-  are_you_sure: 'آیا مطمئن هستید؟',
-  please_fill_required_fields: 'لطفا فیلدهای ضروری را پر کنید',
 
   // Dashboard
   dashboard: 'داشبورد',
@@ -39,16 +36,16 @@ export const fa = {
   logout: 'خروج',
   username: 'نام کاربری',
   password: 'رمز عبور',
-  remember_me: 'مرا به خاطر بسپار',
-  otp_code: 'کد یک‌بار‌مصرف',
+  remember_me: 'مرا یاد بسپار',
+  otp_code: 'کد تأیید یکبار مصرف',
   phone_login: 'ورود با شماره تلفن',
-  mobile_number: 'شماره موبایل',
+  mobile_number: 'شماره تلفن',
   invalid_credentials: 'نام کاربری یا رمز عبور نادرست است',
 
   // Currency
-  currency: 'ارز',
-  irr: 'ریال ایرانی',
-  usd: 'دلار آمریکایی',
+  currency: 'واحد پولی',
+  irr: 'ریال ایران',
+  usd: 'دلار آمریکا',
   aed: 'درهم امارات',
   auto_convert: 'تبدیل خودکار',
 
@@ -75,7 +72,6 @@ export const fa = {
   shared: 'اشتراک‌شده',
   private: 'خصوصی',
   please_select_group_and_member: 'لطفا گروه و شخص را انتخاب کنید',
-  name: 'نام',
 
   // Messages
   save_success: 'تغییرات با موفقیت ذخیره شد',
@@ -98,9 +94,6 @@ export const en = {
   delete: 'Delete',
   close: 'Close',
   back: 'Back',
-  remove: 'Remove',
-  are_you_sure: 'Are you sure?',
-  please_fill_required_fields: 'Please fill required fields',
 
   // Dashboard
   dashboard: 'Dashboard',
@@ -161,7 +154,6 @@ export const en = {
   shared: 'Shared',
   private: 'Private',
   please_select_group_and_member: 'Please select group and member',
-  name: 'Name',
 
   // Messages
   save_success: 'Changes saved successfully',
@@ -184,9 +176,6 @@ export const ar = {
   delete: 'حذف',
   close: 'إغلاق',
   back: 'العودة',
-  remove: 'إزالة',
-  are_you_sure: 'هل أنت متأكد؟',
-  please_fill_required_fields: 'يرجى ملء الحقول المطلوبة',
 
   // Dashboard
   dashboard: 'لوحة التحكم',
@@ -247,11 +236,10 @@ export const ar = {
   shared: 'مشترك',
   private: 'خاص',
   please_select_group_and_member: 'يرجى تحديد المجموعة والعضو',
-  name: 'الاسم',
 
   // Messages
-  save_success: 'تم حفظ التغييرات بنجاح',
-  delete_confirm: 'هل أنت متأكد من حذف هذا البند؟',
+  save_success: 'تم الحفظ بنجاح',
+  delete_confirm: 'هل أنت متأكد من حذف هذا العنصر؟',
   operation_failed: 'فشلت العملية',
   session_expired: 'انتهت جلستك',
 }
@@ -270,9 +258,6 @@ export const ku = {
   delete: 'Delete',
   close: 'Close',
   back: 'Back',
-  remove: 'Remove',
-  are_you_sure: 'Are you sure?',
-  please_fill_required_fields: 'Please fill required fields',
 
   // Dashboard
   dashboard: 'Dashboard',
@@ -318,22 +303,21 @@ export const ku = {
   kurdish: 'کوردی',
 
   // Customer Groups
-  customer_groups: 'Customer Groups',
-  manage_customer_groups_description: 'Create and manage customer groups for better organization',
-  create_group: 'Create Group',
-  edit_group: 'Edit Group',
-  group_name: 'Group Name',
-  group_description: 'Group Description',
-  is_shared: 'Shared',
-  no_groups_yet: 'No groups created yet',
-  no_members_yet: 'No members added yet',
-  add_member: 'Add Member',
-  select_person: 'Select Person',
-  members: 'Members',
-  shared: 'Shared',
-  private: 'Private',
-  please_select_group_and_member: 'Please select group and member',
-  name: 'Name',
+  customer_groups: 'گروه‌های مشتری',
+  manage_customer_groups_description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
+  create_group: 'ایجاد گروه',
+  edit_group: 'ویرایش گروه',
+  group_name: 'نام گروه',
+  group_description: 'توضیح گروه',
+  is_shared: 'اشتراک‌گذاری',
+  no_groups_yet: 'هنوز گروهی ایجاد نشده',
+  no_members_yet: 'هنوز عضوی اضافه نشده',
+  add_member: 'اضافه کردن عضو',
+  select_person: 'انتخاب شخص',
+  members: 'اعضا',
+  shared: 'اشتراک‌شده',
+  private: 'خصوصی',
+  please_select_group_and_member: 'لطفا گروه و شخص را انتخاب کنید',
 
   // Messages
   save_success: 'Changes saved',

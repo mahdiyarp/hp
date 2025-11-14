@@ -5,6 +5,7 @@ import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
 import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
+import CustomerGroupsModule from './CustomerGroupsModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -14,6 +15,13 @@ export const modules: ModuleDefinition[] = [
     description: 'نمایش خلاصه و معمّای خوی معاملات و تحلیل‌های سریع',
     component: DashboardModule,
     badge: 'DASHBOARD',
+  },
+  {
+    id: 'customer-groups',
+    label: 'گروه‌های مشتری',
+    description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
+    component: CustomerGroupsModule,
+    badge: 'GROUPS',
   },
   {
     id: 'reports',

@@ -637,3 +637,39 @@ class BlockchainProof(BaseModel):
     total_entries_in_chain: int
     entry_position: int
 
+
+class CustomerGroupMemberOut(BaseModel):
+    id: int
+    group_id: int
+    person_id: str
+    added_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class CustomerGroupCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_shared: bool = False
+
+
+class CustomerGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_shared: Optional[bool] = None
+
+
+class CustomerGroupOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    created_by_user_id: int
+    is_shared: bool
+    created_at: datetime
+    updated_at: datetime
+    members: List[CustomerGroupMemberOut] = []
+    
+    class Config:
+        orm_mode = True
+

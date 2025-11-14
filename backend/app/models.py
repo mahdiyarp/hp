@@ -344,3 +344,28 @@ class BlockchainEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     user = relationship('User', backref='blockchain_entries')
+
+
+class CustomerGroup(Base):
+    __tablename__ = 'customer_groups'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    is_shared = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    created_by_user = relationship('User', backref='customer_groups')
+    members = relationship('CustomerGroupMember', backref='group', cascade='all, delete-orphan')
+
+
+class CustomerGroupMember(Base):
+    __tablename__ = 'customer_group_members'
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey('customer_groups.id'), nullable=False, index=True)
+    person_id = Column(String(128), ForeignKey('persons.id'), nullable=False, index=True)
+    added_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    person = relationship('Person')
+    __table_args__ = (UniqueConstraint('group_id', 'person_id', name='uq_group_person'),)

@@ -1389,3 +1389,142 @@ def update_api_key_last_used(session: Session, key_id: int) -> None:
         api_key.last_used_at = func.now()
         session.commit()
 
+
+# ==================== Customer Groups CRUD ====================
+
+def create_customer_group(
+    session: Session,
+    user_id: int,
+    payload: schemas.CustomerGroupCreate
+) -> models.CustomerGroup:
+    """ایجاد گروه مشتری جدید"""
+    group = models.CustomerGroup(
+        name=payload.name,
+        description=payload.description,
+        created_by_user_id=user_id,
+        is_shared=payload.is_shared
+    )
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+def get_customer_group(session: Session, group_id: int) -> Optional[models.CustomerGroup]:
+    """دریافت گروه مشتری"""
+    return session.query(models.CustomerGroup).filter(models.CustomerGroup.id == group_id).first()
+
+
+def get_user_customer_groups(
+    session: Session,
+    user_id: int,
+    include_shared: bool = True
+) -> List[models.CustomerGroup]:
+    """دریافت گروه‌های مشتری کاربر"""
+    query = session.query(models.CustomerGroup).filter(
+        models.CustomerGroup.created_by_user_id == user_id
+    )
+    
+    if include_shared:
+        # می‌توان گروه‌های اشتراکی را هم دریافت کرد
+        query = query.filter(
+            (models.CustomerGroup.created_by_user_id == user_id) |
+            (models.CustomerGroup.is_shared == True)
+        )
+    
+    return query.order_by(models.CustomerGroup.created_at.desc()).all()
+
+
+def update_customer_group(
+    session: Session,
+    group_id: int,
+    payload: schemas.CustomerGroupUpdate
+) -> Optional[models.CustomerGroup]:
+    """به‌روزرسانی گروه مشتری"""
+    group = get_customer_group(session, group_id)
+    if not group:
+        return None
+    
+    if payload.name is not None:
+        group.name = payload.name
+    if payload.description is not None:
+        group.description = payload.description
+    if payload.is_shared is not None:
+        group.is_shared = payload.is_shared
+    
+    group.updated_at = func.now()
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+def delete_customer_group(session: Session, group_id: int) -> bool:
+    """حذف گروه مشتری"""
+    group = get_customer_group(session, group_id)
+    if not group:
+        return False
+    
+    session.delete(group)
+    session.commit()
+    return True
+
+
+def add_customer_to_group(
+    session: Session,
+    group_id: int,
+    person_id: str
+) -> Optional[models.CustomerGroupMember]:
+    """افزودن مشتری به گروه"""
+    # بررسی وجود دوباره
+    existing = session.query(models.CustomerGroupMember).filter(
+        (models.CustomerGroupMember.group_id == group_id) &
+        (models.CustomerGroupMember.person_id == person_id)
+    ).first()
+    
+    if existing:
+        return existing
+    
+    member = models.CustomerGroupMember(
+        group_id=group_id,
+        person_id=person_id
+    )
+    session.add(member)
+    session.commit()
+    session.refresh(member)
+    return member
+
+
+def remove_customer_from_group(
+    session: Session,
+    group_id: int,
+    person_id: str
+) -> bool:
+    """حذف مشتری از گروه"""
+    member = session.query(models.CustomerGroupMember).filter(
+        (models.CustomerGroupMember.group_id == group_id) &
+        (models.CustomerGroupMember.person_id == person_id)
+    ).first()
+    
+    if not member:
+        return False
+    
+    session.delete(member)
+    session.commit()
+    return True
+
+
+def get_group_members(session: Session, group_id: int) -> List[models.CustomerGroupMember]:
+    """دریافت اعضای گروه"""
+    return session.query(models.CustomerGroupMember).filter(
+        models.CustomerGroupMember.group_id == group_id
+    ).all()
+
+
+def get_person_groups(session: Session, person_id: str) -> List[models.CustomerGroup]:
+    """دریافت گروه‌هایی که یک مشتری عضو آن است"""
+    return session.query(models.CustomerGroup).join(
+        models.CustomerGroupMember
+    ).filter(
+        models.CustomerGroupMember.person_id == person_id
+    ).all()
+
