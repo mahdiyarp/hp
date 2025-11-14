@@ -1,7 +1,7 @@
 """add developer api keys table
 
-Revision ID: 0026_developer_api_keys
-Revises: 0025_device_login
+Revision ID: 0026
+Revises: 0025
 Create Date: 2025-11-14
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0026_developer_api_keys'
-down_revision = '0025_device_login'
+revision = '0026'
+down_revision = '0025'
 branch_labels = None
 depends_on = None
 

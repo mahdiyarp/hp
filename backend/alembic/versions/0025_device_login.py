@@ -1,7 +1,7 @@
 """add device login tracking
 
-Revision ID: 0025_device_login
-Revises: 0024_user_preferences
+Revision ID: 0025
+Revises: 0024
 Create Date: 2025-11-14
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0025_device_login'
-down_revision = '0024_user_preferences'
+revision = '0025'
+down_revision = '0024'
 branch_labels = None
 depends_on = None
 

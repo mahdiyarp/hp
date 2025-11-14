@@ -1,7 +1,7 @@
 """add customer groups management
 
-Revision ID: 0028_customer_groups
-Revises: 0027_blockchain_entries
+Revision ID: 0028
+Revises: 0027
 Create Date: 2025-11-14
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0028_customer_groups'
-down_revision = '0027_blockchain_entries'
+revision = '0028'
+down_revision = '0027'
 branch_labels = None
 depends_on = None
 

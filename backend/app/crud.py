@@ -1528,3 +1528,244 @@ def get_person_groups(session: Session, person_id: str) -> List[models.CustomerG
         models.CustomerGroupMember.person_id == person_id
     ).all()
 
+
+# ==================== ICC Shop CRUD ====================
+
+def create_icc_category(session: Session, payload: schemas.IccCategoryCreate) -> models.IccCategory:
+    """ایجاد دسته‌بندی ICC"""
+    category = models.IccCategory(
+        external_id=payload.external_id,
+        name=payload.name,
+        description=payload.description,
+        parent_external_id=payload.parent_external_id,
+        sync_url=payload.sync_url
+    )
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+
+def get_icc_category(session: Session, category_id: int) -> Optional[models.IccCategory]:
+    """دریافت دسته‌بندی ICC"""
+    return session.query(models.IccCategory).filter(models.IccCategory.id == category_id).first()
+
+
+def get_icc_category_by_external_id(session: Session, external_id: str) -> Optional[models.IccCategory]:
+    """دریافت دسته‌بندی بر اساس external_id"""
+    return session.query(models.IccCategory).filter(models.IccCategory.external_id == external_id).first()
+
+
+def get_all_icc_categories(session: Session) -> List[models.IccCategory]:
+    """دریافت تمام دسته‌بندی‌های ICC"""
+    return session.query(models.IccCategory).order_by(models.IccCategory.name).all()
+
+
+def update_icc_category(session: Session, category_id: int, payload: schemas.IccCategoryUpdate) -> Optional[models.IccCategory]:
+    """به‌روزرسانی دسته‌بندی ICC"""
+    category = get_icc_category(session, category_id)
+    if not category:
+        return None
+    
+    if payload.name is not None:
+        category.name = payload.name
+    if payload.description is not None:
+        category.description = payload.description
+    if payload.parent_external_id is not None:
+        category.parent_external_id = payload.parent_external_id
+    
+    category.updated_at = func.now()
+    session.commit()
+    session.refresh(category)
+    return category
+
+
+def delete_icc_category(session: Session, category_id: int) -> bool:
+    """حذف دسته‌بندی ICC"""
+    category = get_icc_category(session, category_id)
+    if not category:
+        return False
+    session.delete(category)
+    session.commit()
+    return True
+
+
+def create_icc_center(session: Session, payload: schemas.IccCenterCreate) -> models.IccCenter:
+    """ایجاد مرکز ICC"""
+    center = models.IccCenter(
+        external_id=payload.external_id,
+        category_id=payload.category_id,
+        name=payload.name,
+        address=payload.address,
+        phone=payload.phone,
+        manager_name=payload.manager_name,
+        location_lat=payload.location_lat,
+        location_lng=payload.location_lng,
+        sync_url=payload.sync_url
+    )
+    session.add(center)
+    session.commit()
+    session.refresh(center)
+    return center
+
+
+def get_icc_center(session: Session, center_id: int) -> Optional[models.IccCenter]:
+    """دریافت مرکز ICC"""
+    return session.query(models.IccCenter).filter(models.IccCenter.id == center_id).first()
+
+
+def get_icc_centers_by_category(session: Session, category_id: int) -> List[models.IccCenter]:
+    """دریافت مراکز یک دسته‌بندی"""
+    return session.query(models.IccCenter).filter(models.IccCenter.category_id == category_id).order_by(models.IccCenter.name).all()
+
+
+def update_icc_center(session: Session, center_id: int, payload: schemas.IccCenterUpdate) -> Optional[models.IccCenter]:
+    """به‌روزرسانی مرکز ICC"""
+    center = get_icc_center(session, center_id)
+    if not center:
+        return None
+    
+    if payload.name is not None:
+        center.name = payload.name
+    if payload.address is not None:
+        center.address = payload.address
+    if payload.phone is not None:
+        center.phone = payload.phone
+    if payload.manager_name is not None:
+        center.manager_name = payload.manager_name
+    if payload.location_lat is not None:
+        center.location_lat = payload.location_lat
+    if payload.location_lng is not None:
+        center.location_lng = payload.location_lng
+    
+    center.updated_at = func.now()
+    session.commit()
+    session.refresh(center)
+    return center
+
+
+def delete_icc_center(session: Session, center_id: int) -> bool:
+    """حذف مرکز ICC"""
+    center = get_icc_center(session, center_id)
+    if not center:
+        return False
+    session.delete(center)
+    session.commit()
+    return True
+
+
+def create_icc_unit(session: Session, payload: schemas.IccUnitCreate) -> models.IccUnit:
+    """ایجاد واحد ICC"""
+    unit = models.IccUnit(
+        external_id=payload.external_id,
+        center_id=payload.center_id,
+        name=payload.name,
+        description=payload.description,
+        unit_type=payload.unit_type,
+        capacity=payload.capacity,
+        sync_url=payload.sync_url
+    )
+    session.add(unit)
+    session.commit()
+    session.refresh(unit)
+    return unit
+
+
+def get_icc_unit(session: Session, unit_id: int) -> Optional[models.IccUnit]:
+    """دریافت واحد ICC"""
+    return session.query(models.IccUnit).filter(models.IccUnit.id == unit_id).first()
+
+
+def get_icc_units_by_center(session: Session, center_id: int) -> List[models.IccUnit]:
+    """دریافت واحدهای یک مرکز"""
+    return session.query(models.IccUnit).filter(models.IccUnit.center_id == center_id).order_by(models.IccUnit.name).all()
+
+
+def update_icc_unit(session: Session, unit_id: int, payload: schemas.IccUnitUpdate) -> Optional[models.IccUnit]:
+    """به‌روزرسانی واحد ICC"""
+    unit = get_icc_unit(session, unit_id)
+    if not unit:
+        return None
+    
+    if payload.name is not None:
+        unit.name = payload.name
+    if payload.description is not None:
+        unit.description = payload.description
+    if payload.unit_type is not None:
+        unit.unit_type = payload.unit_type
+    if payload.capacity is not None:
+        unit.capacity = payload.capacity
+    
+    unit.updated_at = func.now()
+    session.commit()
+    session.refresh(unit)
+    return unit
+
+
+def delete_icc_unit(session: Session, unit_id: int) -> bool:
+    """حذف واحد ICC"""
+    unit = get_icc_unit(session, unit_id)
+    if not unit:
+        return False
+    session.delete(unit)
+    session.commit()
+    return True
+
+
+def create_icc_extension(session: Session, payload: schemas.IccExtensionCreate) -> models.IccExtension:
+    """ایجاد شاخه ICC"""
+    extension = models.IccExtension(
+        external_id=payload.external_id,
+        unit_id=payload.unit_id,
+        name=payload.name,
+        responsible_name=payload.responsible_name,
+        responsible_mobile=payload.responsible_mobile,
+        status=payload.status,
+        sync_url=payload.sync_url
+    )
+    session.add(extension)
+    session.commit()
+    session.refresh(extension)
+    return extension
+
+
+def get_icc_extension(session: Session, extension_id: int) -> Optional[models.IccExtension]:
+    """دریافت شاخه ICC"""
+    return session.query(models.IccExtension).filter(models.IccExtension.id == extension_id).first()
+
+
+def get_icc_extensions_by_unit(session: Session, unit_id: int) -> List[models.IccExtension]:
+    """دریافت شاخه‌های یک واحد"""
+    return session.query(models.IccExtension).filter(models.IccExtension.unit_id == unit_id).order_by(models.IccExtension.name).all()
+
+
+def update_icc_extension(session: Session, extension_id: int, payload: schemas.IccExtensionUpdate) -> Optional[models.IccExtension]:
+    """به‌روزرسانی شاخه ICC"""
+    extension = get_icc_extension(session, extension_id)
+    if not extension:
+        return None
+    
+    if payload.name is not None:
+        extension.name = payload.name
+    if payload.responsible_name is not None:
+        extension.responsible_name = payload.responsible_name
+    if payload.responsible_mobile is not None:
+        extension.responsible_mobile = payload.responsible_mobile
+    if payload.status is not None:
+        extension.status = payload.status
+    
+    extension.updated_at = func.now()
+    session.commit()
+    session.refresh(extension)
+    return extension
+
+
+def delete_icc_extension(session: Session, extension_id: int) -> bool:
+    """حذف شاخه ICC"""
+    extension = get_icc_extension(session, extension_id)
+    if not extension:
+        return False
+    session.delete(extension)
+    session.commit()
+    return True
+

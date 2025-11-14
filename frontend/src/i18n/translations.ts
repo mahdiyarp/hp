@@ -76,6 +76,14 @@ export const fa = {
   private: 'خصوصی',
   please_select_group_and_member: 'لطفا گروه و شخص را انتخاب کنید',
   name: 'نام',
+  
+  // ICC Shop
+  integration: 'یکپارچه‌سازی',
+  icc_shop: 'ICC Shop',
+  categories: 'دسته‌بندی‌ها',
+  centers: 'مراکز',
+  units: 'واحدها',
+  extensions: 'شاخه‌ها',
 
   // Messages
   save_success: 'تغییرات با موفقیت ذخیره شد',
@@ -162,6 +170,14 @@ export const en = {
   private: 'Private',
   please_select_group_and_member: 'Please select group and member',
   name: 'Name',
+  
+  // ICC Shop
+  integration: 'Integration',
+  icc_shop: 'ICC Shop',
+  categories: 'Categories',
+  centers: 'Centers',
+  units: 'Units',
+  extensions: 'Extensions',
 
   // Messages
   save_success: 'Changes saved successfully',
@@ -248,6 +264,14 @@ export const ar = {
   private: 'خاص',
   please_select_group_and_member: 'يرجى تحديد المجموعة والعضو',
   name: 'الاسم',
+  
+  // ICC Shop
+  integration: 'التكامل',
+  icc_shop: 'ICC Shop',
+  categories: 'الفئات',
+  centers: 'المراكز',
+  units: 'الوحدات',
+  extensions: 'الامتدادات',
 
   // Messages
   save_success: 'تم حفظ التغييرات بنجاح',
@@ -334,6 +358,14 @@ export const ku = {
   private: 'Private',
   please_select_group_and_member: 'Please select group and member',
   name: 'Name',
+  
+  // ICC Shop
+  integration: 'Integration',
+  icc_shop: 'ICC Shop',
+  categories: 'Categories',
+  centers: 'Centers',
+  units: 'Units',
+  extensions: 'Extensions',
 
   // Messages
   save_success: 'Changes saved',

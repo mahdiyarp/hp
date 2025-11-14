@@ -369,3 +369,75 @@ class CustomerGroupMember(Base):
     
     person = relationship('Person')
     __table_args__ = (UniqueConstraint('group_id', 'person_id', name='uq_group_person'),)
+
+
+# ==================== ICC Shop Organization Structure ====================
+
+class IccCategory(Base):
+    """دسته‌بندی کالاهای ICC از iccshop.ir"""
+    __tablename__ = 'icc_categories'
+    id = Column(Integer, primary_key=True, index=True)
+    external_id = Column(String(128), nullable=False, unique=True, index=True)  # ICC Shop ID
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    parent_external_id = Column(String(128), nullable=True, index=True)  # برای ساختار سلسله‌مراتبی
+    sync_url = Column(String(512), nullable=True)  # URL برای sync اطلاعات
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    centers = relationship('IccCenter', backref='category', cascade='all, delete-orphan')
+
+
+class IccCenter(Base):
+    """مراکز فروش ICC (مثل تهران، تبریز، ...)"""
+    __tablename__ = 'icc_centers'
+    id = Column(Integer, primary_key=True, index=True)
+    external_id = Column(String(128), nullable=False, unique=True, index=True)
+    category_id = Column(Integer, ForeignKey('icc_categories.id'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    address = Column(Text, nullable=True)
+    phone = Column(String(32), nullable=True)
+    manager_name = Column(String(255), nullable=True)
+    location_lat = Column(String(32), nullable=True)
+    location_lng = Column(String(32), nullable=True)
+    sync_url = Column(String(512), nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    units = relationship('IccUnit', backref='center', cascade='all, delete-orphan')
+
+
+class IccUnit(Base):
+    """واحدهای توزیعی در هر مرکز"""
+    __tablename__ = 'icc_units'
+    id = Column(Integer, primary_key=True, index=True)
+    external_id = Column(String(128), nullable=False, unique=True, index=True)
+    center_id = Column(Integer, ForeignKey('icc_centers.id'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    unit_type = Column(String(64), nullable=True)  # warehouse, store, etc
+    capacity = Column(Integer, nullable=True)
+    sync_url = Column(String(512), nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    extensions = relationship('IccExtension', backref='unit', cascade='all, delete-orphan')
+
+
+class IccExtension(Base):
+    """شاخه‌های توسعه‌ای در هر واحد"""
+    __tablename__ = 'icc_extensions'
+    id = Column(Integer, primary_key=True, index=True)
+    external_id = Column(String(128), nullable=False, unique=True, index=True)
+    unit_id = Column(Integer, ForeignKey('icc_units.id'), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    responsible_name = Column(String(255), nullable=True)
+    responsible_mobile = Column(String(32), nullable=True)
+    status = Column(String(32), nullable=False, default='active')  # active, inactive, pending
+    sync_url = Column(String(512), nullable=True)
+    last_synced_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

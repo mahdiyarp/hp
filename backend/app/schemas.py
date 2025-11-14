@@ -673,3 +673,138 @@ class CustomerGroupOut(BaseModel):
     class Config:
         orm_mode = True
 
+
+# ==================== ICC Shop Schemas ====================
+
+class IccCategoryCreate(BaseModel):
+    external_id: str
+    name: str
+    description: Optional[str] = None
+    parent_external_id: Optional[str] = None
+    sync_url: Optional[str] = None
+
+
+class IccCategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parent_external_id: Optional[str] = None
+
+
+class IccCategoryOut(BaseModel):
+    id: int
+    external_id: str
+    name: str
+    description: Optional[str]
+    parent_external_id: Optional[str]
+    last_synced_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class IccCenterCreate(BaseModel):
+    external_id: str
+    category_id: int
+    name: str
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    manager_name: Optional[str] = None
+    location_lat: Optional[str] = None
+    location_lng: Optional[str] = None
+    sync_url: Optional[str] = None
+
+
+class IccCenterUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    manager_name: Optional[str] = None
+    location_lat: Optional[str] = None
+    location_lng: Optional[str] = None
+
+
+class IccCenterOut(BaseModel):
+    id: int
+    external_id: str
+    category_id: int
+    name: str
+    address: Optional[str]
+    phone: Optional[str]
+    manager_name: Optional[str]
+    location_lat: Optional[str]
+    location_lng: Optional[str]
+    last_synced_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class IccUnitCreate(BaseModel):
+    external_id: str
+    center_id: int
+    name: str
+    description: Optional[str] = None
+    unit_type: Optional[str] = None
+    capacity: Optional[int] = None
+    sync_url: Optional[str] = None
+
+
+class IccUnitUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    unit_type: Optional[str] = None
+    capacity: Optional[int] = None
+
+
+class IccUnitOut(BaseModel):
+    id: int
+    external_id: str
+    center_id: int
+    name: str
+    description: Optional[str]
+    unit_type: Optional[str]
+    capacity: Optional[int]
+    last_synced_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class IccExtensionCreate(BaseModel):
+    external_id: str
+    unit_id: int
+    name: str
+    responsible_name: Optional[str] = None
+    responsible_mobile: Optional[str] = None
+    status: str = 'active'
+    sync_url: Optional[str] = None
+
+
+class IccExtensionUpdate(BaseModel):
+    name: Optional[str] = None
+    responsible_name: Optional[str] = None
+    responsible_mobile: Optional[str] = None
+    status: Optional[str] = None
+
+
+class IccExtensionOut(BaseModel):
+    id: int
+    external_id: str
+    unit_id: int
+    name: str
+    responsible_name: Optional[str]
+    responsible_mobile: Optional[str]
+    status: str
+    last_synced_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+

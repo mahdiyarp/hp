@@ -1,7 +1,7 @@
 """add blockchain entries for immutable audit trail
 
-Revision ID: 0027_blockchain_entries
-Revises: 0026_developer_api_keys
+Revision ID: 0027
+Revises: 0026
 Create Date: 2025-11-14
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0027_blockchain_entries'
-down_revision = '0026_developer_api_keys'
+revision = '0027'
+down_revision = '0026'
 branch_labels = None
 depends_on = None
 

@@ -6,6 +6,7 @@ import PeopleModule from './PeopleModule'
 import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import CustomerGroupsModule from './CustomerGroupsModule'
+import IccShopModule from './IccShopModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -22,6 +23,13 @@ export const modules: ModuleDefinition[] = [
     description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
     component: CustomerGroupsModule,
     badge: 'GROUPS',
+  },
+  {
+    id: 'icc-shop',
+    label: 'ICC Shop',
+    description: 'یکپارچه‌سازی ساختار سازمانی ICC',
+    component: IccShopModule,
+    badge: 'ICC',
   },
   {
     id: 'reports',

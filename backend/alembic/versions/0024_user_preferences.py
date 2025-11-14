@@ -1,7 +1,7 @@
 """add user preferences for language and currency
 
-Revision ID: 0024_user_preferences
-Revises: 0023_add_mobile_to_users
+Revision ID: 0024
+Revises: 0023
 Create Date: 2025-11-14
 
 """
@@ -11,8 +11,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision = '0024_user_preferences'
-down_revision = '0023_add_mobile_to_users'
+revision = '0024'
+down_revision = '0023'
 branch_labels = None
 depends_on = None
 
