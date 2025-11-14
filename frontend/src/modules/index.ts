@@ -3,10 +3,18 @@ import SalesModule from './SalesModule'
 import FinanceModule from './FinanceModule'
 import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
+import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
+  {
+    id: 'reports',
+    label: 'گزارش‌ها و تحلیل‌ها',
+    description: 'سود و زیان، تراز نقدی و ارزش موجودی',
+    component: ReportsModule,
+    badge: 'REPORTS',
+  },
   {
     id: 'sales',
     label: 'فروش و اسناد',

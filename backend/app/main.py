@@ -1403,6 +1403,12 @@ async def get_current_user_modules(
         role = crud.get_role(session, current.role_id)
         if role:
             modules = set(p.module for p in role.permissions if p.module)
+            # If user has any report-related permission, expose the dedicated 'reports' module
+            try:
+                if any('report' in (p.name or '').lower() for p in role.permissions):
+                    modules.add('reports')
+            except Exception:
+                pass
             return list(modules)
     return []
 
