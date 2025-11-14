@@ -1681,7 +1681,8 @@ def create_permission(payload: schemas.PermissionCreate, current: models.User = 
 @app.get('/api/users', response_model=List[schemas.UserOut])
 async def list_users(current: models.User = Depends(require_roles(role_names=['Admin'])), session: Session = Depends(db.get_db)):
     """لیست تمام کاربران - فقط Admin"""
-    users = session.query(models.User).all()
+    from sqlalchemy.orm import joinedload
+    users = session.query(models.User).options(joinedload(models.User.role_obj)).all()
     return users
 
 
