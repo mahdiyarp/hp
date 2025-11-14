@@ -556,3 +556,84 @@ class DeviceLoginOut(BaseModel):
     class Config:
         orm_mode = True
 
+
+class DeveloperApiKeyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    rate_limit_per_minute: int = 60
+    endpoints: Optional[List[str]] = None  # List of allowed endpoints
+
+
+class DeveloperApiKeyOut(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    description: Optional[str]
+    enabled: bool
+    rate_limit_per_minute: int
+    endpoints: Optional[str]
+    last_used_at: Optional[datetime]
+    created_at: datetime
+    expires_at: Optional[datetime]
+    revoked_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
+class DeveloperApiKeyWithKey(DeveloperApiKeyOut):
+    """Response when creating a key - shows the actual key once"""
+    api_key: str
+
+
+class DeveloperApiKeyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    enabled: Optional[bool] = None
+    rate_limit_per_minute: Optional[int] = None
+    endpoints: Optional[List[str]] = None
+
+
+class ApiKeyRotateResponse(BaseModel):
+    message: str
+    old_key_id: int
+    new_key_id: int
+    new_api_key: str
+
+
+class BlockchainEntryOut(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    action: str
+    data_hash: str
+    previous_hash: Optional[str]
+    merkle_root: Optional[str]
+    user_id: Optional[int]
+    timestamp: datetime
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class BlockchainVerifyResponse(BaseModel):
+    is_valid: bool
+    message: str
+    entries_checked: int
+
+
+class BlockchainProof(BaseModel):
+    entity_type: str
+    entity_id: str
+    entry_id: int
+    data_hash: str
+    previous_hash: Optional[str]
+    merkle_root: Optional[str]
+    timestamp: datetime
+    action: str
+    chain_is_valid: bool
+    chain_message: str
+    total_entries_in_chain: int
+    entry_position: int
+

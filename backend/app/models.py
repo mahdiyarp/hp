@@ -309,3 +309,38 @@ class DeviceLogin(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     user = relationship('User', backref='device_logins')
+
+
+class DeveloperApiKey(Base):
+    __tablename__ = 'developer_api_keys'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    api_key = Column(String(512), nullable=False)  # encrypted full key
+    api_key_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA256 for lookups
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True, index=True)
+    rate_limit_per_minute = Column(Integer, nullable=False, default=60)
+    endpoints = Column(Text, nullable=True)  # JSON: list of allowed endpoints
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    
+    user = relationship('User', backref='api_keys')
+
+
+class BlockchainEntry(Base):
+    __tablename__ = 'blockchain_entries'
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(64), nullable=False, index=True)  # user, invoice, payment, product, person
+    entity_id = Column(String(128), nullable=False, index=True)
+    action = Column(String(32), nullable=False)  # create, update, delete
+    data_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA256
+    previous_hash = Column(String(64), nullable=True)  # Link to previous
+    merkle_root = Column(String(64), nullable=True)  # Merkle tree root
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    user = relationship('User', backref='blockchain_entries')

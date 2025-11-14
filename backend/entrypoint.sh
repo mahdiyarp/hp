@@ -33,6 +33,8 @@ alembic upgrade 0022_user_sms_config || echo "User SMS config migration applied 
 alembic upgrade 0023_add_mobile_to_users || echo "Mobile to users migration applied or skipped"
 alembic upgrade 0024_user_preferences || echo "User preferences migration applied or skipped"
 alembic upgrade 0025_device_login || echo "Device login migration applied or skipped"
+alembic upgrade 0026_developer_api_keys || echo "Developer API keys migration applied or skipped"
+alembic upgrade 0027_blockchain_entries || echo "Blockchain entries migration applied or skipped"
 set -e
 
 # optional demo seeding

@@ -1882,3 +1882,272 @@ async def get_login_history(
     
     return devices
 
+
+# ==================== Developer API Keys ====================
+
+@app.get('/api/developer/keys', response_model=List[schemas.DeveloperApiKeyOut])
+async def list_api_keys(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت تمام کلیدهای API کاربر"""
+    keys = crud.get_user_api_keys(session, current.id)
+    return keys
+
+
+@app.post('/api/developer/keys', response_model=schemas.DeveloperApiKeyWithKey)
+async def create_api_key(
+    payload: schemas.DeveloperApiKeyCreate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """ایجاد کلید API جدید"""
+    api_key, plain_key = crud.create_api_key(session, current.id, payload)
+    
+    log_activity(session, current.id, '/api/developer/keys', 'POST', 201, 
+                f'کلید API جدید {api_key.name} ایجاد شد')
+    
+    return {
+        'id': api_key.id,
+        'user_id': api_key.user_id,
+        'name': api_key.name,
+        'description': api_key.description,
+        'enabled': api_key.enabled,
+        'rate_limit_per_minute': api_key.rate_limit_per_minute,
+        'endpoints': api_key.endpoints,
+        'last_used_at': api_key.last_used_at,
+        'created_at': api_key.created_at,
+        'expires_at': api_key.expires_at,
+        'revoked_at': api_key.revoked_at,
+        'api_key': plain_key  # Only shown once on creation
+    }
+
+
+@app.put('/api/developer/keys/{key_id}', response_model=schemas.DeveloperApiKeyOut)
+async def update_api_key(
+    key_id: int,
+    payload: schemas.DeveloperApiKeyUpdate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """به‌روزرسانی تنظیمات کلید API"""
+    api_key = crud.get_api_key(session, key_id)
+    
+    if not api_key:
+        raise HTTPException(status_code=404, detail='کلید API یافت نشد')
+    
+    if api_key.user_id != current.id:
+        raise HTTPException(status_code=403, detail='مجاز به ویرایش این کلید نیستید')
+    
+    api_key = crud.update_api_key(session, key_id, payload)
+    
+    log_activity(session, current.id, f'/api/developer/keys/{key_id}', 'PUT', 200, 
+                f'کلید API {api_key.name} به‌روزرسانی شد')
+    
+    return api_key
+
+
+@app.post('/api/developer/keys/{key_id}/rotate', response_model=schemas.ApiKeyRotateResponse)
+async def rotate_api_key(
+    key_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """تولید کلید API جدید (لغو کلید قدیم)"""
+    old_key = crud.get_api_key(session, key_id)
+    
+    if not old_key:
+        raise HTTPException(status_code=404, detail='کلید API یافت نشد')
+    
+    if old_key.user_id != current.id:
+        raise HTTPException(status_code=403, detail='مجاز به چرخش این کلید نیستید')
+    
+    new_key, plain_key = crud.rotate_api_key(session, key_id)
+    
+    log_activity(session, current.id, f'/api/developer/keys/{key_id}/rotate', 'POST', 200, 
+                f'کلید API {old_key.name} چرخش داده شد')
+    
+    return {
+        'message': 'کلید API با موفقیت چرخش داده شد',
+        'old_key_id': key_id,
+        'new_key_id': new_key.id,
+        'new_api_key': plain_key
+    }
+
+
+@app.delete('/api/developer/keys/{key_id}')
+async def revoke_api_key(
+    key_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """لغو (حذف) کلید API"""
+    api_key = crud.get_api_key(session, key_id)
+    
+    if not api_key:
+        raise HTTPException(status_code=404, detail='کلید API یافت نشد')
+    
+    if api_key.user_id != current.id:
+        raise HTTPException(status_code=403, detail='مجاز به حذف این کلید نیستید')
+    
+    success = crud.revoke_api_key(session, key_id)
+    
+    if success:
+        log_activity(session, current.id, f'/api/developer/keys/{key_id}', 'DELETE', 200, 
+                    f'کلید API {api_key.name} لغو شد')
+        return {'detail': 'کلید API لغو شد'}
+    
+    raise HTTPException(status_code=500, detail='لغو ناموفق بود')
+
+
+@app.get('/api/developer/endpoints')
+async def list_available_endpoints(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت فهرست endpoints دسترس‌پذیر برای دیولوپرها"""
+    endpoints = [
+        {
+            'path': '/api/external/fx-rates',
+            'method': 'GET',
+            'description': 'نرخ ارز (USD, EUR, GBP, etc.)',
+            'requires_api_key': True,
+            'rate_limit': '100/min'
+        },
+        {
+            'path': '/api/external/crypto-prices',
+            'method': 'GET',
+            'description': 'قیمت رمزارز (BTC, ETH, etc.)',
+            'requires_api_key': True,
+            'rate_limit': '100/min'
+        },
+        {
+            'path': '/api/external/ai/product-match',
+            'method': 'POST',
+            'description': 'تطابق خودکار کالا با AI',
+            'requires_api_key': True,
+            'rate_limit': '50/min'
+        },
+        {
+            'path': '/api/external/ai/invoice-analysis',
+            'method': 'POST',
+            'description': 'تحلیل فاکتور با OCR و AI',
+            'requires_api_key': True,
+            'rate_limit': '20/min'
+        },
+        {
+            'path': '/api/invoices',
+            'method': 'GET',
+            'description': 'دریافت فاکتورها',
+            'requires_api_key': True,
+            'rate_limit': '200/min'
+        },
+        {
+            'path': '/api/products',
+            'method': 'GET',
+            'description': 'دریافت کالاها',
+            'requires_api_key': True,
+            'rate_limit': '200/min'
+        }
+    ]
+    
+    return {'endpoints': endpoints}
+
+
+# ==================== Blockchain Audit Trail ====================
+
+@app.get('/api/blockchain/entries')
+async def get_blockchain_entries(
+    entity_type: Optional[str] = None,
+    entity_id: Optional[str] = None,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """
+    دریافت blockchain entries
+    می‌توان فیلتر کرد بر اساس entity_type و entity_id
+    """
+    from . import blockchain
+    
+    if entity_type and entity_id:
+        # Get specific entity history
+        entries = blockchain.get_entity_history(session, entity_type, entity_id)
+        return {'entries': entries, 'count': len(entries)}
+    else:
+        # Get recent entries for current user
+        entries = blockchain.get_all_entries_for_user(session, current.id, limit=50)
+        return {'entries': entries, 'count': len(entries)}
+
+
+@app.post('/api/blockchain/verify', response_model=schemas.BlockchainVerifyResponse)
+async def verify_blockchain(
+    entity_type: str,
+    entity_id: str,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """
+    تأیید integrity blockchain برای یک entity
+    """
+    from . import blockchain
+    
+    is_valid, message = blockchain.verify_entry_chain(session, entity_type, entity_id)
+    entries = blockchain.get_entity_history(session, entity_type, entity_id)
+    
+    return {
+        'is_valid': is_valid,
+        'message': message,
+        'entries_checked': len(entries)
+    }
+
+
+@app.get('/api/blockchain/proof')
+async def get_blockchain_proof(
+    entity_type: str,
+    entity_id: str,
+    entry_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """
+    دریافت merkle proof برای یک blockchain entry
+    برای تأیید و export خارج از سیستم
+    """
+    from . import blockchain
+    
+    proof = blockchain.export_merkle_proof(session, entity_type, entity_id, entry_id)
+    
+    if 'error' in proof:
+        raise HTTPException(status_code=404, detail=proof['error'])
+    
+    return proof
+
+
+@app.get('/api/blockchain/audit-log')
+async def get_audit_log(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db),
+    limit: int = 100
+):
+    """
+    دریافت blockchain audit log برای کاربر فعلی
+    نمایش تمام تغییرات ثبت شده توسط user
+    """
+    from . import blockchain
+    
+    entries = blockchain.get_all_entries_for_user(session, current.id, limit=limit)
+    
+    # Group by entity type
+    grouped = {}
+    for entry in entries:
+        if entry.entity_type not in grouped:
+            grouped[entry.entity_type] = []
+        grouped[entry.entity_type].append(entry)
+    
+    return {
+        'user_id': current.id,
+        'total_entries': len(entries),
+        'by_entity_type': {k: len(v) for k, v in grouped.items()},
+        'entries': entries
+    }
+

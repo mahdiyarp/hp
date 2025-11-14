@@ -1264,3 +1264,128 @@ def is_device_otp_locked(session: Session, device_id: int) -> bool:
     
     return True
 
+
+# ==================== Developer API Keys CRUD ====================
+
+def generate_api_key() -> str:
+    """تولید کلید API جدید (32 کاراکتر)"""
+    return secrets.token_urlsafe(32)
+
+
+def hash_api_key(api_key: str) -> str:
+    """SHA256 hash کردن کلید API برای جستجو"""
+    return hashlib.sha256(api_key.encode()).hexdigest()
+
+
+def create_api_key(session: Session, user_id: int, 
+                   payload: schemas.DeveloperApiKeyCreate) -> Tuple[models.DeveloperApiKey, str]:
+    """ایجاد کلید API جدید. برمی‌گرداند (model, plain_key)"""
+    plain_key = generate_api_key()
+    encrypted_key = encrypt_value(plain_key)
+    key_hash = hash_api_key(plain_key)
+    
+    endpoints_json = json.dumps(payload.endpoints) if payload.endpoints else None
+    
+    api_key = models.DeveloperApiKey(
+        user_id=user_id,
+        api_key=encrypted_key,
+        api_key_hash=key_hash,
+        name=payload.name,
+        description=payload.description,
+        rate_limit_per_minute=payload.rate_limit_per_minute,
+        endpoints=endpoints_json,
+        enabled=True
+    )
+    session.add(api_key)
+    session.commit()
+    session.refresh(api_key)
+    
+    return api_key, plain_key
+
+
+def get_api_key_by_hash(session: Session, key_hash: str) -> Optional[models.DeveloperApiKey]:
+    """دریافت کلید API با استفاده از hash"""
+    return session.query(models.DeveloperApiKey).filter(
+        models.DeveloperApiKey.api_key_hash == key_hash,
+        models.DeveloperApiKey.enabled == True,
+        models.DeveloperApiKey.revoked_at.is_(None)
+    ).first()
+
+
+def get_user_api_keys(session: Session, user_id: int) -> List[models.DeveloperApiKey]:
+    """دریافت تمام کلیدهای API کاربر"""
+    return session.query(models.DeveloperApiKey).filter(
+        models.DeveloperApiKey.user_id == user_id
+    ).order_by(models.DeveloperApiKey.created_at.desc()).all()
+
+
+def get_api_key(session: Session, key_id: int) -> Optional[models.DeveloperApiKey]:
+    """دریافت کلید API"""
+    return session.query(models.DeveloperApiKey).filter(
+        models.DeveloperApiKey.id == key_id
+    ).first()
+
+
+def update_api_key(session: Session, key_id: int, 
+                   update: schemas.DeveloperApiKeyUpdate) -> Optional[models.DeveloperApiKey]:
+    """به‌روزرسانی کلید API"""
+    api_key = get_api_key(session, key_id)
+    if not api_key:
+        return None
+    
+    if update.name is not None:
+        api_key.name = update.name
+    if update.description is not None:
+        api_key.description = update.description
+    if update.enabled is not None:
+        api_key.enabled = update.enabled
+    if update.rate_limit_per_minute is not None:
+        api_key.rate_limit_per_minute = update.rate_limit_per_minute
+    if update.endpoints is not None:
+        api_key.endpoints = json.dumps(update.endpoints) if update.endpoints else None
+    
+    session.commit()
+    session.refresh(api_key)
+    return api_key
+
+
+def rotate_api_key(session: Session, old_key_id: int) -> Tuple[models.DeveloperApiKey, str]:
+    """تولید کلید API جدید. برمی‌گرداند (new_model, plain_new_key)"""
+    old_key = get_api_key(session, old_key_id)
+    if not old_key:
+        raise ValueError('کلید API یافت نشد')
+    
+    # Revoke old key
+    old_key.revoked_at = func.now()
+    session.commit()
+    
+    # Create new key with same settings
+    payload = schemas.DeveloperApiKeyCreate(
+        name=old_key.name,
+        description=old_key.description,
+        rate_limit_per_minute=old_key.rate_limit_per_minute,
+        endpoints=json.loads(old_key.endpoints) if old_key.endpoints else None
+    )
+    
+    new_key, plain_key = create_api_key(session, old_key.user_id, payload)
+    return new_key, plain_key
+
+
+def revoke_api_key(session: Session, key_id: int) -> bool:
+    """لغو کلید API"""
+    api_key = get_api_key(session, key_id)
+    if not api_key:
+        return False
+    
+    api_key.revoked_at = func.now()
+    session.commit()
+    return True
+
+
+def update_api_key_last_used(session: Session, key_id: int) -> None:
+    """به‌روزرسانی زمان آخرین استفاده"""
+    api_key = get_api_key(session, key_id)
+    if api_key:
+        api_key.last_used_at = func.now()
+        session.commit()
+
