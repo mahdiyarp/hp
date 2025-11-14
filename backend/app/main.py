@@ -169,6 +169,28 @@ def require_roles(role_ids: List[int] = None, role_names: List[str] = None):
     return _dependency
 
 
+def require_permissions(permission_names: List[str]):
+    """بررسی دسترسی بر اساس نام permission
+    
+    استفاده:
+    - require_permissions(['finance_view'])  # مشاهده مالی
+    - require_permissions(['sales_create', 'sales_edit'])  # ایجاد یا ویرایش فروش
+    """
+    def _dependency(current_user: models.User = Depends(get_current_user)):
+        if not current_user.role_id or not current_user.role_obj:
+            raise HTTPException(status_code=403, detail='کاربر نقشی ندارد')
+        
+        user_perm_names = set(p.name for p in (current_user.role_obj.permissions or []))
+        required_perms = set(permission_names)
+        
+        # Check if user has at least one of the required permissions
+        if not user_perm_names & required_perms:
+            raise HTTPException(status_code=403, detail=f'شما دسترسی ندارید. نیاز به یکی از این دسترسی‌ها: {", ".join(permission_names)}')
+        
+        return current_user
+    return _dependency
+
+
 @app.on_event("startup")
 def on_startup():
     # Ensure DB tables exist for simple dev setup. Alembic is primary migration tool.
@@ -653,7 +675,7 @@ def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = D
 
 @app.post('/api/payments/manual', response_model=schemas.PaymentOut)
 def create_payment_manual(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    require_permissions(['finance_create'])(current)
     pay = crud.create_payment_manual(session, payload)
     return pay
 
@@ -678,21 +700,21 @@ def parse_payment_upload(file: UploadFile = File(...), current: models.User = De
 
 @app.post('/api/payments/from-draft', response_model=schemas.PaymentOut)
 def create_payment_from_draft(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
+    require_permissions(['finance_create'])(current)
     pay = crud.create_payment_manual(session, payload)
     return pay
 
 
 @app.get('/api/payments', response_model=list[schemas.PaymentOut])
 def list_payments(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    require_permissions(['finance_view'])(current)
     pays = crud.get_payments(session, q=q)
     return pays
 
 
 @app.get('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
 def get_payment(payment_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    require_permissions(['finance_view'])(current)
     p = crud.get_payment(session, payment_id)
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
@@ -701,7 +723,7 @@ def get_payment(payment_id: int, session: Session = Depends(db.get_db), current:
 
 @app.patch('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
 def patch_payment(payment_id: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_edit'])(current)
     p = crud.update_invoice(session, payment_id, payload)  # reuse generic update helper
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
@@ -710,7 +732,7 @@ def patch_payment(payment_id: int, payload: dict, session: Session = Depends(db.
 
 @app.post('/api/payments/{payment_id}/finalize', response_model=schemas.PaymentOut)
 def finalize_payment_endpoint(payment_id: int, payload: dict = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_edit'])(current)
     client_time = None
     if payload and isinstance(payload, dict):
         ct = payload.get('client_time')
@@ -818,7 +840,7 @@ def reports_query(payload: dict, session: Session = Depends(db.get_db), current:
 
 @app.get('/api/reports/pnl')
 def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_report'])(current)
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
@@ -828,7 +850,7 @@ def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session:
 
 @app.get('/api/reports/person')
 def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_report'])(current)
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
@@ -838,14 +860,14 @@ def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = N
 
 @app.get('/api/reports/stock')
 def reports_stock(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_report'])(current)
     out = crud.report_stock_valuation(session)
     return out
 
 
 @app.get('/api/reports/cash')
 def reports_cash(method: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
+    require_permissions(['finance_report'])(current)
     out = crud.report_cash_balance(session, method=method)
     return out
 
