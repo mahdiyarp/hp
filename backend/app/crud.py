@@ -1,7 +1,7 @@
 from . import models, schemas
 import secrets
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
 from datetime import timedelta
