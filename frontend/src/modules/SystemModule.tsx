@@ -75,6 +75,20 @@ interface SystemSetting {
   updated_at: string
 }
 
+interface AppUpdateEntry {
+  id: string
+  url: string
+  version?: string | null
+  filename?: string | null
+  size_bytes?: number | null
+  checksum?: string | null
+  created_at: string
+  extracted_path?: string | null
+  extracted_files?: number | null
+  status: 'success' | 'failed'
+  message?: string | null
+}
+
 export default function SystemModule({ smartDate, onSmartDateChange, sync }: ModuleComponentProps) {
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
@@ -104,6 +118,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [savingSidebarSide, setSavingSidebarSide] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
+  const [appUpdates, setAppUpdates] = useState<AppUpdateEntry[]>([])
+  const [updateUrl, setUpdateUrl] = useState('')
+  const [updateVersion, setUpdateVersion] = useState('')
+  const [updateChecksum, setUpdateChecksum] = useState('')
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null)
+  const [updateLoading, setUpdateLoading] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -180,12 +200,45 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       } catch (err) {
         // ignore — this endpoint may not exist or user may not have a value
       }
+      try {
+        const updatesResponse = await apiGet<{ updates: AppUpdateEntry[] }>('/api/developer/updates')
+        setAppUpdates(updatesResponse.updates)
+      } catch (err) {
+        console.error(err)
+        warn.push('لیست به‌روزرسانی‌ها قابل دریافت نیست.')
+      }
     } catch (err) {
       console.error(err)
       setError('بارگذاری بخش تنظیمات با مشکل مواجه شد.')
     } finally {
       setWarnings(warn)
       setLoading(false)
+    }
+  }
+
+  async function downloadUpdateFromLink() {
+    if (!updateUrl.trim()) {
+      setUpdateMessage('لطفاً لینک به‌روزرسانی را وارد کنید.')
+      return
+    }
+    setUpdateLoading(true)
+    setUpdateMessage(null)
+    try {
+      const payload: { url: string; version?: string; checksum?: string } = { url: updateUrl.trim() }
+      if (updateVersion.trim()) payload.version = updateVersion.trim()
+      if (updateChecksum.trim()) payload.checksum = updateChecksum.trim()
+
+      const response = await apiPost<{ detail: string; entry: AppUpdateEntry }>('/api/developer/updates', payload)
+      setUpdateMessage(response.detail || 'بسته با موفقیت دریافت شد.')
+      setAppUpdates(prev => [response.entry, ...prev])
+      setUpdateUrl('')
+      setUpdateVersion('')
+      setUpdateChecksum('')
+    } catch (err: any) {
+      console.error(err)
+      setUpdateMessage(err?.message || 'دانلود به‌روزرسانی با خطا مواجه شد.')
+    } finally {
+      setUpdateLoading(false)
     }
   }
 
@@ -535,6 +588,99 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         ) : (
           <p className="text-xs text-[#7a6b4f]">هیچ یکپارچه‌سازی ثبت نشده است.</p>
         )}
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header>
+          <p className={retroHeading}>Developer</p>
+          <h3 className="text-lg font-semibold mt-2">به‌روزرسانی برنامه از طریق لینک</h3>
+          <p className={`text-xs ${retroMuted} mt-2`}>
+            آدرس بسته‌ی به‌روزرسانی را وارد کنید تا سیستم آن را دانلود و در پوشه‌ی به‌روزرسانی‌ها ذخیره کند.
+          </p>
+        </header>
+
+        <div className={`${retroPanel} p-4 space-y-3`}>
+          <input
+            className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+            placeholder="لینک بسته به‌روزرسانی"
+            value={updateUrl}
+            onChange={e => setUpdateUrl(e.target.value)}
+          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <input
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="نسخه (اختیاری)"
+              value={updateVersion}
+              onChange={e => setUpdateVersion(e.target.value)}
+            />
+            <input
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="چک‌سام SHA256 (اختیاری)"
+              value={updateChecksum}
+              onChange={e => setUpdateChecksum(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <button
+              className={`${retroButton} ${updateLoading ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={downloadUpdateFromLink}
+            >
+              {updateLoading ? 'در حال دریافت...' : 'دریافت بسته'}
+            </button>
+            {updateMessage && (
+              <span className={`text-xs ${retroMuted}`}>{updateMessage}</span>
+            )}
+          </div>
+        </div>
+
+        <div className={`${retroPanel} p-0`}>
+          {appUpdates.length > 0 ? (
+            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-xs lg:text-sm">
+              <thead>
+                <tr>
+                  <th className={retroTableHeader}>زمان</th>
+                  <th className={retroTableHeader}>نسخه</th>
+                  <th className={retroTableHeader}>فایل</th>
+                  <th className={retroTableHeader}>حجم</th>
+                  <th className={retroTableHeader}>وضعیت</th>
+                  <th className={retroTableHeader}>پیام</th>
+                </tr>
+              </thead>
+              <tbody>
+                {appUpdates.map(item => (
+                  <tr key={item.id} className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2 text-left">{item.created_at ? isoToJalali(item.created_at) : '-'}</td>
+                    <td className="px-3 py-2">{item.version || '-'}</td>
+                    <td className="px-3 py-2 break-all">
+                      {item.filename || '---'}
+                      {item.extracted_path ? (
+                        <div className="mt-1">
+                          <span className={`${retroBadge}`}>
+                            پوشه استخراج: {item.extracted_path}
+                          </span>
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-2">
+                      {item.size_bytes ? `${(item.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '-'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`${retroBadge} ${item.status === 'success' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        {item.status === 'success' ? 'موفق' : 'ناموفق'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[#7a6b4f]">
+                      {item.message || '-'}
+                      {item.extracted_files ? ` (فایل‌ها: ${item.extracted_files})` : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-xs text-[#7a6b4f] p-4">هنوز هیچ به‌روزرسانی ثبت نشده است.</p>
+          )}
+        </div>
       </section>
 
       <section className={`${retroPanelPadded} space-y-4`}>

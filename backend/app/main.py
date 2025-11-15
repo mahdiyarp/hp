@@ -5,6 +5,14 @@ from .ocr_parser import parse_invoice_file
 from .ocr_parser import parse_payment_file
 import tempfile
 import shutil
+import json
+import zipfile
+import hashlib
+import re
+import requests
+from pathlib import Path
+from urllib.parse import urlparse
+from uuid import uuid4
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 import jdatetime
@@ -31,6 +39,114 @@ DB = db
 
 app = FastAPI(title="hesabpak Backend")
 
+
+# ==================== Update storage helpers ====================
+
+DATA_DIR = Path(os.getenv('HESABPAK_DATA_DIR', Path(__file__).resolve().parent.parent / 'data'))
+UPDATE_STORAGE_DIR = Path(os.getenv('HESABPAK_UPDATE_DIR', str(DATA_DIR / 'updates')))
+UPDATE_HISTORY_PATH = UPDATE_STORAGE_DIR / 'history.json'
+MAX_UPDATE_SIZE_BYTES = int(os.getenv('HESABPAK_MAX_UPDATE_SIZE', str(200 * 1024 * 1024)))
+
+
+def _ensure_update_dirs() -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        UPDATE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f'امکان ایجاد پوشه‌ی به‌روزرسانی وجود ندارد: {exc}')
+
+
+def _sanitize_filename(name: str) -> str:
+    sanitized = re.sub(r'[^A-Za-z0-9._-]+', '_', name or '')
+    return sanitized or 'package.bin'
+
+
+def _load_update_history() -> List[dict]:
+    _ensure_update_dirs()
+    if UPDATE_HISTORY_PATH.exists():
+        try:
+            with UPDATE_HISTORY_PATH.open('r', encoding='utf-8') as fh:
+                data = json.load(fh)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            return []
+    return []
+
+
+def _save_update_history(items: List[dict]) -> None:
+    _ensure_update_dirs()
+    with UPDATE_HISTORY_PATH.open('w', encoding='utf-8') as fh:
+        json.dump(items, fh, ensure_ascii=False, indent=2)
+
+
+def _append_update_history(entry: dict) -> None:
+    history = _load_update_history()
+    history.insert(0, entry)
+    # keep last 50 records to avoid unlimited growth
+    _save_update_history(history[:50])
+
+
+def _download_update_file(url: str, entry_id: str) -> tuple[Path, int]:
+    _ensure_update_dirs()
+    parsed = urlparse(url)
+    original_name = Path(parsed.path).name or 'package.bin'
+    filename = f"{entry_id}_{_sanitize_filename(original_name)}"
+    destination = UPDATE_STORAGE_DIR / filename
+
+    try:
+        with requests.get(url, stream=True, timeout=30) as response:
+            if response.status_code >= 400:
+                raise HTTPException(status_code=response.status_code, detail='دریافت فایل به‌روزرسانی ناموفق بود.')
+            size = 0
+            with destination.open('wb') as fh:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
+                    fh.write(chunk)
+                    size += len(chunk)
+                    if size > MAX_UPDATE_SIZE_BYTES:
+                        fh.close()
+                        destination.unlink(missing_ok=True)
+                        raise HTTPException(status_code=400, detail='حجم بسته از حد مجاز بیشتر است.')
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
+    except Exception as exc:
+        destination.unlink(missing_ok=True)
+        raise HTTPException(status_code=500, detail=f'خطا در دانلود به‌روزرسانی: {exc}')
+
+    return destination, size
+
+
+def _calculate_checksum(file_path: Path) -> str:
+    digest = hashlib.sha256()
+    with file_path.open('rb') as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_extract_zip(zip_path: Path, target_dir: Path) -> int:
+    with zipfile.ZipFile(zip_path) as archive:
+        for member in archive.infolist():
+            extracted_path = target_dir / member.filename
+            if not str(extracted_path.resolve()).startswith(str(target_dir.resolve())):
+                raise HTTPException(status_code=400, detail='آرشیو شامل مسیر ناامن است.')
+        archive.extractall(target_dir)
+        return len(archive.infolist())
+
+
+def _extract_update_archive(file_path: Path) -> tuple[Optional[str], Optional[int]]:
+    if not zipfile.is_zipfile(file_path):
+        return None, None
+
+    extract_dir = file_path.parent / f"{file_path.stem}_extracted"
+    if extract_dir.exists():
+        shutil.rmtree(extract_dir)
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    count = _safe_extract_zip(file_path, extract_dir)
+    return extract_dir.name, count
 
 # Simple audit middleware: logs each request/response to audit_logs table
 class AuditMiddleware(BaseHTTPMiddleware):
@@ -2293,6 +2409,79 @@ async def list_available_endpoints(
     ]
     
     return {'endpoints': endpoints}
+
+
+@app.get('/api/developer/updates', response_model=schemas.DeveloperAppUpdateList)
+async def list_app_updates(current: models.User = Depends(require_roles(role_names=['Admin']))):
+    """لیست به‌روزرسانی‌های دریافت‌شده از طریق لینک"""
+    updates = _load_update_history()
+    return {'updates': updates}
+
+
+@app.post('/api/developer/updates', response_model=schemas.DeveloperAppUpdateResponse)
+async def download_app_update(
+    payload: schemas.DeveloperAppUpdateRequest,
+    current: models.User = Depends(require_roles(role_names=['Admin'])),
+    session: Session = Depends(db.get_db)
+):
+    """دانلود بسته‌ی به‌روزرسانی از طریق لینک و آماده‌سازی آن"""
+    entry_id = str(uuid4())
+    entry: dict = {
+        'id': entry_id,
+        'url': str(payload.url),
+        'version': payload.version,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+    }
+    file_path: Optional[Path] = None
+
+    try:
+        file_path, size = _download_update_file(str(payload.url), entry_id)
+        entry['filename'] = file_path.name
+        entry['size_bytes'] = size
+
+        checksum = _calculate_checksum(file_path)
+        entry['checksum'] = checksum
+
+        if payload.checksum and checksum.lower() != payload.checksum.lower():
+            entry['status'] = 'failed'
+            entry['message'] = 'چک‌سام فایل با مقدار اعلام‌شده مطابقت ندارد.'
+            if file_path.exists():
+                file_path.unlink()
+            raise HTTPException(status_code=400, detail=entry['message'])
+
+        extracted_path, extracted_count = _extract_update_archive(file_path)
+        entry['extracted_path'] = extracted_path
+        entry['extracted_files'] = extracted_count
+        entry['status'] = 'success'
+        entry['message'] = 'بسته به‌روزرسانی با موفقیت دریافت شد.'
+
+        _append_update_history(entry)
+        log_activity(
+            session,
+            current.id,
+            '/api/developer/updates',
+            'POST',
+            200,
+            f'دریافت بسته به‌روزرسانی از {payload.url}'
+        )
+
+        return {'detail': entry['message'], 'entry': entry}
+
+    except HTTPException as exc:
+        if entry.get('status') != 'failed':
+            entry['status'] = 'failed'
+            entry['message'] = exc.detail if isinstance(exc.detail, str) else 'خطا در دانلود به‌روزرسانی'
+        if file_path and file_path.exists():
+            file_path.unlink()
+        _append_update_history(entry)
+        raise
+    except Exception as exc:
+        entry['status'] = 'failed'
+        entry['message'] = str(exc)
+        if file_path and file_path.exists():
+            file_path.unlink()
+        _append_update_history(entry)
+        raise HTTPException(status_code=500, detail='به‌روزرسانی با خطا مواجه شد')
 
 
 # ==================== Blockchain Audit Trail ====================
