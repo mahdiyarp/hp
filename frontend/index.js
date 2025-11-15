@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
-const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+// Node 18+ provides a global fetch. Use it directly (Node 20 image).
+const fetch = global.fetch || (url => Promise.reject(new Error('global fetch not available')));
 const app = express();
 const port = process.env.PORT || 3000;
 

@@ -1,0 +1,33 @@
+# General
+.DS_Store
+node_modules/
+dist/
+build/
+coverage/
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+env/
+venv/
+
+# Backend
+backend/.env
+backend/backups/
+backend/exports/
+backend/logs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Misc
+*.log
+*.tmp
+*.swp
+*.lock

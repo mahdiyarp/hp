@@ -1,15 +1,15 @@
 """create payments table
 
-Revision ID: 0006_payments
-Revises: 0005_invoices
+Revision ID: 0006
+Revises: 0005
 Create Date: 2025-11-08 01:20:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0006_payments'
-down_revision = '0005_invoices'
+revision = '0006'
+down_revision = '0005'
 branch_labels = None
 depends_on = None
 

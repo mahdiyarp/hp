@@ -1,15 +1,15 @@
 """add backups and financial years
 
-Revision ID: 0013_add_backups_financial_years
-Revises: 0012_shared_files
+Revision ID: 0013
+Revises: 0012
 Create Date: 2025-11-08 00:00:00.000000
 """
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '0013_add_backups_financial_years'
-down_revision = '0012_shared_files'
+revision = '0013'
+down_revision = '0012'
 branch_labels = None
 depends_on = None
 

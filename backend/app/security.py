@@ -1,6 +1,8 @@
 import os
 from datetime import datetime, timedelta
 from typing import Optional
+
+import pyotp
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
@@ -13,7 +15,9 @@ ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '15'))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', '30'))
 
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+# Use a PBKDF2-based scheme to avoid optional bcrypt native backend issues in some containers.
+# PBKDF2-SHA256 is widely supported and doesn't require the bcrypt C-extension.
+pwd_context = CryptContext(schemes=['pbkdf2_sha256'], deprecated='auto')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -81,3 +85,19 @@ def decrypt_value(ciphertext: str) -> str:
         return _FERNET.decrypt(ciphertext.encode('utf-8')).decode('utf-8')
     except Exception:
         return ciphertext
+
+
+def generate_otp_secret() -> str:
+    return pyotp.random_base32()
+
+
+def generate_otp_uri(username: str, secret: str, issuer: str = 'Hesabpak') -> str:
+    return pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name=issuer)
+
+
+def verify_otp(secret: str, token: str) -> bool:
+    try:
+        totp = pyotp.TOTP(secret)
+        return totp.verify(token, valid_window=1)
+    except Exception:
+        return False

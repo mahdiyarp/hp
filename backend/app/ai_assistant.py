@@ -95,5 +95,3 @@ def run_assistant(db_session, user, text: str) -> Dict[str, Any]:
     # fallback: return help and suggestions
     help_text = 'من می‌توانم دستورات سادهٔ حسابداری را اجرا کنم، مثلاً:\n- "فاکتور فروش برای علی ثبت کن با 3 لپ‌تاپ HP"\n- "گزارش دریافتی‌های امروز"\nبرای فعال‌سازی یا خاموش کردن دستیار به /api/assistant/toggle مراجعه کنید.'
     return {'ok': True, 'message': help_text}
-
-*** End Patch

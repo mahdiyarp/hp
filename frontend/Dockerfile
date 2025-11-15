@@ -23,13 +23,4 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 CMD ["nginx", "-g", "daemon off;"]
-FROM node:20-alpine
-WORKDIR /app
 
-COPY package.json package.json
-RUN npm install --production
-
-COPY . .
-
-EXPOSE 3000
-CMD ["npm", "start"]

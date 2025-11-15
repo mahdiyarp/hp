@@ -3,11 +3,26 @@ import csv
 import uuid
 from datetime import datetime
 from typing import Optional
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
-import pandas as pd
-from openpyxl import Workbook
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import mm
+    _REPORTLAB_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    A4 = canvas = None  # type: ignore
+    mm = 1  # dummy value; function will guard availability
+    _REPORTLAB_AVAILABLE = False
+
+try:
+    import pandas as pd  # noqa: F401
+except ImportError:  # pragma: no cover - optional dependency
+    pd = None  # type: ignore
+
+try:
+    from openpyxl import Workbook
+except ImportError:  # pragma: no cover - optional dependency
+    Workbook = None  # type: ignore
 
 from . import db
 from . import models
@@ -25,6 +40,8 @@ def _invoice_base_data(db_session, invoice_id: int):
 
 
 def export_invoice_pdf(db_session, invoice_id: int, filename: Optional[str] = None) -> str:
+    if not _REPORTLAB_AVAILABLE:
+        raise RuntimeError('reportlab dependency not installed; PDF export unavailable')
     data = _invoice_base_data(db_session, invoice_id)
     if not data:
         raise ValueError('invoice not found')
@@ -67,7 +84,7 @@ def export_invoice_pdf(db_session, invoice_id: int, filename: Optional[str] = No
     c.setFont('Helvetica-Bold', 12)
     c.drawString(margin, y, f"مبلغ کل: {total}")
     c.save()
-    return path
+
 
 
 def export_invoice_csv(db_session, invoice_id: int, filename: Optional[str] = None) -> str:
@@ -89,6 +106,8 @@ def export_invoice_csv(db_session, invoice_id: int, filename: Optional[str] = No
 
 
 def export_invoice_excel(db_session, invoice_id: int, filename: Optional[str] = None) -> str:
+    if Workbook is None:
+        raise RuntimeError('openpyxl dependency not installed; Excel export unavailable')
     data = _invoice_base_data(db_session, invoice_id)
     if not data:
         raise ValueError('invoice not found')
@@ -106,5 +125,3 @@ def export_invoice_excel(db_session, invoice_id: int, filename: Optional[str] = 
         ws.append([it.description or '', it.quantity, it.unit or '', it.unit_price, it.total])
     wb.save(path)
     return path
-
-*** End Patch
