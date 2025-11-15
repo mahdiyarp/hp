@@ -21,6 +21,10 @@ backend/.env
 backend/backups/
 backend/exports/
 backend/logs/
+backend/*.db
+
+# Repository-level artifacts
+logs/
 
 # Frontend
 frontend/node_modules/
