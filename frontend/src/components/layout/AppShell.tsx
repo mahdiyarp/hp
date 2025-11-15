@@ -235,19 +235,21 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
         </main>
       </div>
 
-      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col`}>
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col transition-all duration-200 ease-in-out` }>
         <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
           <div>
             <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
-            {!sidebarCollapsed && (
-              <>
-                <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
-                <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
-                  ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
-                  کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
-                </p>
-              </>
-            )}
+            <div className={`${sidebarCollapsed ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'} transition-opacity duration-200`}> 
+              {!sidebarCollapsed && (
+                <>
+                  <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
+                  <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
+                    ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
+                    کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
+                  </p>
+                </>
+              )}
+            </div>
           </div>
           <button
             title={sidebarCollapsed ? 'باز کردن منو' : 'کوچک‌سازی منو'}

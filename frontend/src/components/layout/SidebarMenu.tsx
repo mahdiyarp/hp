@@ -118,10 +118,10 @@ export default function SidebarMenu({
             <div key={mod.id} className="p-1">
               <button
                 title={mod.label}
-                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[#1f2e3b]' : ''}`}
+                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[#1f2e3b]' : ''} transition-colors duration-150`}
                 onClick={() => onNavigate(mod.id)}
               >
-                <span className={`${retroHeading} block text-[11px]`}>{(mod.badge ?? mod.label[0] ?? '•').slice(0,3)}</span>
+                <span className={`${retroHeading} block text-[11px] transition-opacity duration-200`}>{(mod.badge ?? mod.label[0] ?? '•').slice(0,3)}</span>
               </button>
             </div>
           )
@@ -142,9 +142,9 @@ export default function SidebarMenu({
               className={`${base} ${isActive ? activeClass : idleClass}`}
               onClick={() => onNavigate(mod.id)}
             >
-              <span className={`${retroHeading} block text-[11px]`}>{mod.badge ?? 'MODULE'}</span>
-              <span className="text-lg font-semibold">{mod.label}</span>
-              <span className="block text-[11px] mt-1 text-[#aeb4b9]">{mod.description}</span>
+              <span className={`${retroHeading} block text-[11px] transition-opacity duration-200`}>{mod.badge ?? 'MODULE'}</span>
+              <span className="text-lg font-semibold transition-opacity duration-200">{mod.label}</span>
+              <span className="block text-[11px] mt-1 text-[#aeb4b9] transition-opacity duration-200">{mod.description}</span>
             </button>
           </div>
         )
