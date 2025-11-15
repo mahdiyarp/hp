@@ -48,9 +48,9 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
-    email: Optional[EmailStr]
-    full_name: Optional[str]
-    mobile: Optional[str]
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    mobile: Optional[str] = None
     role: str
     role_id: Optional[int]
     is_active: bool
