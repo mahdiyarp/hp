@@ -1769,3 +1769,88 @@ def delete_icc_extension(session: Session, extension_id: int) -> bool:
     session.commit()
     return True
 
+
+# ==================== System Settings CRUD ====================
+
+def get_system_setting(session: Session, key: str) -> Optional[models.SystemSettings]:
+    """دریافت تنظیم سیستم بر اساس کلید"""
+    return session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
+
+
+def get_system_settings_by_category(session: Session, category: str) -> List[models.SystemSettings]:
+    """دریافت تنظیمات بر اساس دسته"""
+    return session.query(models.SystemSettings).filter(models.SystemSettings.category == category).all()
+
+
+def get_all_system_settings(session: Session) -> List[models.SystemSettings]:
+    """دریافت تمام تنظیمات سیستم"""
+    return session.query(models.SystemSettings).all()
+
+
+def create_system_setting(session: Session, setting: schemas.SystemSettingCreate, updated_by: int = None) -> models.SystemSettings:
+    """ایجاد تنظیم سیستم جدید"""
+    db_setting = models.SystemSettings(
+        key=setting.key,
+        value=setting.value,
+        setting_type=setting.setting_type,
+        display_name=setting.display_name,
+        description=setting.description,
+        category=setting.category,
+        is_secret=setting.is_secret,
+        updated_by=updated_by
+    )
+    session.add(db_setting)
+    session.commit()
+    session.refresh(db_setting)
+    return db_setting
+
+
+def update_system_setting(session: Session, key: str, setting: schemas.SystemSettingUpdate, updated_by: int = None) -> Optional[models.SystemSettings]:
+    """به‌روزرسانی تنظیم سیستم"""
+    db_setting = get_system_setting(session, key)
+    if not db_setting:
+        return None
+    
+    update_data = setting.dict(exclude_unset=True)
+    update_data['updated_by'] = updated_by
+    update_data['updated_at'] = datetime.now(timezone.utc)
+    
+    for field, value in update_data.items():
+        setattr(db_setting, field, value)
+    
+    session.commit()
+    session.refresh(db_setting)
+    return db_setting
+
+
+def delete_system_setting(session: Session, key: str) -> bool:
+    """حذف تنظیم سیستم"""
+    db_setting = get_system_setting(session, key)
+    if not db_setting:
+        return False
+    session.delete(db_setting)
+    session.commit()
+    return True
+
+
+def get_setting_value(session: Session, key: str, default=None):
+    """دریافت مقدار تنظیم (بدون جزئیات)"""
+    setting = get_system_setting(session, key)
+    if not setting:
+        return default
+    
+    # اگر نوع json است، parse کن
+    if setting.setting_type == 'json':
+        try:
+            return json.loads(setting.value) if setting.value else default
+        except:
+            return default
+    elif setting.setting_type == 'int':
+        try:
+            return int(setting.value) if setting.value else default
+        except:
+            return default
+    elif setting.setting_type == 'bool':
+        return setting.value in ['true', 'True', '1', True]
+    else:
+        return setting.value or default

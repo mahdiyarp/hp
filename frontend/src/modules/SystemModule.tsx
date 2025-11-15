@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { ModuleComponentProps, SmartDateState } from '../components/layout/AppShell'
 import SmartDatePicker from '../components/SmartDatePicker'
-import { apiGet, apiPost, apiDelete } from '../services/api'
+import { apiGet, apiPost, apiPatch, apiDelete } from '../services/api'
 import { isoToJalali } from '../utils/num'
 import {
   retroBadge,
@@ -70,6 +70,19 @@ interface SmsProviderCfg {
   last_updated: string | null
 }
 
+interface SystemSetting {
+  id: number
+  key: string
+  value: string | null
+  setting_type: string
+  display_name: string | null
+  description: string | null
+  category: string | null
+  is_secret: boolean
+  created_at: string
+  updated_at: string
+}
+
 export default function SystemModule({ smartDate, onSmartDateChange, sync }: ModuleComponentProps) {
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
@@ -92,6 +105,13 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [smsProviders, setSmsProviders] = useState<SmsProviderCfg[]>([])
   const [smsTest, setSmsTest] = useState({ to: '', message: 'کد تست حساب‌پاک', provider: '' })
   const [smsReg, setSmsReg] = useState({ username: '', full_name: '', mobile: '', role_id: 2 })
+  
+  // System Settings state
+  const [allSettings, setAllSettings] = useState<SystemSetting[]>([])
+  const [settingsByCategory, setSettingsByCategory] = useState<{ [key: string]: SystemSetting[] }>({})
+  const [selectedCategory, setSelectedCategory] = useState<string>('sms')
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState<string>('')
 
   useEffect(() => {
     loadData()
@@ -149,6 +169,21 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         setSmsProviders(providers)
       } catch (err) {
         // not critical
+      }
+      try {
+        const settings = await apiGet<SystemSetting[]>('/api/admin/settings')
+        setAllSettings(settings)
+        // Group by category
+        const grouped: { [key: string]: SystemSetting[] } = {}
+        settings.forEach(s => {
+          const cat = s.category || 'other'
+          if (!grouped[cat]) grouped[cat] = []
+          grouped[cat].push(s)
+        })
+        setSettingsByCategory(grouped)
+      } catch (err) {
+        console.error(err)
+        warn.push('تنظیمات سیستم قابل دریافت نیست.')
       }
     } catch (err) {
       console.error(err)
@@ -246,6 +281,29 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     } catch (err) {
       console.error(err)
       setError('ثبت کاربر با پیامک ناموفق بود.')
+    }
+  }
+
+  async function updateSetting(key: string, newValue: string) {
+    try {
+      await apiPatch(`/api/admin/settings/${key}`, { value: newValue })
+      setEditingKey(null)
+      setEditValue('')
+      await loadData()
+    } catch (err) {
+      console.error(err)
+      setError('به‌روزرسانی تنظیم موفق نبود.')
+    }
+  }
+
+  async function deleteSetting(key: string) {
+    if (!window.confirm('آیا مطمئن هستید؟')) return
+    try {
+      await apiDelete(`/api/admin/settings/${key}`)
+      await loadData()
+    } catch (err) {
+      console.error(err)
+      setError('حذف تنظیم موفق نبود.')
     }
   }
 
@@ -631,6 +689,106 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         ) : (
           <p className="text-xs text-[#7a6b4f]">هیچ کاربری وجود ندارد.</p>
         )}
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header>
+          <p className={retroHeading}>System Settings</p>
+          <h3 className="text-lg font-semibold mt-2">تنظیمات سیستم</h3>
+        </header>
+        
+        <div className="mb-4">
+          <p className={retroHeading}>دسته</p>
+          <select 
+            className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+          >
+            <option value="">همه</option>
+            {Object.keys(settingsByCategory).map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className={`${retroPanel} p-4`}>
+          {(selectedCategory ? settingsByCategory[selectedCategory] || [] : allSettings).length > 0 ? (
+            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+              <thead>
+                <tr>
+                  <th className={retroTableHeader}>کلید</th>
+                  <th className={retroTableHeader}>مقدار</th>
+                  <th className={retroTableHeader}>توضیح</th>
+                  <th className={retroTableHeader}>عملیات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(selectedCategory ? settingsByCategory[selectedCategory] || [] : allSettings).map(setting => (
+                  <tr key={setting.key} className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2 font-mono text-xs">{setting.key}</td>
+                    <td className="px-3 py-2">
+                      {editingKey === setting.key ? (
+                        <input
+                          type={setting.is_secret ? 'password' : 'text'}
+                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') updateSetting(setting.key, editValue)
+                            if (e.key === 'Escape') setEditingKey(null)
+                          }}
+                        />
+                      ) : (
+                        <span className={setting.is_secret ? 'text-gray-400' : ''}>
+                          {setting.is_secret ? '***' : setting.value || '-'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-[#7a6b4f]">{setting.description || '-'}</td>
+                    <td className="px-3 py-2 text-center space-x-2">
+                      {editingKey === setting.key ? (
+                        <>
+                          <button
+                            className="text-green-600 hover:text-green-800 text-xs"
+                            onClick={() => updateSetting(setting.key, editValue)}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-xs"
+                            onClick={() => setEditingKey(null)}
+                          >
+                            ✗
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                            onClick={() => {
+                              setEditingKey(setting.key)
+                              setEditValue(setting.value || '')
+                            }}
+                          >
+                            ویرایش
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-xs"
+                            onClick={() => deleteSetting(setting.key)}
+                          >
+                            حذف
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-xs text-[#7a6b4f]">هیچ تنظیمی در این دسته وجود ندارد.</p>
+          )}
+        </div>
       </section>
     </div>
   )

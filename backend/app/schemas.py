@@ -808,3 +808,37 @@ class IccExtensionOut(BaseModel):
     class Config:
         orm_mode = True
 
+
+# System Settings schemas
+class SystemSettingOut(BaseModel):
+    id: int
+    key: str
+    value: Optional[str]
+    setting_type: str
+    display_name: Optional[str]
+    description: Optional[str]
+    category: Optional[str]
+    is_secret: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class SystemSettingCreate(BaseModel):
+    key: str
+    value: Optional[str] = None
+    setting_type: str = 'string'
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    is_secret: bool = False
+
+
+class SystemSettingUpdate(BaseModel):
+    value: Optional[str] = None
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    is_secret: Optional[bool] = None

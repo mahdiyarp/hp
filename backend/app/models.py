@@ -441,3 +441,22 @@ class IccExtension(Base):
     last_synced_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SystemSettings(Base):
+    """Global system settings (SMS, Email, Payment APIs, etc.)"""
+    __tablename__ = 'system_settings'
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(128), nullable=False, unique=True, index=True)
+    value = Column(Text, nullable=True)  # JSON for complex values
+    setting_type = Column(String(32), nullable=False, default='string')  # string, json, int, bool
+    display_name = Column(String(255), nullable=True)  # Label for admin UI
+    description = Column(Text, nullable=True)  # Help text
+    category = Column(String(64), nullable=True, index=True)  # sms, email, payment, etc.
+    is_secret = Column(Boolean, nullable=False, default=False)  # Hide sensitive values
+    updated_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    updated_by_user = relationship('User', foreign_keys=[updated_by], backref='updated_settings')
