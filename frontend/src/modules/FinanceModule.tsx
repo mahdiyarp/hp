@@ -63,6 +63,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [methodFilter, setMethodFilter] = useState('all')
+  const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
@@ -186,9 +187,20 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       if (directionFilter !== 'all' && p.direction !== directionFilter) return false
       if (statusFilter !== 'all' && p.status !== statusFilter) return false
       if (methodFilter !== 'all' && (p.method ?? 'other') !== methodFilter) return false
+      if (search.trim()) {
+        const searchTerm = search.trim().replace(/,/g, '')
+        // Search by payment number, party name, or amount
+        const paymentNumber = (p.payment_number ?? `#${p.id}`).toLowerCase()
+        const partyName = (p.party_name ?? '').toLowerCase()
+        const amount = String(p.amount).toLowerCase()
+        const searchLower = searchTerm.toLowerCase()
+        if (!paymentNumber.includes(searchLower) && !partyName.includes(searchLower) && !amount.includes(searchLower)) {
+          return false
+        }
+      }
       return true
-    })
-  }, [payments, directionFilter, statusFilter, methodFilter])
+    }).slice(0, 5)
+  }, [payments, directionFilter, statusFilter, methodFilter, search])
 
   const totals = useMemo(() => {
     return payments.reduce(
@@ -553,7 +565,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
               <option value="posted">ثبت شده</option>
             </select>
           </div>
-          <div className="space-y-2 lg:col-span-2">
+          <div className="space-y-2">
             <label className={retroHeading}>روش پرداخت</label>
             <select
               value={methodFilter}
@@ -568,9 +580,19 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
               ))}
             </select>
           </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>جستجو (شماره / طرف / مبلغ)</label>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="شماره تراکنش، نام طرف یا مبلغ را جستجو کنید"
+              className={`${retroInput} w-full`}
+            />
+          </div>
         </div>
         <div className="border border-dashed border-[#c5bca5] p-3 text-xs text-[#7a6b4f] rounded-sm">
-          {formatNumberFa(filteredPayments.length)} تراکنش مطابق فیلترهای فعلی نمایش داده می‌شود.
+          {filteredPayments.length} تراکنش از {payments.length} تراکنش کلی نمایش داده می‌شود (حداکثر 5)
         </div>
 
         {filteredPayments.length > 0 ? (

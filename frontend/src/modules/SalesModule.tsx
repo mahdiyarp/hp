@@ -158,6 +158,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [finalizing, setFinalizing] = useState(false)
   const [detailId, setDetailId] = useState<number | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [recentlyViewedInvoiceId, setRecentlyViewedInvoiceId] = useState<number | null>(null)
   const [autoFinalize, setAutoFinalize] = useState(true)
   const [invoiceForm, setInvoiceForm] = useState<InvoiceFormState>({
     invoice_type: 'sale',
@@ -287,6 +288,11 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         return true
       })
       .sort((a, b) => {
+        // اگر یک فاکتور اخیراً مشاهده شده است، آن را به بالای لیست ببر
+        if (recentlyViewedInvoiceId) {
+          if (a.id === recentlyViewedInvoiceId) return -1
+          if (b.id === recentlyViewedInvoiceId) return 1
+        }
         // نمایش فاکتورهای جدید در بالا
         const aTime = new Date(a.server_time).getTime()
         const bTime = new Date(b.server_time).getTime()
@@ -294,7 +300,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
       })
       .slice(0, invoiceListLimit)
     return result
-  }, [invoices, statusFilter, typeFilter, search, invoiceListLimit])
+  }, [invoices, statusFilter, typeFilter, search, invoiceListLimit, recentlyViewedInvoiceId])
 
   const totals = useMemo(() => {
     const all = invoices.reduce(
@@ -343,6 +349,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     setDetailError(null)
     setDetailSuccess(null)
     setDetailId(invoiceId)
+    setRecentlyViewedInvoiceId(invoiceId)
     try {
       const detail = await apiGet<InvoiceDetail>(`/api/invoices/${invoiceId}`)
       setInvoiceDetail(detail)
@@ -359,6 +366,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     setDetailError(null)
     setDetailSuccess(null)
     setDetailId(null)
+    setRecentlyViewedInvoiceId(null)
   }
 
   useEffect(() => {
@@ -1127,25 +1135,28 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {(invoiceDetail.items ?? []).map(item => (
-                      <tr key={item.id} className="border-b border-[#d9cfb6]">
-                        <td className="px-3 py-2">{item.description}</td>
-                        <td className="px-3 py-2 text-left font-[Yekan]">{formatNumberFa(item.quantity)}</td>
-                        <td className="px-3 py-2 text-left">{item.unit ?? '-'}</td>
-                        <td className="px-3 py-2 text-left">
-                          <div className="font-[Yekan]">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</div>
-                          {item.unit_price > 0 && (
-                            <div className="text-[10px] text-[#7a6b4f] italic">{numberToPersianWords(Math.trunc(item.unit_price))} ریال</div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-left">
-                          <div className="font-bold font-[Yekan] text-[#154b5f]">{formatCurrencyFa(item.total, 'ریال', false).numeric}</div>
-                          {item.total > 0 && (
-                            <div className="text-[10px] text-[#154b5f] italic">{numberToPersianWords(Math.trunc(item.total))} ریال</div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {(invoiceDetail.items ?? []).map(item => {
+                      const itemTotal = (item.quantity ?? 0) * (item.unit_price ?? 0)
+                      return (
+                        <tr key={item.id} className="border-b border-[#d9cfb6]">
+                          <td className="px-3 py-2">{item.description}</td>
+                          <td className="px-3 py-2 text-left font-[Yekan]">{formatNumberFa(item.quantity)}</td>
+                          <td className="px-3 py-2 text-left">{item.unit ?? '-'}</td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-[Yekan]">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</div>
+                            {item.unit_price > 0 && (
+                              <div className="text-[10px] text-[#7a6b4f] italic">{numberToPersianWords(Math.trunc(item.unit_price))} ریال</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-bold font-[Yekan] text-[#154b5f]">{formatCurrencyFa(itemTotal, 'ریال', false).numeric}</div>
+                            {itemTotal > 0 && (
+                              <div className="text-[10px] text-[#154b5f] italic">{numberToPersianWords(Math.trunc(itemTotal))} ریال</div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
