@@ -82,13 +82,16 @@ def send_sms(session, to: str, message: str, provider_or_name: Optional[str] = N
         
         if provider == "ippanel":
             url = "https://api.ippanel.com/api/v1/sms/send"
-            headers = {"Authorization": f"Bearer {api_key}"}
-            sender = ""
-            data = {"sender": sender, "recipient": to, "message": message}
-            r = requests.post(url, headers=headers, json=data, timeout=7)
+            params = {
+                "apikey": api_key,
+                "recipient": to,
+                "message": message,
+                "sender": ""
+            }
+            r = requests.get(url, params=params, timeout=7)
             if r.status_code in (200, 201):
                 return True, "sent"
-            return False, f"ippanel status {r.status_code}"
+            return False, f"ippanel status {r.status_code}: {r.text}"
         
         return False, f"unsupported provider {provider}"
     except Exception as e:
