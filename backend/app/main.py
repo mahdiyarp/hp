@@ -2011,6 +2011,46 @@ def set_sidebar_order(payload: dict, current: models.User = Depends(get_current_
     return {'ok': True}
 
 
+@app.get('/api/users/preferences/sidebar-side')
+def get_sidebar_side(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """Return saved sidebar side for the current user ('left'|'right') or empty string"""
+    key = f'user_sidebar_side:{current.id}'
+    try:
+        setting = crud.get_system_setting(session, key)
+    except Exception:
+        setting = None
+    if not setting or not setting.value:
+        return ''
+    try:
+        return setting.value
+    except Exception:
+        return ''
+
+
+@app.post('/api/users/preferences/sidebar-side')
+def set_sidebar_side(payload: dict, current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """Persist sidebar side for the current user. Expects JSON body: { side: 'left'|'right' }"""
+    side = payload.get('side') if isinstance(payload, dict) else None
+    if side not in ('left', 'right'):
+        raise HTTPException(status_code=400, detail="side must be 'left' or 'right'")
+    key = f'user_sidebar_side:{current.id}'
+    try:
+        existing = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
+        if existing:
+            existing.value = side
+            existing.setting_type = 'string'
+            existing.updated_by = current.id
+            session.add(existing)
+        else:
+            ss = models.SystemSettings(key=key, value=side, setting_type='string', display_name=f'Sidebar side for user {current.id}', category='user_pref', is_secret=False, updated_by=current.id)
+            session.add(ss)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    return {'ok': True}
+
+
 @app.put('/api/users/preferences', response_model=schemas.UserPreferencesOut)
 async def update_user_preferences(
     payload: schemas.UserPreferencesUpdate,

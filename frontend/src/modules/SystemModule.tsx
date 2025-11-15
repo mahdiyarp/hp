@@ -100,6 +100,8 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [allSettings, setAllSettings] = useState<SystemSetting[]>([])
   const [settingsByCategory, setSettingsByCategory] = useState<{ [key: string]: SystemSetting[] }>({})
   const [selectedCategory, setSelectedCategory] = useState<string>('sms')
+  const [sidebarSide, setSidebarSide] = useState<string>('')
+  const [savingSidebarSide, setSavingSidebarSide] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
 
@@ -169,12 +171,36 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         console.error(err)
         warn.push('تنظیمات سیستم قابل دریافت نیست.')
       }
+      // load sidebar side preference for this user (if any)
+      try {
+        const side = await apiGet<string>('/api/users/preferences/sidebar-side')
+        if (side === 'left' || side === 'right') {
+          setSidebarSide(side)
+        }
+      } catch (err) {
+        // ignore — this endpoint may not exist or user may not have a value
+      }
     } catch (err) {
       console.error(err)
       setError('بارگذاری بخش تنظیمات با مشکل مواجه شد.')
     } finally {
       setWarnings(warn)
       setLoading(false)
+    }
+  }
+
+  async function saveSidebarSide() {
+    if (!sidebarSide) return
+    setSavingSidebarSide(true)
+    try {
+      await apiPost('/api/users/preferences/sidebar-side', { side: sidebarSide })
+      try { localStorage.setItem('hesabpak_sidebar_side_v1', sidebarSide) } catch (e) {}
+      alert('تنظیم ذخیره شد')
+    } catch (err) {
+      console.error(err)
+      setError('ذخیره تنظیم منوی کناری موفق نبود.')
+    } finally {
+      setSavingSidebarSide(false)
     }
   }
 
@@ -656,7 +682,23 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           <h3 className="text-lg font-semibold mt-2">تنظیمات سیستم</h3>
         </header>
         
-        <div className="mb-4">
+        <div className="mb-4 space-y-3">
+          <div className={`${retroPanel} p-3`}> 
+            <p className={retroHeading}>جهت منو</p>
+            <p className="text-xs text-[#7a6b4f]">محل نمایش منوی کناری را برای این کاربر انتخاب کنید.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <select className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de] text-sm" value={sidebarSide} onChange={e=>setSidebarSide(e.target.value)}>
+                <option value="">پیشفرض (راست)</option>
+                <option value="right">راست</option>
+                <option value="left">چپ</option>
+              </select>
+              <button className={`${retroButton} ${savingSidebarSide ? 'opacity-50 pointer-events-none' : ''}`} onClick={saveSidebarSide}>
+                ذخیره
+              </button>
+            </div>
+          </div>
+
+          <div>
           <p className={retroHeading}>دسته</p>
           <select 
             className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
@@ -747,6 +789,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           ) : (
             <p className="text-xs text-[#7a6b4f]">هیچ تنظیمی در این دسته وجود ندارد.</p>
           )}
+        </div>
         </div>
       </section>
     </div>
