@@ -12,6 +12,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import { requestInvoiceExport } from '../utils/export'
 
 interface Product {
   id: string
@@ -170,7 +171,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
 
   const exportMovement = () => {
     if (!movementData) return
-    
+
     const csv = [
       ['تاریخ', 'نوع', 'طرف حساب', 'تعداد', 'قیمت واحد', 'مبلغ کل', 'موجودی قبل', 'موجودی بعد', 'فاکتور'].join('\t'),
       ...movementData.movements.map(m => [
@@ -193,6 +194,20 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     link.download = `گردش-کالا-${movementData.product.name}-${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const openInvoiceDocument = async (invoiceId: number) => {
+    try {
+      const downloadUrl = await requestInvoiceExport(invoiceId, 'pdf')
+      if (downloadUrl) {
+        window.open(downloadUrl, '_blank', 'noopener')
+      } else {
+        setError('امکان دریافت فایل فاکتور وجود ندارد.')
+      }
+    } catch (err) {
+      console.error('Failed to export invoice:', err)
+      setError('امکان دریافت فایل فاکتور وجود ندارد.')
+    }
   }
 
   const groups = useMemo(() => {
@@ -586,11 +601,11 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                               {formatNumberFa(movement.stock_after)}
                             </td>
                             <td className="px-3 py-2 text-xs">
-                              <button 
+                              <button
                                 className="text-blue-700 underline hover:text-blue-900"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  window.open(`/api/invoices/${movement.invoice_id}/export`, '_blank')
+                                  openInvoiceDocument(movement.invoice_id)
                                 }}
                               >
                                 {movement.invoice_number}

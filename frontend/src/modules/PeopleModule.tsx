@@ -11,6 +11,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import { requestInvoiceExport } from '../utils/export'
 
 interface Person {
   id: string
@@ -154,6 +155,20 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       setError('خطا در دریافت گردش حساب')
     } finally {
       setLoadingLedger(false)
+    }
+  }
+
+  const openInvoiceDocument = async (invoiceId: number) => {
+    try {
+      const downloadUrl = await requestInvoiceExport(invoiceId, 'pdf')
+      if (downloadUrl) {
+        window.open(downloadUrl, '_blank', 'noopener')
+      } else {
+        setError('امکان دریافت فایل فاکتور وجود ندارد.')
+      }
+    } catch (err) {
+      console.error('Failed to export invoice:', err)
+      setError('امکان دریافت فایل فاکتور وجود ندارد.')
     }
   }
 
@@ -672,11 +687,11 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                             </td>
                             <td className="px-3 py-2 text-xs">
                               {entry.invoice && (
-                                <button 
+                                <button
                                   className="text-blue-700 underline hover:text-blue-900"
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    window.open(`/api/invoices/${entry.invoice!.id}/export`, '_blank')
+                                    openInvoiceDocument(entry.invoice!.id)
                                   }}
                                 >
                                   مشاهده فاکتور
