@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'
-import { formatNumberFa, isoToJalali, toPersianDigits, formatPrice, formatCurrencyFa } from '../utils/num'
+import { formatNumberFa, isoToJalali, toPersianDigits, formatPrice, formatCurrencyFa, numberToPersianWords } from '../utils/num'
 import {
   retroBadge,
   retroButton,
@@ -662,90 +662,127 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 </button>
               </div>
 
-              {invoiceForm.items.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3 border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm"
-                >
-                  <div className="space-y-2">
-                    <label className={retroHeading}>شرح کالا *</label>
-                    <input
-                      value={item.description}
-                      onChange={e => {
-                        const value = e.target.value
-                        updateItem(idx, 'description', value)
-                        const matched = products.find(
-                          prod => prod.name === value || prod.id === value,
-                        )
-                        if (matched) {
-                          setInvoiceForm(prev => {
-                            const items = prev.items.map((row, rowIndex) =>
-                              rowIndex === idx
-                                ? {
-                                    ...row,
-                                    unit: matched.unit || row.unit,
-                                    product_id: matched.id || row.product_id,
-                                  }
-                                : row,
+              {invoiceForm.items.map((item, idx) => {
+                const itemSubtotal = item.quantity * item.unit_price
+                const priceWords = item.unit_price > 0 ? numberToPersianWords(Math.trunc(item.unit_price)) : ''
+                const subtotalWords = itemSubtotal > 0 ? numberToPersianWords(Math.trunc(itemSubtotal)) : ''
+                
+                return (
+                  <div
+                    key={idx}
+                    className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm space-y-3"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-3">
+                      <div className="space-y-2">
+                        <label className={retroHeading}>شرح کالا *</label>
+                        <input
+                          value={item.description}
+                          onChange={e => {
+                            const value = e.target.value
+                            updateItem(idx, 'description', value)
+                            const matched = products.find(
+                              prod => prod.name === value || prod.id === value,
                             )
-                            return { ...prev, items }
-                          })
-                        }
-                      }}
-                      className={`${retroInput} w-full`}
-                      placeholder="نام یا توضیح کالا"
-                      required
-                      list={`invoice-product-${idx}`}
-                    />
-                    <datalist id={`invoice-product-${idx}`}>
-                      {products.map(prod => (
-                        <option key={prod.id} value={prod.name}>
-                          {prod.group ? `${prod.name} (${prod.group})` : prod.name}
-                        </option>
-                      ))}
-                    </datalist>
+                            if (matched) {
+                              setInvoiceForm(prev => {
+                                const items = prev.items.map((row, rowIndex) =>
+                                  rowIndex === idx
+                                    ? {
+                                        ...row,
+                                        unit: matched.unit || row.unit,
+                                        product_id: matched.id || row.product_id,
+                                      }
+                                    : row,
+                                )
+                                return { ...prev, items }
+                              })
+                            }
+                          }}
+                          className={`${retroInput} w-full`}
+                          placeholder="نام یا توضیح کالا"
+                          required
+                          list={`invoice-product-${idx}`}
+                        />
+                        <datalist id={`invoice-product-${idx}`}>
+                          {products.map(prod => (
+                            <option key={prod.id} value={prod.name}>
+                              {prod.group ? `${prod.name} (${prod.group})` : prod.name}
+                            </option>
+                          ))}
+                        </datalist>
+                      </div>
+                      <div className="space-y-2">
+                        <label className={retroHeading}>تعداد *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={item.quantity}
+                          onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                          className={`${retroInput} w-full`}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={retroHeading}>واحد</label>
+                        <input
+                          value={item.unit}
+                          onChange={e => updateItem(idx, 'unit', e.target.value)}
+                          className={`${retroInput} w-full`}
+                          placeholder="عدد / بسته ..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-3">
+                      <div className="space-y-2">
+                        <label className={retroHeading}>قیمت واحد (ریال) *</label>
+                        <div className="space-y-1">
+                          <input
+                            type="number"
+                            min={1}
+                            value={item.unit_price}
+                            onChange={e => updateItem(idx, 'unit_price', e.target.value)}
+                            className={`${retroInput} w-full font-[Yekan] text-center text-lg`}
+                            style={{ fontFamily: 'Yekan' }}
+                          />
+                          <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">
+                            {formatNumberFa(item.unit_price)}
+                          </div>
+                          {item.unit_price > 0 && (
+                            <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">
+                              {priceWords} ریال
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className={retroHeading}>کل (تعداد × قیمت)</label>
+                        <div className="space-y-1">
+                          <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-3 py-2 rounded font-bold text-center font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+                            {formatNumberFa(itemSubtotal)}
+                          </div>
+                          {itemSubtotal > 0 && (
+                            <div className="text-[10px] text-[#154b5f] italic bg-[#e8f2f7] px-2 py-0.5 rounded border border-dashed border-[#154b5f]">
+                              {subtotalWords} ریال
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          className={`${retroButton} !bg-[#c35c5c] w-full`}
+                          onClick={() => removeItem(idx)}
+                          disabled={invoiceForm.items.length === 1}
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className={retroHeading}>تعداد *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={e => updateItem(idx, 'quantity', e.target.value)}
-                      className={`${retroInput} w-full`}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className={retroHeading}>واحد</label>
-                    <input
-                      value={item.unit}
-                      onChange={e => updateItem(idx, 'unit', e.target.value)}
-                      className={`${retroInput} w-full`}
-                      placeholder="عدد / بسته ..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className={retroHeading}>قیمت واحد *</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.unit_price}
-                      onChange={e => updateItem(idx, 'unit_price', e.target.value)}
-                      className={`${retroInput} w-full`}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      className={`${retroButton} !bg-[#c35c5c]`}
-                      onClick={() => removeItem(idx)}
-                      disabled={invoiceForm.items.length === 1}
-                    >
-                      حذف
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
@@ -1035,10 +1072,20 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                     {(invoiceDetail.items ?? []).map(item => (
                       <tr key={item.id} className="border-b border-[#d9cfb6]">
                         <td className="px-3 py-2">{item.description}</td>
-                        <td className="px-3 py-2 text-left">{formatNumberFa(item.quantity)}</td>
+                        <td className="px-3 py-2 text-left font-[Yekan]">{formatNumberFa(item.quantity)}</td>
                         <td className="px-3 py-2 text-left">{item.unit ?? '-'}</td>
-                        <td className="px-3 py-2 text-left">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</td>
-                        <td className="px-3 py-2 text-left">{formatCurrencyFa(item.total, 'ریال', false).numeric}</td>
+                        <td className="px-3 py-2 text-left">
+                          <div className="font-[Yekan]">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</div>
+                          {item.unit_price > 0 && (
+                            <div className="text-[10px] text-[#7a6b4f] italic">{numberToPersianWords(Math.trunc(item.unit_price))} ریال</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-left">
+                          <div className="font-bold font-[Yekan] text-[#154b5f]">{formatCurrencyFa(item.total, 'ریال', false).numeric}</div>
+                          {item.total > 0 && (
+                            <div className="text-[10px] text-[#154b5f] italic">{numberToPersianWords(Math.trunc(item.total))} ریال</div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
