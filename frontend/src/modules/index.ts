@@ -13,30 +13,9 @@ export const modules: ModuleDefinition[] = [
   {
     id: 'dashboard',
     label: 'داشبورد',
-    description: 'نمایش خلاصه و معمّای خوی معاملات و تحلیل‌های سریع',
+    description: 'نمایش خلاصه و نمای کلی معاملات و تحلیل‌های سریع',
     component: DashboardModule,
     badge: 'DASHBOARD',
-  },
-  {
-    id: 'customer-groups',
-    label: 'گروه‌های مشتری',
-    description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
-    component: CustomerGroupsModule,
-    badge: 'GROUPS',
-  },
-  {
-    id: 'icc-shop',
-    label: 'ICC Shop',
-    description: 'یکپارچه‌سازی ساختار سازمانی ICC',
-    component: IccShopModule,
-    badge: 'ICC',
-  },
-  {
-    id: 'reports',
-    label: 'گزارش‌ها و تحلیل‌ها',
-    description: 'سود و زیان، تراز نقدی و ارزش موجودی',
-    component: ReportsModule,
-    badge: 'REPORTS',
   },
   {
     id: 'sales',
@@ -44,6 +23,13 @@ export const modules: ModuleDefinition[] = [
     description: 'مدیریت فاکتورهای فروش و خرید، همراه با فیلترهای پیشرفته',
     component: SalesModule,
     badge: 'SALES',
+  },
+  {
+    id: 'reports',
+    label: 'گزارش‌ها و تحلیل‌ها',
+    description: 'سود و زیان، تراز نقدی و ارزش موجودی',
+    component: ReportsModule,
+    badge: 'REPORTS',
   },
   {
     id: 'finance',
@@ -65,6 +51,20 @@ export const modules: ModuleDefinition[] = [
     description: 'مدیریت مشتریان، تأمین‌کنندگان و مخاطبین سیستم',
     component: PeopleModule,
     badge: 'RELATIONS',
+  },
+  {
+    id: 'customer-groups',
+    label: 'گروه‌های مشتری',
+    description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
+    component: CustomerGroupsModule,
+    badge: 'GROUPS',
+  },
+  {
+    id: 'icc-shop',
+    label: 'ICC Shop',
+    description: 'یکپارچه‌سازی ساختار سازمانی ICC',
+    component: IccShopModule,
+    badge: 'ICC',
   },
   {
     id: 'settings',
