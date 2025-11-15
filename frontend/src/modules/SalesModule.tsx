@@ -136,6 +136,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [invoiceListLimit, setInvoiceListLimit] = useState(20) // تعداد فاکتورهای نمایشی
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [search, setSearch] = useState('')
@@ -212,7 +213,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     if (showSpinner) setLoading(true)
     setError(null)
     try {
-      const data = await apiGet<Invoice[]>('/api/invoices?limit=100')
+      const data = await apiGet<Invoice[]>('/api/invoices?limit=200')
       setInvoices(data)
     } catch (err) {
       console.error(err)
@@ -269,18 +270,27 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   }
 
   const filtered = useMemo(() => {
-    return invoices.filter(inv => {
-      if (statusFilter !== 'all' && inv.status !== statusFilter) return false
-      if (typeFilter !== 'all' && inv.invoice_type !== typeFilter) return false
-      if (search) {
-        const q = search.trim()
-        if (!q) return true
-        const haystack = `${inv.invoice_number ?? ''} ${inv.party_name ?? ''}`.toLowerCase()
-        if (!haystack.includes(q.toLowerCase())) return false
-      }
-      return true
-    })
-  }, [invoices, statusFilter, typeFilter, search])
+    const result = invoices
+      .filter(inv => {
+        if (statusFilter !== 'all' && inv.status !== statusFilter) return false
+        if (typeFilter !== 'all' && inv.invoice_type !== typeFilter) return false
+        if (search) {
+          const q = search.trim()
+          if (!q) return true
+          const haystack = `${inv.invoice_number ?? ''} ${inv.party_name ?? ''}`.toLowerCase()
+          if (!haystack.includes(q.toLowerCase())) return false
+        }
+        return true
+      })
+      .sort((a, b) => {
+        // نمایش فاکتورهای جدید در بالا
+        const aTime = new Date(a.server_time).getTime()
+        const bTime = new Date(b.server_time).getTime()
+        return bTime - aTime // newest first
+      })
+      .slice(0, invoiceListLimit)
+    return result
+  }, [invoices, statusFilter, typeFilter, search, invoiceListLimit])
 
   const totals = useMemo(() => {
     const all = invoices.reduce(
@@ -838,7 +848,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
       )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
           <div className="space-y-2">
             <label className={retroHeading}>فیلتر وضعیت</label>
             <select
@@ -864,6 +874,17 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               <option value="purchase">خرید</option>
             </select>
           </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>تعداد نمایشی</label>
+            <input
+              type="number"
+              min={5}
+              max={100}
+              value={invoiceListLimit}
+              onChange={e => setInvoiceListLimit(Math.max(5, parseInt(e.target.value) || 20))}
+              className={`${retroInput} w-full`}
+            />
+          </div>
           <div className="space-y-2 lg:col-span-2">
             <label className={retroHeading}>جستجو</label>
             <input
@@ -876,7 +897,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         </div>
 
         <div className="border border-dashed border-[#c5bca5] p-3 text-xs text-[#7a6b4f] rounded-sm">
-          {formatNumberFa(filtered.length)} فاکتور مطابق فیلترهای اعمال‌شده نمایش داده می‌شود.
+          {formatNumberFa(filtered.length)} فاکتور (جدیدترین {invoiceListLimit} فاکتور از {formatNumberFa(invoices.length)}) نمایش داده می‌شود.
         </div>
 
         {filtered.length > 0 ? (
