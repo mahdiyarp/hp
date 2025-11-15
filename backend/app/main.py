@@ -581,7 +581,7 @@ def list_open_invoices(session: Session = Depends(db.get_db), current: models.Us
 @app.get('/api/integrations', response_model=list[schemas.IntegrationConfigOut])
 def list_integrations(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant'])(current)
-    return crud.get_integrations(db)
+    return crud.get_integrations(session)
 
 
 @app.post('/api/integrations', response_model=schemas.IntegrationConfigOut)

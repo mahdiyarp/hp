@@ -49,7 +49,7 @@ def get_or_create_current_financial_year(db: Session) -> models.FinancialYear:
     end_gregorian = end_jalali.togregorian()
     
     fy = crud.create_financial_year(
-        db=db,
+        session=db,
         name=f"سال مالی {current_jalali_year}",
         start_date=start_gregorian.isoformat(),
         end_date=end_gregorian.isoformat()
