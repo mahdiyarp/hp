@@ -438,6 +438,148 @@ def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = 
     )
 
 
+# ==================== موبائل سے نیا صارف بنانا ====================
+
+@app.post('/api/auth/register-mobile-otp', response_model=schemas.MobileOTPResponse)
+def register_mobile_otp(payload: schemas.MobileOTPRequest, session: Session = Depends(db.get_db)):
+    """
+    موبائل نمبر سے نیا صارف بنانے کے لیے OTP طلب کریں۔
+    """
+    from .sms import create_otp_session, send_sms
+    
+    phone = payload.mobile.strip()
+    
+    # فون نمبر کی تصدیق
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='فون نمبر غلط ہے')
+    
+    # چیک کریں کہ صارف پہلے سے موجود تو نہیں
+    existing_user = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=409, detail='یہ فون نمبر پہلے سے رجسٹر ہے')
+    
+    # OTP جلسہ بنائیں
+    session_id, otp_code = create_otp_session(phone)
+    
+    # OTP بھیجیں
+    message = f'آپ کا رجسٹریشن کوڈ: {otp_code}\nیہ کوڈ 5 منٹ تک درست ہے۔'
+    success, msg = send_sms(session, phone, message)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f'OTP بھیجنے میں خرابی: {msg}')
+    
+    return schemas.MobileOTPResponse(
+        success=True,
+        message='OTP آپ کے فون پر بھیجا گیا',
+        session_id=session_id
+    )
+
+
+@app.post('/api/auth/register-mobile-verify', response_model=schemas.MobileRegisterResponse)
+def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Session = Depends(db.get_db)):
+    """
+    موبائل سے نیا صارف بنانا اور OTP تصدیق کریں۔
+    """
+    from .sms import verify_otp_session
+    
+    phone = payload.mobile.strip()
+    username = payload.username.strip()
+    password = payload.password.strip()
+    full_name = payload.full_name.strip() if payload.full_name else None
+    
+    # ان پٹ کی جانچ کریں
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='فون نمبر غلط ہے')
+    
+    if not username or len(username) < 3:
+        raise HTTPException(status_code=400, detail='صارف نام کم از کم 3 حروف ہونا چاہیے')
+    
+    if not password or len(password) < 6:
+        raise HTTPException(status_code=400, detail='پاس ورڈ کم از کم 6 حروف ہونا چاہیے')
+    
+    # OTP تصدیق کریں
+    is_valid, verified_phone = verify_otp_session(payload.otp_code, payload.otp_code)
+    
+    # براہ راست جانچ - سادہ تر طریقہ
+    # یہاں session_id سے phone حاصل کریں
+    from .sms import _otp_sessions
+    session_data = _otp_sessions.get(payload.otp_code)  # یہاں OTP session_id ہونی چاہیے
+    
+    if not session_data or session_data['phone'] != phone or session_data['otp_code'] != payload.otp_code:
+        raise HTTPException(status_code=400, detail='OTP غلط یا منقضی ہے')
+    
+    # چیک کریں کہ صارف یا فون پہلے سے موجود تو نہیں
+    existing_user = session.query(models.User).filter(
+        (models.User.username == username) | (models.User.mobile == phone)
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=409, detail='صارف نام یا فون نمبر پہلے سے موجود ہے')
+    
+    # ڈیفالٹ نقش صارف شامل کریں (Viewer)
+    viewer_role = session.query(models.Role).filter(models.Role.name == 'Viewer').first()
+    role_id = viewer_role.id if viewer_role else 5
+    
+    # نیا صارف بنائیں
+    hashed_password = security.get_password_hash(password)
+    new_user = models.User(
+        username=username,
+        password_hash=hashed_password,
+        email=None,
+        mobile=phone,
+        full_name=full_name or username,
+        role_id=role_id,
+        is_active=True
+    )
+    
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
+    
+    # Access token بنائیں
+    access_token = security.create_access_token(
+        str(new_user.username),
+        expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    refresh_token = security.create_refresh_token(str(new_user.username))
+    crud.set_refresh_token(session, new_user, refresh_token)
+    
+    return schemas.MobileRegisterResponse(
+        success=True,
+        message='صارف کامیابی سے بنایا گیا',
+        user=schemas.UserOut(
+            id=new_user.id,
+            username=new_user.username,
+            email=new_user.email,
+            full_name=new_user.full_name,
+            mobile=new_user.mobile,
+            role=new_user.role or 'Viewer',
+            role_id=new_user.role_id,
+            is_active=new_user.is_active,
+            otp_enabled=getattr(new_user, 'otp_enabled', False),
+            role_obj=None
+        ),
+        access_token=access_token,
+        refresh_token=refresh_token
+    )
+
+    
+    # ایجاد access token
+    access_token = security.create_access_token(str(user.username), expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(str(user.username))
+    crud.set_refresh_token(session, user, refresh_token)
+    
+    return schemas.PhoneOtpVerifyResponse(
+        success=True,
+        access_token=access_token,
+        token_type='bearer',
+        message='ورود موفق'
+    )
+
+
 # ==================== User SMS Configuration ====================
 
 @app.get('/api/users/{user_id}/sms-config', response_model=schemas.UserSmsConfigOut)

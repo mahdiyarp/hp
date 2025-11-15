@@ -95,6 +95,38 @@ class OTPDisableRequest(BaseModel):
     code: Optional[str] = None
 
 
+# ==================== موبائل سے رجسٹریشن کے لیے Schemas ====================
+
+class MobileOTPRequest(BaseModel):
+    """موبائل نمبر سے OTP کی درخواست"""
+    mobile: str  # فارمیٹ: +989123456789 یا 9123456789
+
+
+class MobileOTPVerifyRequest(BaseModel):
+    """OTP تصدیق اور صارف بنانے کے لیے"""
+    mobile: str
+    otp_code: str
+    username: str
+    password: str
+    full_name: Optional[str] = None
+
+
+class MobileOTPResponse(BaseModel):
+    """OTP کی جواب"""
+    success: bool
+    message: str
+    session_id: Optional[str] = None
+
+
+class MobileRegisterResponse(BaseModel):
+    """موبائل رجسٹریشن کی جواب"""
+    success: bool
+    message: str
+    user: Optional[UserOut] = None
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+
+
 class TimeSyncBase(BaseModel):
     client_time: datetime
 

@@ -3,110 +3,106 @@ import requests
 import random
 import string
 import time
+from urllib.parse import quote
 
+from sqlalchemy.orm import Session
 from . import models
 from .security import decrypt_value
 
 
-SUPPORTED_PROVIDERS = {"kavenegar", "ghasedak", "ippanel"}
+SUPPORTED_PROVIDERS = {"ippanel"}
 
 # OTP sessions: {session_id: {phone, otp_code, expires_at, attempts}}
 _otp_sessions = {}
 
 
-def _pick_config(session, provider_or_name: Optional[str] = None) -> dict:
-    """دریافت تنظیمات SMS از جدول system_settings"""
+def _get_sms_config(session: Session) -> dict:
+    """سیستم تنظیمات سے SMS کنفیگریشن حاصل کریں"""
     config = {}
     
-    # دریافت SMS provider
+    # SMS provider حاصل کریں
     provider_setting = session.query(models.SystemSettings).filter(
         models.SystemSettings.key == 'sms_provider',
         models.SystemSettings.category == 'sms'
     ).first()
     
-    if provider_setting:
-        config['provider'] = provider_setting.value
-    else:
-        config['provider'] = 'ippanel'  # default
+    config['provider'] = provider_setting.value if provider_setting else 'ippanel'
     
-    # دریافت API key (رمزگشایی شود اگر رمزشده باشد)
+    # API key حاصل کریں (encrypted ہو سکتا ہے)
     api_key_setting = session.query(models.SystemSettings).filter(
         models.SystemSettings.key == 'sms_api_key',
         models.SystemSettings.category == 'sms'
     ).first()
     
     if api_key_setting:
-        # اگر رمزشده باشد، رمزگشایی کنید
         if api_key_setting.is_secret:
             config['api_key'] = decrypt_value(api_key_setting.value)
         else:
             config['api_key'] = api_key_setting.value
-    else:
-        return {}
     
-    return config if config.get('provider') and config.get('api_key') else {}
+    # Sender number حاصل کریں
+    sender_setting = session.query(models.SystemSettings).filter(
+        models.SystemSettings.key == 'sms_sender',
+        models.SystemSettings.category == 'sms'
+    ).first()
+    
+    config['sender'] = sender_setting.value if sender_setting else ''
+    
+    return config
 
 
-def send_sms(session, to: str, message: str, provider_or_name: Optional[str] = None, user_id: Optional[int] = None) -> Tuple[bool, str]:
+def send_sms(session: Session, to: str, message: str) -> Tuple[bool, str]:
     """
-    ارسال پیام SMS.
-    تنظیمات از جدول system_settings دریافت می‌شوند.
+    SMS پیغام بھیجیں۔
+    تنظیمات system_settings ٹیبل سے حاصل کی جاتی ہیں۔
     """
-    config = _pick_config(session, provider_or_name)
+    config = _get_sms_config(session)
     
-    if not config:
-        return False, "no sms provider configured/enabled"
+    if not config.get('api_key'):
+        return False, "SMS API کنفیگریشن دستیاب نہیں"
     
-    provider = (config.get('provider') or "").lower()
+    provider = (config.get('provider') or "ippanel").lower()
     api_key = config.get('api_key')
-    
-    if not api_key:
-        return False, "missing api key"
+    sender = config.get('sender', '')
     
     try:
-        if provider == "kavenegar":
-            url = f"https://api.kavenegar.com/v1/{api_key}/sms/send.json"
-            r = requests.get(url, params={"receptor": to, "message": message}, timeout=7)
-            if r.status_code == 200:
-                return True, "sent"
-            return False, f"kavenegar status {r.status_code}"
-        
-        if provider == "ghasedak":
-            url = "https://api.ghasedak.me/v2/sms/send/simple"
-            headers = {"apikey": api_key}
-            data = {"receptor": to, "message": message}
-            r = requests.post(url, headers=headers, data=data, timeout=7)
-            if r.status_code in (200, 201):
-                return True, "sent"
-            return False, f"ghasedak status {r.status_code}"
-        
         if provider == "ippanel":
+            # iPanel API - https://ippanelcom.github.io/Edge-Document/
             url = "https://api.ippanel.com/api/v1/sms/send"
             params = {
                 "apikey": api_key,
                 "recipient": to,
                 "message": message,
-                "sender": ""
+                "sender": sender
             }
-            r = requests.get(url, params=params, timeout=7)
-            if r.status_code in (200, 201):
-                return True, "sent"
-            return False, f"ippanel status {r.status_code}: {r.text}"
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('result') == True:
+                    return True, "SMS کامیابی سے بھیجا گیا"
+                else:
+                    return False, f"iPanel خرابی: {data.get('message', 'نامعلوم')}"
+            else:
+                return False, f"iPanel سرور خرابی ({response.status_code})"
         
-        return False, f"unsupported provider {provider}"
+        return False, f"نامعاون فراہم کنندہ: {provider}"
+    
+    except requests.Timeout:
+        return False, "درخواست ختم ہو گئی"
     except Exception as e:
-        return False, str(e)
+        return False, f"خرابی: {str(e)}"
 
 
 def generate_otp() -> str:
-    """تولید کد OTP 6 رقمی"""
+    """6 ہندسے کا OTP کوڈ تیار کریں"""
     return ''.join(random.choices(string.digits, k=6))
 
 
 def create_otp_session(phone: str) -> Tuple[str, str]:
     """
-    ایجاد جلسه OTP برای شماره تلفن.
-    بازگشت: (session_id, otp_code)
+    فون نمبر کے لیے OTP سیشن بنائیں۔
+    واپسی: (session_id, otp_code)
     """
     session_id = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
     otp_code = generate_otp()
@@ -114,7 +110,7 @@ def create_otp_session(phone: str) -> Tuple[str, str]:
     _otp_sessions[session_id] = {
         'phone': phone,
         'otp_code': otp_code,
-        'expires_at': time.time() + 300,  # 5 دقیقه
+        'expires_at': time.time() + 300,  # 5 منٹ
         'attempts': 0
     }
     
@@ -123,31 +119,30 @@ def create_otp_session(phone: str) -> Tuple[str, str]:
 
 def verify_otp_session(session_id: str, otp_code: str) -> Tuple[bool, Optional[str]]:
     """
-    تأیید کد OTP.
-    بازگشت: (is_valid, phone)
+    OTP کوڈ کی تصدیق کریں۔
+    واپسی: (is_valid, phone)
     """
     if session_id not in _otp_sessions:
         return False, None
     
     session_data = _otp_sessions[session_id]
     
-    # بررسی انقضا
+    # کی توسیع پذیری چیک کریں
     if time.time() > session_data['expires_at']:
         del _otp_sessions[session_id]
         return False, None
     
-    # بررسی تعداد تلاش‌ها
+    # کوششوں کی تعداد چیک کریں
     if session_data['attempts'] >= 3:
         del _otp_sessions[session_id]
         return False, None
     
     session_data['attempts'] += 1
     
-    # بررسی کد
+    # کوڈ کی تصدیق کریں
     if session_data['otp_code'] == otp_code:
         phone = session_data['phone']
         del _otp_sessions[session_id]
         return True, phone
     
     return False, None
-
