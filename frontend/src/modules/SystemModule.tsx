@@ -62,14 +62,6 @@ interface Permission {
   module?: string | null
 }
 
-interface SmsProviderCfg {
-  id: number
-  name: string
-  provider: string
-  enabled: boolean
-  last_updated: string | null
-}
-
 interface SystemSetting {
   id: number
   key: string
@@ -101,8 +93,6 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [newRole, setNewRole] = useState({ name: '', description: '' })
 
   // SMS state
-  const [smsCfg, setSmsCfg] = useState({ name: 'default-sms', provider: 'kavenegar', api_key: '', enabled: true })
-  const [smsProviders, setSmsProviders] = useState<SmsProviderCfg[]>([])
   const [smsTest, setSmsTest] = useState({ to: '', message: 'کد تست حساب‌پاک', provider: '' })
   const [smsReg, setSmsReg] = useState({ username: '', full_name: '', mobile: '', role_id: 2 })
   
@@ -163,12 +153,6 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       } catch (err) {
         console.error(err)
         warn.push('permissions قابل دریافت نیست.')
-      }
-      try {
-        const providers = await apiGet<SmsProviderCfg[]>('/api/sms/providers')
-        setSmsProviders(providers)
-      } catch (err) {
-        // not critical
       }
       try {
         const settings = await apiGet<SystemSetting[]>('/api/admin/settings')
@@ -249,16 +233,6 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     } catch (err) {
       console.error(err)
       setError('ذخیره دسترسی‌های نقش موفق نبود.')
-    }
-  }
-
-  async function saveSmsConfig() {
-    try {
-      await apiPost('/api/integrations', { ...smsCfg })
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('ثبت تنظیمات پیامک موفق نبود.')
     }
   }
 
@@ -402,22 +376,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           <p className={retroHeading}>SMS Gateway</p>
           <h3 className="text-lg font-semibold mt-2">ارسال پیامک و ثبت کاربر</h3>
         </header>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <p className={retroHeading}>تنظیمات ارائه‌دهنده</p>
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام پیکربندی" value={smsCfg.name} onChange={e=>setSmsCfg({...smsCfg, name: e.target.value})} />
-            <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={smsCfg.provider} onChange={e=>setSmsCfg({...smsCfg, provider: e.target.value})}>
-              <option value="kavenegar">kavenegar</option>
-              <option value="ghasedak">ghasedak</option>
-              <option value="ippanel">ippanel</option>
-            </select>
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="API Key" value={smsCfg.api_key} onChange={e=>setSmsCfg({...smsCfg, api_key: e.target.value})} />
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={smsCfg.enabled} onChange={e=>setSmsCfg({...smsCfg, enabled: e.target.checked})}/> فعال</label>
-            <button className={retroButton} onClick={saveSmsConfig}>ذخیره تنظیمات</button>
-            {smsProviders.length>0 && (
-              <div className="text-xs text-[#7a6b4f]">پیکربندی‌های موجود: {smsProviders.map(p=>p.name).join(', ')}</div>
-            )}
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className={`${retroPanel} p-4 space-y-3`}>
             <p className={retroHeading}>ارسال تست</p>
             <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="شماره گیرنده" value={smsTest.to} onChange={e=>setSmsTest({...smsTest, to: e.target.value})} />
