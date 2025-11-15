@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
-import CustomizableDashboard from '../components/CustomizableDashboard'
 import {
   retroBadge,
   retroButton,
@@ -109,8 +108,6 @@ export default function DashboardModule({
   onSmartDateChange,
   onNavigate,
 }: ModuleComponentProps) {
-  const [viewMode, setViewMode] = useState<'widgets' | 'detailed'>('widgets')
-  const [itemLimit, setItemLimit] = useState(15) // 5-15 آیتم قابل انتخاب
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -125,7 +122,7 @@ export default function DashboardModule({
 
   useEffect(() => {
     loadDashboardData()
-  }, [itemLimit])
+  }, [])
 
   async function loadDashboardData() {
     setLoading(true)
@@ -135,11 +132,11 @@ export default function DashboardModule({
       const results = await Promise.allSettled([
         apiGet<FinancialData>('/api/financial/auto-context'),
         apiGet<DashboardSummary>('/api/dashboard/summary'),
-        apiGet<Invoice[]>(`/api/invoices?limit=${itemLimit}`),
-        apiGet<Product[]>(`/api/products?limit=${itemLimit}`),
+        apiGet<Invoice[]>(`/api/invoices?limit=50`),
+        apiGet<Product[]>(`/api/products?limit=50`),
         apiGet<{ series: TrendPoint[] }>('/api/dashboard/sales-trends?days=30'),
-        apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=${itemLimit}`),
-        apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=${itemLimit}`),
+        apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=50`),
+        apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=50`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
       ])
 
@@ -239,24 +236,7 @@ export default function DashboardModule({
     }
   }
 
-  // بخش نمایش Widgets یا جزئیات
-  if (viewMode === 'widgets') {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={() => setViewMode('detailed')}
-            className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold"
-          >
-            نمای جزئی
-          </button>
-        </div>
-        <CustomizableDashboard isDragEnabled={true} />
-      </div>
-    )
-  }
-
-  // نمای جزئی
+  // بخش نمایش جزئیات
   if (loading) {
     return (
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
@@ -297,6 +277,7 @@ export default function DashboardModule({
 
   return (
     <div className="space-y-4">
+      <ViewToggle />
       <ViewToggle />
       <div className="space-y-8">
       {error && (
