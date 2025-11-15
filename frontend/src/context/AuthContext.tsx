@@ -46,7 +46,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
         if (modsRes.ok) {
           const mods = await modsRes.json()
-          setModules(Array.isArray(mods) ? mods : [])
+          const finalMods = Array.isArray(mods) ? mods : []
+          setModules(finalMods)
+          // Debug: log role and modules to help trace UI issues (can be removed)
+          try { console.debug('[Auth] loaded user role/modules', { role: data.role, modules: finalMods }) } catch (e) {}
         }
         
         const permsRes = await authService.fetchWithAuth('/api/current-user/permissions')
@@ -77,8 +80,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fetch user's modules and permissions
       const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
       if (modsRes.ok) {
-        const mods = await modsRes.json()
-        setModules(Array.isArray(mods) ? mods : [])
+          const mods = await modsRes.json()
+          const finalMods = Array.isArray(mods) ? mods : []
+          setModules(finalMods)
+          try { console.debug('[Auth] post-login user role/modules', { role: d.role, modules: finalMods }) } catch (e) {}
       }
       
       const permsRes = await authService.fetchWithAuth('/api/current-user/permissions')

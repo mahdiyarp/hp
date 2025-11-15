@@ -1965,6 +1965,52 @@ async def get_user_preferences(
     return prefs
 
 
+@app.get('/api/users/preferences/sidebar-order')
+def get_sidebar_order(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """Return saved sidebar order for the current user (list of module ids) or []"""
+    key = f'user_sidebar_order:{current.id}'
+    # Use existing CRUD helper to fetch system setting; stored as JSON in SystemSettings.value
+    try:
+        setting = crud.get_system_setting(session, key)
+    except Exception:
+        setting = None
+    if not setting or not setting.value:
+        return []
+    import json
+    try:
+        return json.loads(setting.value)
+    except Exception:
+        # If stored value is plain string or malformed, return empty list
+        return []
+
+
+@app.post('/api/users/preferences/sidebar-order')
+def set_sidebar_order(payload: dict, current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """Persist sidebar order for the current user. Expects JSON body: { order: ["dashboard","sales",...] }"""
+    order = payload.get('order') if isinstance(payload, dict) else None
+    if not isinstance(order, list):
+        raise HTTPException(status_code=400, detail='order must be a list of module ids')
+    key = f'user_sidebar_order:{current.id}'
+    # store as json string in system_settings table
+    import json
+    existing = None
+    try:
+        existing = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
+        if existing:
+            existing.value = json.dumps(order, ensure_ascii=False)
+            existing.setting_type = 'json'
+            existing.updated_by = current.id
+            session.add(existing)
+        else:
+            ss = models.SystemSettings(key=key, value=json.dumps(order, ensure_ascii=False), setting_type='json', display_name=f'Sidebar order for user {current.id}', category='user_pref', is_secret=False, updated_by=current.id)
+            session.add(ss)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    return {'ok': True}
+
+
 @app.put('/api/users/preferences', response_model=schemas.UserPreferencesOut)
 async def update_user_preferences(
     payload: schemas.UserPreferencesUpdate,

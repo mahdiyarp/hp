@@ -11,6 +11,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import { useI18n } from '../i18n/I18nContext'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 
 interface FinancialYear {
@@ -108,6 +109,7 @@ export default function DashboardModule({
   onSmartDateChange,
   onNavigate,
 }: ModuleComponentProps) {
+  const { t } = useI18n()
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -242,7 +244,7 @@ export default function DashboardModule({
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
         <div className="space-y-3 text-center">
           <div className="mx-auto h-10 w-10 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} tracking-[0.4em] text-[#1f2e3b]`}>LOADING SYSTEM...</p>
+          <p className={`${retroHeading} tracking-[0.4em] text-[#1f2e3b]`}>{t('loading_system')}</p>
         </div>
       </div>
     )
@@ -277,7 +279,6 @@ export default function DashboardModule({
 
   return (
     <div className="space-y-4">
-      <ViewToggle />
       <ViewToggle />
       <div className="space-y-8">
       {error && (
@@ -387,7 +388,7 @@ export default function DashboardModule({
       <section className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-6">
         <div className={retroPanelPadded}>
           <header className="mb-3">
-            <p className={retroHeading}>Activity Counter</p>
+            <p className={retroHeading}>{t('activity_counter')}</p>
             <h3 className="text-lg font-semibold mt-2">خلاصه عملیات</h3>
           </header>
           {summary ? (
@@ -451,7 +452,7 @@ export default function DashboardModule({
         <div className={retroPanelPadded}>
           <header className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className={retroHeading}>Sales Trend</p>
+              <p className={retroHeading}>{t('sales_trend')}</p>
               <h3 className="text-lg font-semibold mt-2">روند فروش ۳۰ روز اخیر</h3>
             </div>
             <button className={`${retroButton} text-[11px]`} onClick={loadDashboardData}>
@@ -488,7 +489,7 @@ export default function DashboardModule({
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className={retroPanelPadded}>
           <header className="mb-3">
-            <p className={retroHeading}>Latest Invoices</p>
+            <p className={retroHeading}>{t('latest_invoices')}</p>
             <h3 className="text-lg font-semibold mt-2">فاکتورهای اخیر</h3>
           </header>
           {invoices.length > 0 ? (
@@ -535,7 +536,7 @@ export default function DashboardModule({
 
         <div className={retroPanelPadded}>
           <header className="mb-3">
-            <p className={retroHeading}>Inventory Snapshot</p>
+            <p className={retroHeading}>{t('inventory_snapshot')}</p>
             <h3 className="text-lg font-semibold mt-2">محصولات اخیر</h3>
           </header>
           {products.length > 0 ? (
@@ -576,7 +577,7 @@ export default function DashboardModule({
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className={retroPanelPadded}>
           <header className="mb-3">
-            <p className={retroHeading}>Aging Inventory</p>
+            <p className={retroHeading}>{t('aging_inventory')}</p>
             <h3 className="text-lg font-semibold mt-2">محصولات راکد</h3>
           </header>
           {oldStock.length > 0 ? (
@@ -609,7 +610,7 @@ export default function DashboardModule({
 
         <div className={retroPanelPadded}>
           <header className="mb-3">
-            <p className={retroHeading}>Checks Due</p>
+            <p className={retroHeading}>{t('checks_due')}</p>
             <h3 className="text-lg font-semibold mt-2">چک‌های در شرف سررسید</h3>
           </header>
           {checksDue.length > 0 ? (
@@ -643,9 +644,9 @@ export default function DashboardModule({
 
       <section className={retroPanelPadded}>
         <header className="mb-3">
-          <p className={retroHeading}>Command Pad</p>
-          <h3 className="text-lg font-semibold mt-2">عملیات سریع سیستم</h3>
-        </header>
+              <p className={retroHeading}>{t('command_pad')}</p>
+              <h3 className="text-lg font-semibold mt-2">عملیات سریع سیستم</h3>
+            </header>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
           <button className={`${retroButton} w-full`} onClick={() => onNavigate('sales')}>
             صدور فاکتور جدید

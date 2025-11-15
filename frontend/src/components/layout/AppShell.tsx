@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { retroBadge, retroButton, retroHeading, retroPanel, retroMuted } from '../retroTheme'
+import { useI18n } from '../../i18n/I18nContext'
+import SidebarMenu from './SidebarMenu'
 import type { SyncRecord } from '../../App'
 import GlobalSearch from '../GlobalSearch'
 import { formatNumberFa, toPersianDigits } from '../../utils/num'
@@ -42,6 +44,7 @@ function normalizeIsoDate(value: string | null | undefined) {
 }
 
 export default function AppShell({ modules, sync, user, onLogout }: AppShellProps) {
+  const { t } = useI18n()
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
     modules.forEach(m => map.set(m.id, m))
@@ -126,70 +129,12 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
 
   return (
     <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex">
-      <aside className="w-72 border-l-4 border-[#d7caa4] bg-[#111821] flex flex-col">
-        <div className="p-6 border-b border-[#2d3b45]">
-          <p className={`${retroHeading} text-[#d7caa4]`}>HESABPAK</p>
-          <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
-          <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
-            ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
-            کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
-          </p>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-2">
-          {modules.map(mod => {
-            const isActive = mod.id === activeModuleId
-            const base =
-              'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
-            const activeClass =
-              'bg-[#d7caa4] text-[#1f2e3b] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
-            const idleClass =
-              'border-[#2d3b45] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]'
-            return (
-              <button
-                key={mod.id}
-                className={`${base} ${isActive ? activeClass : idleClass}`}
-                onClick={() => navigate(mod.id)}
-              >
-                <span className={`${retroHeading} block text-[11px]`}>
-                  {mod.badge ?? 'MODULE'}
-                </span>
-                <span className="text-lg font-semibold">{mod.label}</span>
-                <span className="block text-[11px] mt-1 text-[#aeb4b9]">
-                  {mod.description}
-                </span>
-              </button>
-            )
-          })}
-        </nav>
-        <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
-          <div>
-            <p className={`${retroHeading} text-[#d7caa4]`}>SMART DATE</p>
-            <p className="mt-1">
-              {smartDate.jalali ? smartDate.jalali : 'تاریخ انتخاب نشده'}
-            </p>
-            {smartDate.isoDate && (
-              <p className="text-[#aeb4b9] mt-1">ISO: {smartDate.isoDate}</p>
-            )}
-          </div>
-          {sync && (
-            <div>
-              <p className={`${retroHeading} text-[#d7caa4]`}>SYNC</p>
-              <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">
-                UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}
-              </p>
-              <p className="text-[#aeb4b9] text-[11px] leading-5">
-                اختلاف: {sync.serverOffsetSeconds}s
-              </p>
-            </div>
-          )}
-        </div>
-      </aside>
       <div className="flex-1 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
         <header className="border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a]">
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className={`${retroHeading} text-[#d7caa4]`}>ACTIVE MODULE</p>
+                <p className={`${retroHeading} text-[#d7caa4]`}>{t('active_module')}</p>
                 <h2 className="text-3xl font-semibold mt-2">
                   {activeModule?.label ?? '—'}
                 </h2>
@@ -214,7 +159,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
             <GlobalSearch onNavigate={navigate} />
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
+              <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
               <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
               <p>
                 {sync?.serverUtc
@@ -265,7 +210,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
               />
             ) : (
               <div className={`${retroPanel} p-6`}>
-                <p className={`${retroHeading} text-[#7a6b4f]`}>MODULE NOT FOUND</p>
+                <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found')}</p>
                 <p className="mt-2 text-sm">
                   ماژول انتخاب‌شده یافت نشد. از منوی کناری گزینه دیگری را انتخاب کنید.
                 </p>
@@ -274,6 +219,40 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
           </div>
         </main>
       </div>
+
+      <aside className="w-72 border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col">
+        <div className="p-6 border-b border-[#2d3b45]">
+          <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
+          <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
+          <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
+            ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
+            کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
+          </p>
+        </div>
+        <SidebarMenu modules={modules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))} activeModuleId={activeModuleId} onNavigate={navigate} />
+        <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
+          <div>
+            <p className={`${retroHeading} text-[#d7caa4]`}>{t('smart_date')}</p>
+            <p className="mt-1">
+              {smartDate.jalali ? smartDate.jalali : 'تاریخ انتخاب نشده'}
+            </p>
+            {smartDate.isoDate && (
+              <p className="text-[#aeb4b9] mt-1">ISO: {smartDate.isoDate}</p>
+            )}
+          </div>
+          {sync && (
+            <div>
+              <p className={`${retroHeading} text-[#d7caa4]`}>SYNC</p>
+              <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">
+                UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}
+              </p>
+              <p className="text-[#aeb4b9] text-[11px] leading-5">
+                اختلاف: {sync.serverOffsetSeconds}s
+              </p>
+            </div>
+          )}
+        </div>
+      </aside>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
 import {
   retroButton,
   retroHeading,
@@ -11,6 +12,7 @@ import {
 
 export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) {
   const { login } = useAuth()
+  const { t } = useI18n()
   const [step, setStep] = useState<'phone' | 'otp' | 'details'>('phone')
   const [mobile, setMobile] = useState('')
   const [otp, setOtp] = useState('')
@@ -110,7 +112,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
       <div className="w-full max-w-md">
         <div className={`${retroPanelPadded} space-y-5`}>
           <header className="space-y-2 text-right">
-            <p className={retroHeading}>hesabpak registration</p>
+            <p className={retroHeading}>{t('registration')}</p>
             <h2 className="text-2xl font-semibold text-[#1f2e3b]">صارف بنائیں</h2>
             <p className={`text-xs ${retroMuted}`}>
               شماره موبائل درج کریں۔ ہم OTP بھیجیں گے۔

@@ -170,10 +170,15 @@ export default function App() {
 
   // Show dashboard when user is logged in and smart date is initialized OR time has passed
   if (smartDateInitialized) {
-    // Filter modules based on user's accessible modules
-    const accessibleModules = modules.filter(mod => 
-      userModules.length === 0 || userModules.includes(mod.id)
-    )
+    // Filter modules based on user's accessible modules.
+    // If the logged-in user is a Developer, expose all modules (Developer
+    // is considered the highest-level role). Otherwise, if `userModules`
+    // is empty show the minimal starter menu to avoid overwhelming new users.
+    const accessibleModules = user?.role === 'Developer'
+      ? modules
+      : userModules.length === 0
+        ? modules.filter(mod => ['dashboard', 'icc-shop'].includes(mod.id))
+        : modules.filter(mod => userModules.includes(mod.id))
     
     return (
       <>
