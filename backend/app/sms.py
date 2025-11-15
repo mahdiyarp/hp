@@ -14,58 +14,52 @@ SUPPORTED_PROVIDERS = {"kavenegar", "ghasedak", "ippanel"}
 _otp_sessions = {}
 
 
-def _pick_config(session, provider_or_name: Optional[str] = None) -> Optional[models.IntegrationConfig]:
-    q = session.query(models.IntegrationConfig).filter(models.IntegrationConfig.enabled == True)
-    if provider_or_name:
-        # try by exact name first
-        cfg = q.filter(models.IntegrationConfig.name == provider_or_name).first()
-        if cfg:
-            return cfg
-        # else by provider
-        cfg = q.filter(models.IntegrationConfig.provider == provider_or_name).first()
-        if cfg:
-            return cfg
-    # fallback: first enabled SMS provider
-    cfg = (
-        session.query(models.IntegrationConfig)
-        .filter(models.IntegrationConfig.enabled == True)
-        .filter(models.IntegrationConfig.provider.in_(list(SUPPORTED_PROVIDERS)))
-        .first()
-    )
-    return cfg
-
-
-def _pick_user_config(session, user_id: int) -> Optional[models.UserSmsConfig]:
-    """دریافت تنظیمات SMS کاربر اگر فعال باشد"""
-    config = session.query(models.UserSmsConfig).filter(
-        models.UserSmsConfig.user_id == user_id,
-        models.UserSmsConfig.enabled == True
+def _pick_config(session, provider_or_name: Optional[str] = None) -> dict:
+    """دریافت تنظیمات SMS از جدول system_settings"""
+    config = {}
+    
+    # دریافت SMS provider
+    provider_setting = session.query(models.SystemSettings).filter(
+        models.SystemSettings.key == 'sms_provider',
+        models.SystemSettings.category == 'sms'
     ).first()
-    return config
+    
+    if provider_setting:
+        config['provider'] = provider_setting.value
+    else:
+        config['provider'] = 'ippanel'  # default
+    
+    # دریافت API key (رمزگشایی شود اگر رمزشده باشد)
+    api_key_setting = session.query(models.SystemSettings).filter(
+        models.SystemSettings.key == 'sms_api_key',
+        models.SystemSettings.category == 'sms'
+    ).first()
+    
+    if api_key_setting:
+        # اگر رمزشده باشد، رمزگشایی کنید
+        if api_key_setting.is_secret:
+            config['api_key'] = decrypt_value(api_key_setting.value)
+        else:
+            config['api_key'] = api_key_setting.value
+    else:
+        return {}
+    
+    return config if config.get('provider') and config.get('api_key') else {}
 
 
 def send_sms(session, to: str, message: str, provider_or_name: Optional[str] = None, user_id: Optional[int] = None) -> Tuple[bool, str]:
     """
     ارسال پیام SMS.
-    اگر user_id ارائه شود، ابتدا تنظیمات کاربر را بررسی می‌کند.
-    اگر فعال نباشد، تنظیمات سیستم را استفاده می‌کند.
+    تنظیمات از جدول system_settings دریافت می‌شوند.
     """
-    config = None
-    
-    # اگر user_id ارائه شود، اول تنظیمات کاربر را بررسی کنید
-    if user_id:
-        config = _pick_user_config(session, user_id)
-    
-    # اگر تنظیمات کاربر نبود، تنظیمات سیستم را استفاده کنید
-    if not config:
-        config = _pick_config(session, provider_or_name)
+    config = _pick_config(session, provider_or_name)
     
     if not config:
         return False, "no sms provider configured/enabled"
     
-    provider = (config.provider or "").lower()
-    api_key_enc = config.api_key
-    api_key = decrypt_value(api_key_enc) if api_key_enc else None
+    provider = (config.get('provider') or "").lower()
+    api_key = config.get('api_key')
+    
     if not api_key:
         return False, "missing api key"
     
@@ -90,9 +84,6 @@ def send_sms(session, to: str, message: str, provider_or_name: Optional[str] = N
             url = "https://api.ippanel.com/api/v1/sms/send"
             headers = {"Authorization": f"Bearer {api_key}"}
             sender = ""
-            # اگر UserSmsConfig باشد، sender را از آن استفاده کنید
-            if isinstance(config, models.UserSmsConfig):
-                sender = config.sender_name or ""
             data = {"sender": sender, "recipient": to, "message": message}
             r = requests.post(url, headers=headers, json=data, timeout=7)
             if r.status_code in (200, 201):

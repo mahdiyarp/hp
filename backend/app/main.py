@@ -2767,3 +2767,30 @@ async def reorder_widgets(
         raise HTTPException(status_code=400, detail='تغییر ترتیب ناموفق بود')
     
     return {'message': 'ترتیب widgets با موفقیت ذخیره شد'}
+
+
+@app.post('/api/test/send-sms')
+async def test_send_sms(
+    payload: dict,  # {'mobile': '...', 'message': '...'}
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """تست ارسال SMS (فقط برای Admin)"""
+    if current.role_id != 1:  # فقط Admin
+        raise HTTPException(status_code=403, detail='فقط Admin می‌تواند SMS را تست کند')
+    
+    mobile = payload.get('mobile', '').strip()
+    message = payload.get('message', '').strip()
+    
+    if not mobile or not message:
+        raise HTTPException(status_code=400, detail='mobile و message الزامی است')
+    
+    from .sms import send_sms
+    success, msg = send_sms(session, mobile, message)
+    
+    return {
+        'success': success,
+        'message': msg,
+        'mobile': mobile,
+        'text': message
+    }
