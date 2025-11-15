@@ -842,3 +842,46 @@ class SystemSettingUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     is_secret: Optional[bool] = None
+
+
+# Dashboard Widget schemas
+class DashboardWidgetOut(BaseModel):
+    id: int
+    user_id: int
+    widget_type: str
+    title: Optional[str]
+    position_x: int
+    position_y: int
+    width: int
+    height: int
+    config: Optional[str]
+    enabled: bool
+    order: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        orm_mode = True
+
+
+class DashboardWidgetCreate(BaseModel):
+    widget_type: str
+    title: Optional[str] = None
+    position_x: int = 0
+    position_y: int = 0
+    width: int = 3
+    height: int = 3
+    config: Optional[str] = None
+    enabled: bool = True
+    order: int = 0
+
+
+class DashboardWidgetUpdate(BaseModel):
+    title: Optional[str] = None
+    position_x: Optional[int] = None
+    position_y: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    config: Optional[str] = None
+    enabled: Optional[bool] = None
+    order: Optional[int] = None

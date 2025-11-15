@@ -1854,3 +1854,83 @@ def get_setting_value(session: Session, key: str, default=None):
         return setting.value in ['true', 'True', '1', True]
     else:
         return setting.value or default
+
+
+# ==================== Dashboard Widgets CRUD ====================
+
+def get_user_dashboard_widgets(session: Session, user_id: int) -> List[models.DashboardWidget]:
+    """دریافت تمام widgets کاربر"""
+    return session.query(models.DashboardWidget).filter(models.DashboardWidget.user_id == user_id).all()
+
+
+def get_dashboard_widget(session: Session, widget_id: int) -> Optional[models.DashboardWidget]:
+    """دریافت widget خاص"""
+    return session.query(models.DashboardWidget).filter(models.DashboardWidget.id == widget_id).first()
+
+
+def create_dashboard_widget(session: Session, user_id: int, widget: schemas.DashboardWidgetCreate) -> models.DashboardWidget:
+    """ایجاد widget جدید"""
+    db_widget = models.DashboardWidget(
+        user_id=user_id,
+        widget_type=widget.widget_type,
+        title=widget.title,
+        position_x=widget.position_x,
+        position_y=widget.position_y,
+        width=widget.width,
+        height=widget.height,
+        config=widget.config,
+        enabled=widget.enabled,
+        order=widget.order
+    )
+    session.add(db_widget)
+    session.commit()
+    session.refresh(db_widget)
+    return db_widget
+
+
+def update_dashboard_widget(session: Session, widget_id: int, widget: schemas.DashboardWidgetUpdate) -> Optional[models.DashboardWidget]:
+    """به‌روزرسانی widget"""
+    db_widget = get_dashboard_widget(session, widget_id)
+    if not db_widget:
+        return None
+    
+    update_data = widget.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_widget, field, value)
+    
+    session.commit()
+    session.refresh(db_widget)
+    return db_widget
+
+
+def delete_dashboard_widget(session: Session, widget_id: int) -> bool:
+    """حذف widget"""
+    db_widget = get_dashboard_widget(session, widget_id)
+    if not db_widget:
+        return False
+    session.delete(db_widget)
+    session.commit()
+    return True
+
+
+def reorder_dashboard_widgets(session: Session, user_id: int, widget_positions: List[dict]) -> bool:
+    """به‌روزرسانی موقعیت و ترتیب widgets
+    
+    Args:
+        widget_positions: List of dicts with widget_id, position_x, position_y, width, height
+    """
+    try:
+        for pos in widget_positions:
+            widget = session.query(models.DashboardWidget).filter(
+                models.DashboardWidget.id == pos['widget_id'],
+                models.DashboardWidget.user_id == user_id
+            ).first()
+            if widget:
+                widget.position_x = pos.get('position_x', widget.position_x)
+                widget.position_y = pos.get('position_y', widget.position_y)
+                widget.width = pos.get('width', widget.width)
+                widget.height = pos.get('height', widget.height)
+        session.commit()
+        return True
+    except:
+        return False

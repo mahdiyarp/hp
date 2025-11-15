@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
+import CustomizableDashboard from '../components/CustomizableDashboard'
 import {
   retroBadge,
   retroButton,
@@ -108,6 +109,7 @@ export default function DashboardModule({
   onSmartDateChange,
   onNavigate,
 }: ModuleComponentProps) {
+  const [viewMode, setViewMode] = useState<'widgets' | 'detailed'>('widgets')
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -236,6 +238,24 @@ export default function DashboardModule({
     }
   }
 
+  // بخش نمایش Widgets یا جزئیات
+  if (viewMode === 'widgets') {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setViewMode('detailed')}
+            className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold"
+          >
+            نمای جزئی
+          </button>
+        </div>
+        <CustomizableDashboard isDragEnabled={true} />
+      </div>
+    )
+  }
+
+  // نمای جزئی
   if (loading) {
     return (
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
@@ -247,8 +267,20 @@ export default function DashboardModule({
     )
   }
 
+  // دکمه تبدیل نمای
+  const ViewToggle = () => (
+    <button
+      onClick={() => setViewMode('widgets')}
+      className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold mb-4"
+    >
+      نمای تنظیم‌پذیر
+    </button>
+  )
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+      <ViewToggle />
+      <div className="space-y-8">
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
           {error}
@@ -675,7 +707,9 @@ export default function DashboardModule({
           </div>
         </section>
       )}
+      </div>
     </div>
   )
 }
+
 

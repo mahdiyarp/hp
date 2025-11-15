@@ -458,5 +458,27 @@ class SystemSettings(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
+    
     # Relationships
     updated_by_user = relationship('User', foreign_keys=[updated_by], backref='updated_settings')
+
+
+class DashboardWidget(Base):
+    """User customizable dashboard widgets"""
+    __tablename__ = 'dashboard_widgets'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    widget_type = Column(String(64), nullable=False)  # sales, invoices, payments, inventory, etc.
+    title = Column(String(255), nullable=True)
+    position_x = Column(Integer, nullable=False, default=0)  # Column position
+    position_y = Column(Integer, nullable=False, default=0)  # Row position
+    width = Column(Integer, nullable=False, default=3)  # Width in grid units
+    height = Column(Integer, nullable=False, default=3)  # Height in grid units
+    config = Column(Text, nullable=True)  # JSON for widget-specific settings
+    enabled = Column(Boolean, nullable=False, default=True)
+    order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relationships
+    user = relationship('User', backref='dashboard_widgets')

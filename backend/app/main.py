@@ -2682,3 +2682,88 @@ async def delete_setting(
         raise HTTPException(status_code=404, detail='تنظیم یافت نشد')
     
     return {'message': 'تنظیم با موفقیت حذف شد'}
+
+
+# ==================== Dashboard Widgets API ====================
+
+@app.get('/api/dashboard/widgets', response_model=List[schemas.DashboardWidgetOut])
+async def get_dashboard_widgets(
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت widgets داشبورد کاربر"""
+    widgets = crud.get_user_dashboard_widgets(session, current.id)
+    return widgets
+
+
+@app.post('/api/dashboard/widgets', response_model=schemas.DashboardWidgetOut)
+async def create_widget(
+    payload: schemas.DashboardWidgetCreate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """ایجاد widget جدید"""
+    widget = crud.create_dashboard_widget(session, current.id, payload)
+    return widget
+
+
+@app.get('/api/dashboard/widgets/{widget_id}', response_model=schemas.DashboardWidgetOut)
+async def get_widget(
+    widget_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """دریافت widget خاص"""
+    widget = crud.get_dashboard_widget(session, widget_id)
+    if not widget or widget.user_id != current.id:
+        raise HTTPException(status_code=404, detail='Widget یافت نشد')
+    return widget
+
+
+@app.patch('/api/dashboard/widgets/{widget_id}', response_model=schemas.DashboardWidgetOut)
+async def update_widget(
+    widget_id: int,
+    payload: schemas.DashboardWidgetUpdate,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """به‌روزرسانی widget"""
+    widget = crud.get_dashboard_widget(session, widget_id)
+    if not widget or widget.user_id != current.id:
+        raise HTTPException(status_code=404, detail='Widget یافت نشد')
+    
+    updated = crud.update_dashboard_widget(session, widget_id, payload)
+    return updated
+
+
+@app.delete('/api/dashboard/widgets/{widget_id}')
+async def delete_widget(
+    widget_id: int,
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """حذف widget"""
+    widget = crud.get_dashboard_widget(session, widget_id)
+    if not widget or widget.user_id != current.id:
+        raise HTTPException(status_code=404, detail='Widget یافت نشد')
+    
+    success = crud.delete_dashboard_widget(session, widget_id)
+    if not success:
+        raise HTTPException(status_code=400, detail='حذف widget ناموفق بود')
+    
+    return {'message': 'Widget با موفقیت حذف شد'}
+
+
+@app.post('/api/dashboard/widgets/reorder')
+async def reorder_widgets(
+    payload: dict,  # {'widgets': [{'widget_id': 1, 'position_x': 0, 'position_y': 0, ...}, ...]}
+    current: models.User = Depends(get_current_user),
+    session: Session = Depends(db.get_db)
+):
+    """تغییر موقعیت و اندازه widgets (برای drag-and-drop)"""
+    widgets = payload.get('widgets', [])
+    success = crud.reorder_dashboard_widgets(session, current.id, widgets)
+    if not success:
+        raise HTTPException(status_code=400, detail='تغییر ترتیب ناموفق بود')
+    
+    return {'message': 'ترتیب widgets با موفقیت ذخیره شد'}
