@@ -39,6 +39,7 @@ alembic upgrade 0028 || echo "Customer groups migration applied or skipped"
 alembic upgrade 0029 || echo "ICC Shop integration migration applied or skipped"
 alembic upgrade 0030 || echo "System settings migration applied or skipped"
 alembic upgrade 0031 || echo "Dashboard widgets migration applied or skipped"
+alembic upgrade 0032 || echo "Dashboard and reports modules migration applied or skipped"
 set -e
 
 # optional demo seeding
