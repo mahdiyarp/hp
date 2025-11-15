@@ -727,12 +727,22 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                         {item.product_id && (() => {
                           const selected = products.find(p => p.id === item.product_id)
                           return selected ? (
-                            <div className="text-[11px] space-y-0.5 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
+                            <div className="text-[10px] space-y-1 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">💰 تاریخچه قیمت‌ها:</div>
                               {selected.last_sale_price && (
-                                <div>آخرین فروش: {formatNumberFa(selected.last_sale_price)} ریال</div>
+                                <div>🔹 آخرین فروش: <span className="font-semibold">{formatNumberFa(selected.last_sale_price)}</span> ریال</div>
+                              )}
+                              {selected.avg_sale_price && (
+                                <div>📊 میانگین فروش: <span className="font-semibold">{formatNumberFa(selected.avg_sale_price)}</span> ریال</div>
+                              )}
+                              {selected.last_purchase_price && (
+                                <div>🔹 آخرین خرید: <span className="font-semibold">{formatNumberFa(selected.last_purchase_price)}</span> ریال</div>
                               )}
                               {selected.avg_purchase_price && (
-                                <div>میانگین خرید: {formatNumberFa(selected.avg_purchase_price)} ریال</div>
+                                <div>📊 میانگین خرید: <span className="font-semibold">{formatNumberFa(selected.avg_purchase_price)}</span> ریال</div>
+                              )}
+                              {!selected.last_sale_price && !selected.avg_sale_price && !selected.last_purchase_price && !selected.avg_purchase_price && (
+                                <div className="text-[#7a6b4f] italic">هنوز تاریخچه قیمتی ندارد</div>
                               )}
                             </div>
                           ) : null
@@ -812,8 +822,18 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               })}
             </div>
 
+            <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-4 py-3 rounded text-center space-y-1">
+              <p className={retroHeading}>💰 جمع کل فاکتور</p>
+              <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+                {formatNumberFa(computedSubtotal || 0)}
+              </p>
+              <p className="text-xs text-[#154b5f] italic">
+                {computedSubtotal > 0 ? numberToPersianWords(Math.trunc(computedSubtotal)) + ' ریال' : ''}
+              </p>
+            </div>
+
             <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
-              جمع پیش‌فرض فاکتور: {formatPrice(computedSubtotal || 0, 'ریال')}
+              توجه: این مبلغ قبل از اعمال هرگونه کسر یا افزایش‌های احتمالی است.
             </div>
 
             <div className="space-y-2">
