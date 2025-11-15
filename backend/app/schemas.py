@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, AnyHttpUrl
 from datetime import datetime
 from typing import Optional, List, Any
 from typing import Literal
@@ -635,6 +635,35 @@ class ApiKeyRotateResponse(BaseModel):
     old_key_id: int
     new_key_id: int
     new_api_key: str
+
+
+class DeveloperAppUpdateRequest(BaseModel):
+    url: AnyHttpUrl
+    version: Optional[str] = None
+    checksum: Optional[str] = None
+
+
+class DeveloperAppUpdateEntry(BaseModel):
+    id: str
+    url: str
+    version: Optional[str] = None
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    checksum: Optional[str] = None
+    created_at: datetime
+    extracted_path: Optional[str] = None
+    extracted_files: Optional[int] = None
+    status: Literal['success', 'failed']
+    message: Optional[str] = None
+
+
+class DeveloperAppUpdateResponse(BaseModel):
+    detail: str
+    entry: DeveloperAppUpdateEntry
+
+
+class DeveloperAppUpdateList(BaseModel):
+    updates: List[DeveloperAppUpdateEntry]
 
 
 class BlockchainEntryOut(BaseModel):
