@@ -49,7 +49,20 @@ const fs = require('fs');
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
 
     // wait briefly for potential runtime errors to occur
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
+
+    // Smoke navigation: go to Dashboard and then Sales module to ensure routing works
+    try {
+      await page.evaluate(() => { window.location.hash = 'dashboard' })
+      await page.waitForTimeout(1200)
+      outLogs.push({ type: 'info', text: 'navigated to #dashboard' })
+
+      await page.evaluate(() => { window.location.hash = 'sales' })
+      await page.waitForTimeout(1200)
+      outLogs.push({ type: 'info', text: 'navigated to #sales' })
+    } catch (e) {
+      outLogs.push({ type: 'error', text: 'Smoke navigation failed: ' + String(e) })
+    }
 
     const screenshotPath = '/workspace/logs/headless_screenshot.png';
     const logPath = '/workspace/logs/headless_console.log';

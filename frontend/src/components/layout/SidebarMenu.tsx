@@ -19,9 +19,11 @@ export default function SidebarMenu({
   modules: ModuleDef[]
   activeModuleId: string
   onNavigate: (id: string) => void
+  collapsed?: boolean
 }) {
   const [order, setOrder] = useState<string[]>([])
   const [expandedSettings, setExpandedSettings] = useState(false)
+  const collapsed = (arguments[0] && (arguments[0] as any).collapsed) || false
 
   useEffect(() => {
     let cancelled = false
@@ -108,9 +110,23 @@ export default function SidebarMenu({
   }
 
   return (
-    <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-2">
+    <nav className={`flex-1 overflow-y-auto px-2 py-4 ${collapsed ? 'space-y-1' : 'space-y-2'}`}>
       {nonSettings.map(mod => {
         const isActive = mod.id === activeModuleId
+        if (collapsed) {
+          return (
+            <div key={mod.id} className="p-1">
+              <button
+                title={mod.label}
+                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[#1f2e3b]' : ''}`}
+                onClick={() => onNavigate(mod.id)}
+              >
+                <span className={`${retroHeading} block text-[11px]`}>{(mod.badge ?? mod.label[0] ?? '•').slice(0,3)}</span>
+              </button>
+            </div>
+          )
+        }
+
         const base = 'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
         const activeClass = 'bg-[#d7caa4] text-[#1f2e3b] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
         const idleClass = 'border-[#2d3b45] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]'
@@ -136,20 +152,22 @@ export default function SidebarMenu({
 
       {settingsChildren.length > 0 && (
         <div className="pt-3 border-t border-[#2d3b45]">
-          <button
-            className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
-            onClick={() => setExpandedSettings(s => !s)}
-          >
-            <div className="flex justify-between items-center">
-              <div>
-                <p className={`${retroHeading} text-[11px]`}>تنظیمات</p>
-                <div className="text-lg font-semibold">پنل تنظیمات</div>
+          {!collapsed && (
+            <button
+              className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
+              onClick={() => setExpandedSettings(s => !s)}
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className={`${retroHeading} text-[11px]`}>تنظیمات</p>
+                  <div className="text-lg font-semibold">پنل تنظیمات</div>
+                </div>
+                <div className="text-sm text-[#aeb4b9]">{expandedSettings ? '–' : '+'}</div>
               </div>
-              <div className="text-sm text-[#aeb4b9]">{expandedSettings ? '–' : '+'}</div>
-            </div>
-          </button>
+            </button>
+          )}
 
-          {expandedSettings && (
+          {expandedSettings && !collapsed && (
             <div className="mt-3 space-y-2">
               {settingsChildren.map(s => (
                 <div

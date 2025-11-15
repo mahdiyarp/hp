@@ -58,6 +58,13 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
   }, [moduleMap, modules])
 
   const [activeModuleId, setActiveModuleId] = useState(initialModuleId)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hesabpak_sidebar_collapsed_v1') === '1'
+    } catch (e) {
+      return false
+    }
+  })
   const [smartDate, setSmartDate] = useState<SmartDateState>({
     isoDate: normalizeIsoDate(localStorage.getItem(SMART_DATE_ISO_KEY)),
     jalali: localStorage.getItem(SMART_DATE_JALALI_KEY),
@@ -71,6 +78,14 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     },
     [moduleMap],
   )
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem('hesabpak_sidebar_collapsed_v1', next ? '1' : '0') } catch (e) {}
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     const handler = () => {
@@ -220,16 +235,34 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
         </main>
       </div>
 
-      <aside className="w-72 border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col">
-        <div className="p-6 border-b border-[#2d3b45]">
-          <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
-          <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
-          <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
-            ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
-            کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
-          </p>
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col`}>
+        <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
+          <div>
+            <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
+            {!sidebarCollapsed && (
+              <>
+                <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
+                <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
+                  ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
+                  کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
+                </p>
+              </>
+            )}
+          </div>
+          <button
+            title={sidebarCollapsed ? 'باز کردن منو' : 'کوچک‌سازی منو'}
+            onClick={toggleSidebar}
+            className="text-xs px-2 py-1 bg-[#1f2e3b] rounded border border-[#2d3b45]"
+          >
+            {sidebarCollapsed ? '›' : '‹'}
+          </button>
         </div>
-        <SidebarMenu modules={modules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))} activeModuleId={activeModuleId} onNavigate={navigate} />
+        <SidebarMenu
+          modules={modules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
+          activeModuleId={activeModuleId}
+          onNavigate={navigate}
+          collapsed={sidebarCollapsed}
+        />
         <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
           <div>
             <p className={`${retroHeading} text-[#d7caa4]`}>{t('smart_date')}</p>
