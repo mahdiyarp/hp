@@ -110,6 +110,7 @@ export default function DashboardModule({
   onNavigate,
 }: ModuleComponentProps) {
   const [viewMode, setViewMode] = useState<'widgets' | 'detailed'>('widgets')
+  const [itemLimit, setItemLimit] = useState(15) // 5-15 آیتم قابل انتخاب
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -124,7 +125,7 @@ export default function DashboardModule({
 
   useEffect(() => {
     loadDashboardData()
-  }, [])
+  }, [itemLimit])
 
   async function loadDashboardData() {
     setLoading(true)
@@ -134,11 +135,11 @@ export default function DashboardModule({
       const results = await Promise.allSettled([
         apiGet<FinancialData>('/api/financial/auto-context'),
         apiGet<DashboardSummary>('/api/dashboard/summary'),
-        apiGet<Invoice[]>('/api/invoices?limit=6'),
-        apiGet<Product[]>('/api/products?limit=6'),
+        apiGet<Invoice[]>(`/api/invoices?limit=${itemLimit}`),
+        apiGet<Product[]>(`/api/products?limit=${itemLimit}`),
         apiGet<{ series: TrendPoint[] }>('/api/dashboard/sales-trends?days=30'),
-        apiGet<OldStockItem[]>('/api/dashboard/old-stock?days=60'),
-        apiGet<CheckDue[]>('/api/dashboard/checks-due?within_days=21'),
+        apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=${itemLimit}`),
+        apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=${itemLimit}`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
       ])
 
@@ -267,14 +268,31 @@ export default function DashboardModule({
     )
   }
 
-  // دکمه تبدیل نمای
+  // دکمه تبدیل نمای و selector تعداد آیتم‌ها
   const ViewToggle = () => (
-    <button
-      onClick={() => setViewMode('widgets')}
-      className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold mb-4"
-    >
-      نمای تنظیم‌پذیر
-    </button>
+    <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+      <button
+        onClick={() => setViewMode('widgets')}
+        className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold"
+      >
+        نمای تنظیم‌پذیر
+      </button>
+      <div className="flex items-center gap-3 text-sm">
+        <label className={`${retroHeading} whitespace-nowrap`}>تعداد آیتم‌های نمایشی:</label>
+        <input
+          type="range"
+          min="5"
+          max="15"
+          value={itemLimit}
+          onChange={(e) => {
+            const newLimit = parseInt(e.target.value)
+            setItemLimit(newLimit)
+          }}
+          className="w-32 cursor-pointer"
+        />
+        <span className={`${retroHeading} w-10 text-center font-bold`}>{itemLimit}</span>
+      </div>
+    </div>
   )
 
   return (
@@ -590,7 +608,7 @@ export default function DashboardModule({
                 </tr>
               </thead>
               <tbody>
-                {oldStock.slice(0, 6).map(item => (
+                {oldStock.map(item => (
                   <tr key={item.product_id} className="border-b border-[#d9cfb6]">
                     <td className="px-3 py-2">{item.name}</td>
                     <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
@@ -624,7 +642,7 @@ export default function DashboardModule({
                 </tr>
               </thead>
               <tbody>
-                {checksDue.slice(0, 6).map(item => (
+                {checksDue.map(item => (
                   <tr key={item.id} className="border-b border-[#d9cfb6]">
                     <td className="px-3 py-2">{item.payment_number || `#${item.id}`}</td>
                     <td className="px-3 py-2">{item.party_name || 'نامشخص'}</td>
