@@ -26,22 +26,19 @@ def upgrade() -> None:
             ('dashboard_customize', 'سفارشی‌سازی داشبورد', 'dashboard', now()),
             ('reports_view', 'مشاهده گزارش‌ها', 'reports', now()),
             ('reports_export', 'صادرات گزارش‌ها', 'reports', now())
-        ON CONFLICT (id) DO NOTHING;
+        ON CONFLICT DO NOTHING;
     """)
     
-    # Get the permission IDs
+    # Assign all dashboard and reports permissions to all roles
     op.execute("""
-        WITH new_perms AS (
-            SELECT id FROM permissions 
-            WHERE module IN ('dashboard', 'reports') 
-            AND created_at > now() - interval '1 minute'
-        ),
-        all_roles AS (
-            SELECT id FROM roles
-        )
         INSERT INTO role_permissions (role_id, permission_id)
-        SELECT r.id, p.id FROM all_roles r, new_perms p
-        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        SELECT r.id, p.id 
+        FROM roles r, permissions p
+        WHERE p.module IN ('dashboard', 'reports')
+        AND NOT EXISTS (
+            SELECT 1 FROM role_permissions 
+            WHERE role_id = r.id AND permission_id = p.id
+        );
     """)
 
 
