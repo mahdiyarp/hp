@@ -99,7 +99,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     setLoading(true)
     setError(null)
     try {
-      const data = await apiGet<Product[]>('/api/products?limit=200')
+      const data = await apiGet<Product[]>('/api/products?limit=1000')
       setProducts(data)
     } catch (err) {
       console.error(err)
@@ -138,7 +138,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       const created = await apiPost<Product>('/api/products', payload)
       const normalized: Product = {
         ...created,
-        inventory: (created as Product).inventory ?? 0,
+        inventory: Number((created as Product).inventory ?? 0),
       }
       setProducts(prev => [normalized, ...prev])
       setProductForm(emptyForm)
@@ -230,7 +230,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   }, [products, groupFilter, search])
 
   const totals = useMemo(() => {
-    const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
+    const totalInventory = products.reduce((acc, prod) => acc + Number(prod.inventory ?? 0), 0)
     const uniqueGroups = groups.length
     return { totalInventory, uniqueGroups }
   }, [products, groups])
@@ -257,10 +257,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <p className={retroHeading}>Inventory Board</p>
+            <p className={retroHeading}>داشبورد موجودی</p>
             <h2 className="text-2xl font-semibold mt-2">مدیریت موجودی کالا</h2>
             <p className={`text-xs ${retroMuted} mt-2`}>
-              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | {smartDate.isoDate ?? 'ISO TBD'}
+              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | تاریخ میلادی: {smartDate.isoDate ?? 'نامشخص'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -440,6 +440,8 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                 <th className={retroTableHeader}>موجودی</th>
                 <th className={retroTableHeader}>آخرین خرید</th>
                 <th className={retroTableHeader}>میانگین خرید</th>
+                <th className={retroTableHeader}>آخرین فروش</th>
+                <th className={retroTableHeader}>میانگین فروش</th>
               </tr>
             </thead>
             <tbody>
@@ -459,11 +461,11 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                   </td>
                   <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
                   <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
-                  <td className="px-3 py-2 text-left font-semibold">{formatNumberFa(prod.inventory ?? 0)}</td>
+                  <td className="px-3 py-2 text-left font-semibold">{formatNumberFa(Number(prod.inventory ?? 0))}</td>
                   <td className="px-3 py-2 text-left">
-                    {prod.last_purchase_price ? (
+                    {prod.last_purchase_price !== null && prod.last_purchase_price !== undefined ? (
                       <div>
-                        <span className="font-semibold">{formatNumberFa(prod.last_purchase_price)}</span>
+                        <span className="font-semibold">{formatNumberFa(Number(prod.last_purchase_price))}</span>
                         <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
                       </div>
                     ) : (
@@ -471,9 +473,29 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-left">
-                    {prod.avg_purchase_price ? (
+                    {prod.avg_purchase_price !== null && prod.avg_purchase_price !== undefined ? (
                       <div>
-                        <span className="font-semibold">{formatNumberFa(prod.avg_purchase_price)}</span>
+                        <span className="font-semibold">{formatNumberFa(Number(prod.avg_purchase_price))}</span>
+                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">---</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-left">
+                    {prod.last_sale_price !== null && prod.last_sale_price !== undefined ? (
+                      <div>
+                        <span className="font-semibold">{formatNumberFa(Number(prod.last_sale_price))}</span>
+                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">---</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-left">
+                    {prod.avg_sale_price !== null && prod.avg_sale_price !== undefined ? (
+                      <div>
+                        <span className="font-semibold">{formatNumberFa(Number(prod.avg_sale_price))}</span>
                         <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
                       </div>
                     ) : (
@@ -585,20 +607,23 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                             </td>
                             <td className="px-3 py-2 text-left font-mono">
                               <span className={movement.quantity_change > 0 ? 'text-green-700' : 'text-red-700'}>
-                                {movement.quantity_change > 0 ? '+' : ''}{formatNumberFa(movement.quantity)}
+                                {movement.quantity_change > 0 ? '+' : ''}
+                                {formatNumberFa(Math.abs(Number(movement.quantity_change ?? movement.quantity ?? 0)))}
                               </span>
                             </td>
                             <td className="px-3 py-2 text-left font-mono text-xs">
-                              {formatNumberFa(movement.unit_price)}
+                              {movement.unit_price !== null && movement.unit_price !== undefined
+                                ? formatNumberFa(Number(movement.unit_price))
+                                : '---'}
                             </td>
                             <td className="px-3 py-2 text-left font-mono font-semibold">
-                              {formatNumberFa(movement.total_price)}
+                              {formatNumberFa(Number(movement.total_price ?? 0))}
                             </td>
                             <td className="px-3 py-2 text-left font-mono text-xs text-[#7a6b4f]">
-                              {formatNumberFa(movement.stock_before)}
+                              {formatNumberFa(Number(movement.stock_before ?? 0))}
                             </td>
                             <td className="px-3 py-2 text-left font-mono font-semibold text-blue-700">
-                              {formatNumberFa(movement.stock_after)}
+                              {formatNumberFa(Number(movement.stock_after ?? 0))}
                             </td>
                             <td className="px-3 py-2 text-xs">
                               <button

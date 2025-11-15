@@ -149,7 +149,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className={`${retroHeading} text-[#d7caa4]`}>{t('active_module')}</p>
+                <p className={`${retroHeading} text-[#d7caa4]`}>{t('active_module', 'ماژول فعال')}</p>
                 <h2 className="text-3xl font-semibold mt-2">
                   {activeModule?.label ?? '—'}
                 </h2>
@@ -162,10 +162,10 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
                 <span>نقش دسترسی: {user?.role ?? '---'}</span>
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>
-                    {smartDate.jalali ? `Jalali: ${smartDate.jalali}` : 'JALALI TBD'}
+                    {smartDate.jalali ? `تاریخ جلالی: ${smartDate.jalali}` : 'تاریخ جلالی ثبت نشده'}
                   </span>
                   <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>
-                    {smartDate.isoDate ? `ISO: ${smartDate.isoDate}` : 'ISO TBD'}
+                    {smartDate.isoDate ? `تاریخ میلادی: ${smartDate.isoDate}` : 'تاریخ میلادی ثبت نشده'}
                   </span>
                 </div>
             </div>
@@ -173,38 +173,38 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
           <div className="mt-2">
             <GlobalSearch onNavigate={navigate} />
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
-              <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
-              <p>
-                {sync?.serverUtc
-                  ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
-                  : 'در انتظار همگام‌سازی'}
-              </p>
-              {sync?.serverLocal && (
-                <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
-              )}
-              {sync?.jalali && <p>JALALI: {sync.jalali}</p>}
-              <p className={`text-[#7a6b4f]`}>
-                اختلاف منطقه: {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
-              </p>
-              {clockDriftMs !== null && (
-                <p className={`text-[#7a6b4f]`}>
-                  اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
+                <p className={`${retroHeading} text-[#7a6b4f]`}>وضعیت زمان سرور</p>
+                <p>
+                  {sync?.serverUtc
+                    ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
+                    : 'در انتظار همگام‌سازی'}
                 </p>
-              )}
-              {sync?.latencyMs !== null && (
+                {sync?.serverLocal && (
+                  <p>زمان محلی سرور: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
+                )}
+                {sync?.jalali && <p>تاریخ جلالی سرور: {sync.jalali}</p>}
                 <p className={`text-[#7a6b4f]`}>
-                  تاخیر شبکه: {formatNumberFa(sync.latencyMs)} میلی‌ثانیه
+                  اختلاف منطقه زمانی: {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
                 </p>
-              )}
-            </div>
-              <div className="flex sm:flex-row flex-col gap-2 text-xs">
-                <button className={`${retroButton} !tracking-[0.3em]`} onClick={onLogout}>
+                {clockDriftMs !== null && (
+                  <p className={`text-[#7a6b4f]`}>
+                    اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
+                  </p>
+                )}
+                {sync?.latencyMs !== null && sync?.latencyMs !== undefined && (
+                  <p className={`text-[#7a6b4f]`}>
+                    تاخیر شبکه: {formatNumberFa(sync?.latencyMs ?? 0)} میلی‌ثانیه
+                  </p>
+                )}
+              </div>
+              <div className="flex sm:flex-row flex-col gap-2 text-sm">
+                <button className={retroButton} onClick={onLogout}>
                   خروج از سیستم
                 </button>
                 <button
-                  className={`${retroButton} !bg-[#2d3b45] !border-[#1f2e3b] !tracking-[0.3em]`}
+                  className={`${retroButton} !bg-[#2d3b45] !border-[#1f2e3b]`}
                   onClick={() => navigate('system')}
                 >
                   پنل تنظیمات
@@ -225,7 +225,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
               />
             ) : (
               <div className={`${retroPanel} p-6`}>
-                <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found')}</p>
+                <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found', 'ماژول یافت نشد')}</p>
                 <p className="mt-2 text-sm">
                   ماژول انتخاب‌شده یافت نشد. از منوی کناری گزینه دیگری را انتخاب کنید.
                 </p>
@@ -238,7 +238,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
       <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} border-r-4 border-[#d7caa4] bg-[#111821] flex flex-col transition-all duration-200 ease-in-out` }>
         <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
           <div>
-            <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
+            <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name', 'حساب‌پاک')}</p>
             <div className={`${sidebarCollapsed ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'} transition-opacity duration-200`}> 
               {!sidebarCollapsed && (
                 <>
@@ -267,22 +267,22 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
         />
         <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
           <div>
-            <p className={`${retroHeading} text-[#d7caa4]`}>{t('smart_date')}</p>
+            <p className={`${retroHeading} text-[#d7caa4]`}>{t('smart_date', 'تاریخ هوشمند')}</p>
             <p className="mt-1">
               {smartDate.jalali ? smartDate.jalali : 'تاریخ انتخاب نشده'}
             </p>
             {smartDate.isoDate && (
-              <p className="text-[#aeb4b9] mt-1">ISO: {smartDate.isoDate}</p>
+              <p className="text-[#aeb4b9] mt-1">تاریخ میلادی: {smartDate.isoDate}</p>
             )}
           </div>
           {sync && (
             <div>
-              <p className={`${retroHeading} text-[#d7caa4]`}>SYNC</p>
+              <p className={`${retroHeading} text-[#d7caa4]`}>اطلاعات همگام‌سازی</p>
               <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">
-                UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}
+                UTC سرور: {toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}
               </p>
               <p className="text-[#aeb4b9] text-[11px] leading-5">
-                اختلاف: {sync.serverOffsetSeconds}s
+                اختلاف: {formatNumberFa(sync.serverOffsetSeconds)} ثانیه
               </p>
             </div>
           )}

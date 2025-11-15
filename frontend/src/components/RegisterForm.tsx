@@ -25,7 +25,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
 
   async function requestOTP() {
     if (!mobile || mobile.length < 10) {
-      setError('شماره موبائل درست نیست')
+      setError('شماره موبایل صحیح نیست')
       return
     }
     
@@ -38,17 +38,17 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile }),
       })
-      
+
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.detail || 'درخواست ناموفق')
+        throw new Error(data.detail || 'درخواست ناموفق بود')
       }
-      
+
       const data = await res.json()
       setSessionId(data.session_id)
       setStep('otp')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'خرابی در درخواست')
+      setError(err instanceof Error ? err.message : 'خطا در ارسال درخواست')
     } finally {
       setLoading(false)
     }
@@ -58,17 +58,17 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
     e.preventDefault()
     
     if (!otp || otp.length !== 6) {
-      setError('OTP 6 ہندسے ہونا چاہیے')
+      setError('کد تایید باید شش رقم باشد')
       return
     }
     
     if (!username || username.length < 3) {
-      setError('صارف نام کم از کم 3 حروف ہو')
+      setError('نام کاربری باید حداقل ۳ کاراکتر باشد')
       return
     }
     
     if (!password || password.length < 6) {
-      setError('پاس ورڈ کم از کم 6 حروف ہو')
+      setError('رمز عبور باید حداقل ۶ کاراکتر باشد')
       return
     }
     
@@ -87,21 +87,21 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
           full_name: fullName || username,
         }),
       })
-      
+
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.detail || 'رجسٹریشن ناموفق')
+        throw new Error(data.detail || 'ثبت‌نام ناموفق بود')
       }
-      
+
       const data = await res.json()
-      
+
       if (data.success) {
         // Auto-login
         await login(username, password)
         if (onSuccess) onSuccess()
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'خرابی')
+      setError(err instanceof Error ? err.message : 'خطای نامشخص')
     } finally {
       setLoading(false)
     }
@@ -112,15 +112,15 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
       <div className="w-full max-w-md">
         <div className={`${retroPanelPadded} space-y-5`}>
           <header className="space-y-2 text-right">
-            <p className={retroHeading}>{t('registration')}</p>
-            <h2 className="text-2xl font-semibold text-[#1f2e3b]">صارف بنائیں</h2>
+            <p className={retroHeading}>{t('registration', 'ثبت‌نام')}</p>
+            <h2 className="text-2xl font-semibold text-[#1f2e3b]">ایجاد حساب کاربری</h2>
             <p className={`text-xs ${retroMuted}`}>
-              شماره موبائل درج کریں۔ ہم OTP بھیجیں گے۔
+              شماره موبایل خود را وارد کنید تا کد تایید برای شما ارسال شود.
             </p>
           </header>
 
           <div>
-            <label className={retroLabel}>شماره موبائل</label>
+            <label className={retroLabel}>شماره موبایل</label>
             <input
               type="tel"
               value={mobile}
@@ -130,7 +130,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
               inputMode="numeric"
             />
             <p className={`mt-2 text-[10px] ${retroMuted}`}>
-              بغیر صفر کے یا +98 کے ساتھ شروع کریں
+              شماره را بدون صفر ابتدایی یا با پیش‌شماره +98 وارد کنید.
             </p>
           </div>
 
@@ -146,7 +146,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
             disabled={loading}
             type="button"
           >
-            {loading ? 'بھیجا جا رہا ہے...' : 'OTP بھیجیں'}
+            {loading ? 'در حال ارسال...' : 'ارسال کد تایید'}
           </button>
         </div>
       </div>
@@ -158,20 +158,20 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
       <div className="w-full max-w-md">
         <form onSubmit={verifyAndRegister} className={`${retroPanelPadded} space-y-5`}>
           <header className="space-y-2 text-right">
-            <p className={retroHeading}>تصدیق کریں</p>
-            <h2 className="text-2xl font-semibold text-[#1f2e3b]">OTP درج کریں</h2>
+            <p className={retroHeading}>تایید شماره</p>
+            <h2 className="text-2xl font-semibold text-[#1f2e3b]">کد تایید را وارد کنید</h2>
             <p className={`text-xs ${retroMuted}`}>
-              {mobile} پر بھیجا گیا 6 ہندسے کا کوڈ درج کریں۔
+              کد شش رقمی ارسال‌شده به {mobile} را وارد کنید.
             </p>
           </header>
 
           <div className="space-y-4">
             <div>
-              <label className={retroLabel}>OTP کوڈ</label>
+              <label className={retroLabel}>کد تایید</label>
               <input
                 value={otp}
                 onChange={e => setOtp(e.target.value.slice(0, 6))}
-                className={`${retroInput} w-full tracking-[0.6em] text-center text-2xl font-bold`}
+                className={`${retroInput} w-full tracking-[0.35em] text-center text-2xl font-bold`}
                 placeholder="000000"
                 inputMode="numeric"
                 pattern="\d{6}"
@@ -179,33 +179,33 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
             </div>
 
             <div>
-              <label className={retroLabel}>صارف نام</label>
+              <label className={retroLabel}>نام کاربری</label>
               <input
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 className={`${retroInput} w-full`}
-                placeholder="username"
+                placeholder="نام کاربری"
               />
             </div>
 
             <div>
-              <label className={retroLabel}>پاس ورڈ</label>
+              <label className={retroLabel}>رمز عبور</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className={`${retroInput} w-full`}
-                placeholder="••••••••"
+                placeholder="رمز عبور"
               />
             </div>
 
             <div>
-              <label className={retroLabel}>مکمل نام (اختیاری)</label>
+              <label className={retroLabel}>نام و نام خانوادگی (اختیاری)</label>
               <input
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
                 className={`${retroInput} w-full`}
-                placeholder="نام"
+                placeholder="نام کامل"
               />
             </div>
           </div>
@@ -222,7 +222,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
               type="submit"
               disabled={loading}
             >
-              {loading ? 'رجسٹر ہو رہے ہیں...' : 'صارف بنائیں اور ورود کریں'}
+              {loading ? 'در حال ایجاد حساب...' : 'ساخت حساب و ورود'}
             </button>
 
             <button
@@ -234,7 +234,7 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
               }}
               disabled={loading}
             >
-              واپس جائیں
+              بازگشت
             </button>
           </div>
         </form>

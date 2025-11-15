@@ -51,7 +51,7 @@ export default function LoginForm() {
               onClick={() => setShowRegister(false)}
               type="button"
             >
-              پہلے سے صارف ہیں؟ یہاں ورود کریں
+              قبلاً ثبت‌نام کرده‌اید؟ اینجا وارد شوید
             </button>
           </div>
         </>
@@ -59,7 +59,7 @@ export default function LoginForm() {
         <>
           <form onSubmit={onSubmit} className={`${retroPanelPadded} space-y-5`}>
             <header className="space-y-2 text-right">
-              <p className={retroHeading}>hesabpak access terminal</p>
+              <p className={retroHeading}>درگاه دسترسی حساب‌پاک</p>
               <h2 className="text-2xl font-semibold text-[#1f2e3b]">ورود به سامانه</h2>
               <p className={`text-xs ${retroMuted}`}>
                 برای ادامه، نام کاربری و رمز عبور خود را وارد کنید. در صورت فعال بودن ورود دو مرحله‌ای،
@@ -74,7 +74,7 @@ export default function LoginForm() {
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   className={`${retroInput} w-full`}
-                  placeholder="username"
+                  placeholder="نام کاربری"
                 />
               </div>
               <div>
@@ -84,7 +84,7 @@ export default function LoginForm() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   className={`${retroInput} w-full`}
-                  placeholder="••••••••"
+                  placeholder="رمز عبور"
                 />
               </div>
               {otpRequired && (
@@ -93,7 +93,7 @@ export default function LoginForm() {
                   <input
                     value={otp}
                     onChange={e => setOtp(e.target.value)}
-                    className={`${retroInput} w-full tracking-[0.6em] text-center`}
+                    className={`${retroInput} w-full tracking-[0.3em] text-center`}
                     placeholder="123456"
                     inputMode="numeric"
                     pattern="\\d{6}"
@@ -121,17 +121,17 @@ export default function LoginForm() {
 
           <div className="mt-4 text-center space-y-2">
             <p className={`text-[11px] ${retroMuted}`}>
-              صارف نہیں ہیں؟
+              حساب‌پاک برای شما جدید است؟
             </p>
             <button
               className={`${retroButton} !bg-[#2d5b2d] w-full`}
               onClick={() => setShowRegister(true)}
               type="button"
             >
-              موبائل سے صارف بنائیں
+              ثبت‌نام با شماره موبایل
             </button>
             <p className={`text-[11px] text-center ${retroMuted}`}>
-              در صورت فراموشی رمز عبور با مدیر سیستم تماس بگیرید۔
+              در صورت فراموشی رمز عبور با مدیر سیستم تماس بگیرید.
             </p>
           </div>
         </>

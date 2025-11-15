@@ -314,10 +314,10 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <p className={retroHeading}>Relations Hub</p>
-            <h2 className="text-2xl font-semibold mt-2">مدیریت طرف‌های حساب</h2>
+            <p className={retroHeading}>مدیریت طرف‌های حساب</p>
+            <h2 className="text-2xl font-semibold mt-2">دفتر مخاطبین و تراز مالی</h2>
             <p className={`text-xs ${retroMuted} mt-2`}>
-              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | {smartDate.isoDate ?? 'ISO TBD'}
+              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | تاریخ میلادی: {smartDate.isoDate ?? 'نامشخص'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

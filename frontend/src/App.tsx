@@ -146,16 +146,16 @@ export default function App() {
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 text-gray-800 flex items-center justify-center p-6">
           <div className="max-w-5xl w-full flex flex-col-reverse md:flex-row items-center justify-between gap-10">
             <div className="md:w-1/2 space-y-4 text-right">
-              <p className="text-sm font-mono text-indigo-700 tracking-wider">HESABPAK CLASSIC CONSOLE</p>
+              <p className="text-sm font-mono text-indigo-700">کنسول کلاسیک حساب‌پاک</p>
               <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-gray-900">به سیستم جامع حساب‌پاک خوش آمدید</h1>
               <p className="text-sm text-gray-700 leading-6">
                 برای دسترسی به داشبورد مرکزی و ابزارهای حسابداری، ابتدا وارد شوید. این محیط بر اساس تم
                 کلاسیک طراحی شده تا با سیستم‌های آرشیوی و کاربران باسابقه هماهنگ بماند.
               </p>
               <div className="flex flex-wrap gap-3 text-xs text-indigo-700">
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">SYNCED TIME</span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">RETRO UI MODE</span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">SECURE ACCESS</span>
+                <span className="border border-indigo-400 px-3 py-1 rounded">همگام با زمان</span>
+                <span className="border border-indigo-400 px-3 py-1 rounded">رابط کلاسیک</span>
+                <span className="border border-indigo-400 px-3 py-1 rounded">دسترسی امن</span>
               </div>
             </div>
             <div className="md:w-1/2 w-full">
