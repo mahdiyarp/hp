@@ -20,6 +20,10 @@ interface Product {
   unit: string | null
   inventory: number | null | undefined
   description?: string | null
+  last_purchase_price?: number | null
+  avg_purchase_price?: number | null
+  last_sale_price?: number | null
+  avg_sale_price?: number | null
 }
 
 interface ProductMovement {
@@ -412,13 +416,15 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
         </div>
 
         {filtered.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
             <thead>
               <tr>
                 <th className={retroTableHeader}>نام کالا</th>
                 <th className={retroTableHeader}>گروه</th>
                 <th className={retroTableHeader}>واحد</th>
                 <th className={retroTableHeader}>موجودی</th>
+                <th className={retroTableHeader}>آخرین خرید</th>
+                <th className={retroTableHeader}>میانگین خرید</th>
               </tr>
             </thead>
             <tbody>
@@ -439,6 +445,26 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                   <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
                   <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
                   <td className="px-3 py-2 text-left font-semibold">{formatNumberFa(prod.inventory ?? 0)}</td>
+                  <td className="px-3 py-2 text-left">
+                    {prod.last_purchase_price ? (
+                      <div>
+                        <span className="font-semibold">{formatNumberFa(prod.last_purchase_price)}</span>
+                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">---</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-left">
+                    {prod.avg_purchase_price ? (
+                      <div>
+                        <span className="font-semibold">{formatNumberFa(prod.avg_purchase_price)}</span>
+                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                      </div>
+                    ) : (
+                      <span className="text-[#999]">---</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

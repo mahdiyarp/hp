@@ -128,6 +128,10 @@ class ProductOut(ProductBase):
     id: str
     code: str
     created_at: datetime
+    last_purchase_price: Optional[int] = None  # آخرین قیمت خرید
+    avg_purchase_price: Optional[int] = None   # میانگین قیمت خرید
+    last_sale_price: Optional[int] = None      # آخرین قیمت فروش
+    avg_sale_price: Optional[int] = None       # میانگین قیمت فروش
 
     class Config:
         orm_mode = True

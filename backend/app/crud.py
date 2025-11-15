@@ -152,11 +152,58 @@ def create_product_from_external(session: Session, external: dict, unit: Optiona
 
 
 def get_products(session: Session, q: Optional[str] = None, limit: int = 50):
+    from sqlalchemy import func, desc
+    
     qs = session.query(models.Product)
     if q:
         qn = normalize_for_search(q)
         qs = qs.filter(models.Product.name_norm.contains(qn))
-    return qs.limit(limit).all()
+    
+    products = qs.limit(limit).all()
+    
+    # Enrich with pricing information
+    for product in products:
+        # آخرین قیمت خرید
+        last_purchase = session.query(models.InvoiceItem).join(
+            models.Invoice, models.InvoiceItem.invoice_id == models.Invoice.id
+        ).filter(
+            models.InvoiceItem.product_id == product.id,
+            models.Invoice.invoice_type == 'purchase',
+            models.Invoice.status == 'final'
+        ).order_by(desc(models.Invoice.server_time)).first()
+        product.last_purchase_price = last_purchase.unit_price if last_purchase else None
+        
+        # میانگین قیمت خرید
+        avg_purchase = session.query(func.avg(models.InvoiceItem.unit_price)).join(
+            models.Invoice, models.InvoiceItem.invoice_id == models.Invoice.id
+        ).filter(
+            models.InvoiceItem.product_id == product.id,
+            models.Invoice.invoice_type == 'purchase',
+            models.Invoice.status == 'final'
+        ).scalar()
+        product.avg_purchase_price = int(avg_purchase) if avg_purchase else None
+        
+        # آخرین قیمت فروش
+        last_sale = session.query(models.InvoiceItem).join(
+            models.Invoice, models.InvoiceItem.invoice_id == models.Invoice.id
+        ).filter(
+            models.InvoiceItem.product_id == product.id,
+            models.Invoice.invoice_type == 'sale',
+            models.Invoice.status == 'final'
+        ).order_by(desc(models.Invoice.server_time)).first()
+        product.last_sale_price = last_sale.unit_price if last_sale else None
+        
+        # میانگین قیمت فروش
+        avg_sale = session.query(func.avg(models.InvoiceItem.unit_price)).join(
+            models.Invoice, models.InvoiceItem.invoice_id == models.Invoice.id
+        ).filter(
+            models.InvoiceItem.product_id == product.id,
+            models.Invoice.invoice_type == 'sale',
+            models.Invoice.status == 'final'
+        ).scalar()
+        product.avg_sale_price = int(avg_sale) if avg_sale else None
+    
+    return products
 
 
 def create_person(session: Session, p: PersonCreate) -> models.Person:

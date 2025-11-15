@@ -118,6 +118,10 @@ interface ProductOption {
   name: string
   unit?: string | null
   group?: string | null
+  last_purchase_price?: number | null
+  avg_purchase_price?: number | null
+  last_sale_price?: number | null
+  avg_sale_price?: number | null
 }
 
 type InvoiceDetail = Invoice & { items: InvoiceItemRow[] }
@@ -720,6 +724,19 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             </option>
                           ))}
                         </datalist>
+                        {item.product_id && (() => {
+                          const selected = products.find(p => p.id === item.product_id)
+                          return selected ? (
+                            <div className="text-[11px] space-y-0.5 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
+                              {selected.last_sale_price && (
+                                <div>آخرین فروش: {formatNumberFa(selected.last_sale_price)} ریال</div>
+                              )}
+                              {selected.avg_purchase_price && (
+                                <div>میانگین خرید: {formatNumberFa(selected.avg_purchase_price)} ریال</div>
+                              )}
+                            </div>
+                          ) : null
+                        })()}
                       </div>
                       <div className="space-y-2">
                         <label className={retroHeading}>تعداد *</label>
