@@ -5,6 +5,7 @@ from typing import Optional, List, Tuple
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
 from datetime import timedelta
+from collections import Counter
 import jdatetime
 import requests
 import math
@@ -481,33 +482,85 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
     inv = session.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
     if not inv:
         return None
+
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == invoice_id).all()
+
+    # Validate sale invoices against available inventory before changing status
+    if inv.invoice_type == 'sale':
+        product_requirements = Counter()
+        for item in items:
+            if item.product_id:
+                product_requirements[item.product_id] += int(item.quantity or 0)
+        if product_requirements:
+            product_rows = session.query(models.Product).filter(models.Product.id.in_(product_requirements.keys())).all()
+            product_map = {p.id: p for p in product_rows}
+            insufficient = []
+            for pid, needed in product_requirements.items():
+                product = product_map.get(pid)
+                available = int(product.inventory or 0) if product else 0
+                if available < needed:
+                    insufficient.append({
+                        'name': product.name if product else f'ID {pid}',
+                        'required': needed,
+                        'available': available,
+                    })
+            if insufficient:
+                details = '، '.join(
+                    f"«{entry['name']}»: نیاز {entry['required']} / موجود {entry['available']}"
+                    for entry in insufficient
+                )
+                raise ValueError(f'موجودی کافی برای کالاهای زیر وجود ندارد: {details}')
+
     inv.status = 'final'
     if client_time:
         inv.client_time = client_time
     inv.server_time = datetime.now(timezone.utc)
     session.add(inv)
-    session.commit()
-    session.refresh(inv)
-    
-    # Update inventory based on invoice items and type
+
+    price_history_entries = []
+    product_map: dict[str, models.Product] = {}
+    product_ids = {item.product_id for item in items if item.product_id}
+    if product_ids:
+        product_rows = session.query(models.Product).filter(models.Product.id.in_(product_ids)).all()
+        product_map = {p.id: p for p in product_rows}
+
+    for item in items:
+        if not item.product_id:
+            continue
+        product = product_map.get(item.product_id)
+        if not product:
+            continue
+        history_type = None
+        if inv.invoice_type == 'sale':
+            product.inventory = int(product.inventory or 0) - int(item.quantity or 0)
+            history_type = 'sell'
+        elif inv.invoice_type == 'purchase':
+            product.inventory = int(product.inventory or 0) + int(item.quantity or 0)
+            history_type = 'buy'
+        session.add(product)
+        if history_type and item.unit_price is not None:
+            price_history_entries.append(models.PriceHistory(
+                product_id=item.product_id,
+                price=int(item.unit_price),
+                type=history_type,
+                effective_at=datetime.now(timezone.utc),
+            ))
+
+    if price_history_entries:
+        session.add_all(price_history_entries)
+
     try:
-        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == invoice_id).all()
-        for item in items:
-            if item.product_id:
-                product = session.query(models.Product).filter(models.Product.id == item.product_id).first()
-                if product:
-                    if inv.invoice_type == 'sale':
-                        # Decrease inventory for sales
-                        product.inventory = (product.inventory or 0) - item.quantity
-                    elif inv.invoice_type == 'purchase':
-                        # Increase inventory for purchases
-                        product.inventory = (product.inventory or 0) + item.quantity
-                    session.add(product)
         session.commit()
+    except ValueError:
+        session.rollback()
+        raise
     except Exception as e:
-        print(f"Inventory update error: {e}")
-        pass
-    
+        session.rollback()
+        print(f"Finalize invoice error: {e}")
+        raise
+
+    session.refresh(inv)
+
     # Create ledger entries for inventory and revenue based on invoice_type
     try:
         # sale: debit AR/Cash, credit Sales (or COGS/Inventory)

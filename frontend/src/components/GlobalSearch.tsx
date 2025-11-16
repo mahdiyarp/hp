@@ -40,49 +40,85 @@ const MODULE_TARGETS: Record<SearchIndex, { module: string; focus: FocusType | n
   payments: { module: 'finance', focus: 'payment' },
 }
 
+const toDisplayText = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    return value.trim() || null
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  return null
+}
+
+const pickDisplayText = (value: unknown, fallback: string) => toDisplayText(value) ?? fallback
+
+const toNumeric = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
 function resolveHitId(index: SearchIndex, hit: SearchHit) {
-  if (hit.id !== undefined && hit.id !== null) return hit.id
-  if (index === 'invoices' && hit.invoice_id) return hit.invoice_id
-  if (index === 'payments' && hit.payment_id) return hit.payment_id
-  if (index === 'products' && hit.product_id) return hit.product_id
-  if (index === 'persons' && hit.person_id) return hit.person_id
+  const candidates: Array<unknown> = [
+    hit.id,
+    index === 'invoices' ? hit.invoice_id : null,
+    index === 'payments' ? hit.payment_id : null,
+    index === 'products' ? hit.product_id : null,
+    index === 'persons' ? hit.person_id : null,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' || typeof candidate === 'number') {
+      return candidate
+    }
+  }
   return null
 }
 
 function extractPrimaryText(index: SearchIndex, hit: SearchHit): string {
   if (index === 'products') {
-    return String(hit.name ?? hit.id ?? 'محصول ناشناخته')
+    return pickDisplayText(hit.name ?? hit.id, 'محصول ناشناخته')
   }
   if (index === 'persons') {
-    return String(hit.name ?? hit.party_name ?? hit.id ?? 'مخاطب ناشناخته')
+    return pickDisplayText(hit.name ?? hit.party_name ?? hit.id, 'مخاطب ناشناخته')
   }
   if (index === 'invoices') {
-    const number = hit.invoice_number ?? hit.id
-    const party = hit.party_name ?? hit.party_id ?? ''
-    return `${number ?? 'فاکتور'} ${party ? `| ${party}` : ''}`.trim()
+    const number = pickDisplayText(hit.invoice_number ?? hit.id, 'فاکتور')
+    const party = toDisplayText(hit.party_name ?? hit.party_id)
+    return `${number}${party ? ` | ${party}` : ''}`
   }
   if (index === 'payments') {
-    const number = hit.payment_number ?? hit.id
-    const party = hit.party_name ?? hit.party_id ?? ''
-    return `${number ?? 'سند'} ${party ? `| ${party}` : ''}`.trim()
+    const number = pickDisplayText(hit.payment_number ?? hit.id, 'سند')
+    const party = toDisplayText(hit.party_name ?? hit.party_id)
+    return `${number}${party ? ` | ${party}` : ''}`
   }
-  return String(hit.id ?? 'رکورد')
+  return pickDisplayText(hit.id, 'رکورد')
 }
 
 function extractSecondaryText(index: SearchIndex, hit: SearchHit): string | null {
   if (index === 'products') {
-    const unit = hit.unit ? `واحد: ${hit.unit}` : ''
-    const group = hit.group ? `گروه: ${hit.group}` : ''
+    const unitValue = toDisplayText(hit.unit)
+    const groupValue = toDisplayText(hit.group)
+    const unit = unitValue ? `واحد: ${unitValue}` : ''
+    const group = groupValue ? `گروه: ${groupValue}` : ''
     return [unit, group].filter(Boolean).join(' | ') || null
   }
   if (index === 'invoices') {
-    const total = hit.total ? `مبلغ: ${formatNumberFa(Number(hit.total))}` : ''
-    const status = hit.status ? `وضعیت: ${hit.status}` : ''
+    const totalNumber = toNumeric(hit.total)
+    const total = typeof totalNumber === 'number' ? `مبلغ: ${formatNumberFa(totalNumber)}` : ''
+    const statusValue = toDisplayText(hit.status)
+    const status = statusValue ? `وضعیت: ${statusValue}` : ''
     return [total, status].filter(Boolean).join(' | ') || null
   }
   if (index === 'payments') {
-    const amount = hit.amount ? `مبلغ: ${formatNumberFa(Number(hit.amount))}` : ''
-    const method = hit.method ? `روش: ${hit.method}` : ''
+    const amountNumber = toNumeric(hit.amount)
+    const amount = typeof amountNumber === 'number' ? `مبلغ: ${formatNumberFa(amountNumber)}` : ''
+    const methodValue = toDisplayText(hit.method)
+    const method = methodValue ? `روش: ${methodValue}` : ''
     return [amount, method].filter(Boolean).join(' | ') || null
   }
   return null

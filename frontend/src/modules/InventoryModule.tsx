@@ -217,7 +217,8 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   const totals = useMemo(() => {
     const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
     const uniqueGroups = groups.length
-    return { totalInventory, uniqueGroups }
+    const lowStockCount = products.filter(prod => (prod.inventory ?? 0) <= 5).length
+    return { totalInventory, uniqueGroups, lowStockCount }
   }, [products, groups])
 
   if (loading) {
@@ -265,7 +266,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>تعداد کالاها</p>
             <p className="text-lg font-semibold">{formatNumberFa(products.length)}</p>
@@ -277,6 +278,12 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>گروه‌ها</p>
             <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>کالاهای کم‌موجودی</p>
+            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#c35c5c]' : ''}`}>
+              {formatNumberFa(totals.lowStockCount)}
+            </p>
           </div>
         </div>
       </section>
@@ -425,48 +432,78 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                 <th className={retroTableHeader}>موجودی</th>
                 <th className={retroTableHeader}>آخرین خرید</th>
                 <th className={retroTableHeader}>میانگین خرید</th>
+                <th className={retroTableHeader}>آخرین فروش</th>
+                <th className={retroTableHeader}>میانگین فروش</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(prod => (
-                <tr 
-                  key={prod.id} 
-                  className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer"
-                  onClick={() => loadProductMovement(prod)}
-                >
-                  <td className="px-3 py-2">
-                    {prod.name}
-                    {prod.description && (
-                      <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                        {prod.description}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
-                  <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
-                  <td className="px-3 py-2 text-left font-semibold">{formatNumberFa(prod.inventory ?? 0)}</td>
-                  <td className="px-3 py-2 text-left">
-                    {prod.last_purchase_price ? (
-                      <div>
-                        <span className="font-semibold">{formatNumberFa(prod.last_purchase_price)}</span>
-                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+              {filtered.map(prod => {
+                const lowStock = (prod.inventory ?? 0) <= 5
+                return (
+                  <tr 
+                    key={prod.id} 
+                    className={`border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer ${lowStock ? 'bg-[#fff3f3]' : ''}`}
+                    onClick={() => loadProductMovement(prod)}
+                  >
+                    <td className="px-3 py-2">
+                      {prod.name}
+                      {prod.description && (
+                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                          {prod.description}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
+                    <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
+                    <td className="px-3 py-2 text-left font-semibold">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>{formatNumberFa(prod.inventory ?? 0)}</span>
+                        {lowStock && <span className={`${retroBadge} !bg-[#c35c5c] !text-white text-[10px]`}>کمبود</span>}
                       </div>
-                    ) : (
-                      <span className="text-[#999]">---</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-left">
-                    {prod.avg_purchase_price ? (
-                      <div>
-                        <span className="font-semibold">{formatNumberFa(prod.avg_purchase_price)}</span>
-                        <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
-                      </div>
-                    ) : (
-                      <span className="text-[#999]">---</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.last_purchase_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.last_purchase_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.avg_purchase_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.avg_purchase_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.last_sale_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.last_sale_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.avg_sale_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.avg_sale_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         ) : (

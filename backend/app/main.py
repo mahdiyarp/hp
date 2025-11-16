@@ -971,7 +971,10 @@ def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = D
                 client_time = datetime.fromisoformat(ct)
             except Exception:
                 client_time = None
-    inv = crud.finalize_invoice(session, invoice_id, client_time=client_time)
+    try:
+        inv = crud.finalize_invoice(session, invoice_id, client_time=client_time)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if not inv:
         raise HTTPException(status_code=404, detail='Invoice not found')
     items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
@@ -1431,10 +1434,11 @@ def api_create_product(p: ProductCreate, session: Session = Depends(db.get_db), 
 
 
 @app.get("/api/products")
-def api_get_products(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def api_get_products(q: Optional[str] = None, limit: int = 50, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     # viewers and above can list
     require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
-    return crud.get_products(session, q=q)
+    limit = max(1, min(int(limit or 50), 500))
+    return crud.get_products(session, q=q, limit=limit)
 
 
 

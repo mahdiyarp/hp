@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext'
 import LoginForm from './components/LoginForm'
-import { retroHeading } from './components/retroTheme'
 import AppShell from './components/layout/AppShell'
 import { modules } from './modules'
 import { getAccessToken } from './services/auth'
@@ -18,6 +17,39 @@ export type SyncRecord = {
   clientUtc: string
 }
 
+type TimeNowResponse = {
+  utc: string
+  server_offset_seconds?: number | null
+  server_offset?: string | null
+  server_local?: string | null
+  jalali?: string | null
+  epoch_ms?: number | null
+}
+
+type VersionResponse = {
+  version?: string
+}
+
+type AutoContextResponse = {
+  context?: {
+    current_jalali?: {
+      formatted?: string
+    }
+  }
+}
+
+type StoredSyncRecord = Partial<SyncRecord> & {
+  server_utc?: string
+  server_offset_seconds?: number | null
+  server_offset?: string | null
+  server_local?: string | null
+  epoch_ms?: number | null
+  client_utc?: string
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
   const [version, setVersion] = useState<string | null>(null)
@@ -27,17 +59,17 @@ export default function App() {
   async function syncTime() {
     const before = new Date()
     const resp = await fetch('/api/time/now')
-    const server = await resp.json()
+    const server = (await resp.json()) as TimeNowResponse
     const after = new Date()
     // choose client time as arrival time (after)
     const clientUtc = after.toISOString()
     const latencyMs = after.getTime() - before.getTime()
-    const record = {
-      serverUtc: server.utc,
+    const record: SyncRecord = {
+      serverUtc: typeof server.utc === 'string' ? server.utc : clientUtc,
       serverOffsetSeconds: Number(server.server_offset_seconds ?? 0),
-      serverOffset: server.server_offset ?? null,
-      serverLocal: server.server_local ?? null,
-      jalali: server.jalali ?? null,
+      serverOffset: typeof server.server_offset === 'string' ? server.server_offset : null,
+      serverLocal: typeof server.server_local === 'string' ? server.server_local : null,
+      jalali: typeof server.jalali === 'string' ? server.jalali : null,
       epochMs: typeof server.epoch_ms === 'number' ? server.epoch_ms : null,
       latencyMs: Number.isFinite(latencyMs) ? latencyMs : null,
       clientUtc,
@@ -65,12 +97,12 @@ export default function App() {
       }
 
       const resp = await fetch('/api/financial/auto-context', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       })
-      
+
       if (resp.ok) {
-        const data = await resp.json()
-        const today = data?.context?.current_jalali?.formatted
+        const data = (await resp.json()) as AutoContextResponse
+        const today = data.context?.current_jalali?.formatted
         let todayIso = new Date().toISOString().split('T')[0]
         if (typeof today === 'string') {
           const parsed = parseJalaliInput(today)
@@ -95,34 +127,71 @@ export default function App() {
     const stored = localStorage.getItem('hesabpak_time_sync')
     if (stored) {
       try {
-        const parsed = JSON.parse(stored)
-        setSync({
-          serverUtc: parsed.serverUtc ?? parsed.server_utc ?? new Date().toISOString(),
-          serverOffsetSeconds: Number(parsed.serverOffsetSeconds ?? parsed.server_offset_seconds ?? 0),
-          serverOffset: parsed.serverOffset ?? parsed.server_offset ?? null,
-          serverLocal: parsed.serverLocal ?? parsed.server_local ?? null,
-          jalali: parsed.jalali ?? null,
-          epochMs: typeof parsed.epochMs === 'number' ? parsed.epochMs : parsed.epoch_ms ?? null,
-          latencyMs: typeof parsed.latencyMs === 'number' ? parsed.latencyMs : null,
-          clientUtc: parsed.clientUtc ?? parsed.client_utc ?? new Date().toISOString(),
-        })
+        const parsed: unknown = JSON.parse(stored)
+        if (isPlainObject(parsed)) {
+          const legacy = parsed as StoredSyncRecord
+          const fallbackIso = new Date().toISOString()
+          const epochCandidate =
+            typeof legacy.epochMs === 'number'
+              ? legacy.epochMs
+              : typeof legacy.epoch_ms === 'number'
+                ? legacy.epoch_ms
+                : null
+          const latencyCandidate = typeof legacy.latencyMs === 'number' ? legacy.latencyMs : null
+          setSync({
+            serverUtc:
+              typeof legacy.serverUtc === 'string'
+                ? legacy.serverUtc
+                : typeof legacy.server_utc === 'string'
+                  ? legacy.server_utc
+                  : fallbackIso,
+            serverOffsetSeconds: Number(
+              legacy.serverOffsetSeconds ?? legacy.server_offset_seconds ?? 0,
+            ),
+            serverOffset:
+              typeof legacy.serverOffset === 'string'
+                ? legacy.serverOffset
+                : typeof legacy.server_offset === 'string'
+                  ? legacy.server_offset
+                  : null,
+            serverLocal:
+              typeof legacy.serverLocal === 'string'
+                ? legacy.serverLocal
+                : typeof legacy.server_local === 'string'
+                  ? legacy.server_local
+                  : null,
+            jalali: typeof legacy.jalali === 'string' ? legacy.jalali : null,
+            epochMs: epochCandidate,
+            latencyMs: latencyCandidate,
+            clientUtc:
+              typeof legacy.clientUtc === 'string'
+                ? legacy.clientUtc
+                : typeof legacy.client_utc === 'string'
+                  ? legacy.client_utc
+                  : fallbackIso,
+          })
+        }
       } catch (e) {
         console.warn('Failed to parse stored sync record', e)
       }
     }
     // perform an immediate sync
-    syncTime()
+    void syncTime()
     // fetch version
-    fetch('/api/version')
-      .then(r => r.ok ? r.json() : null)
+    void fetch('/api/version')
+      .then(async r => {
+        if (!r.ok) return null
+        return (await r.json()) as VersionResponse
+      })
       .then(data => {
-        if (data && data.version) setVersion(data.version)
-      }).catch(() => {})
+        if (data?.version) setVersion(data.version)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
     if (user && sync && !smartDateInitialized) {
-      initializeSmartDate()
+      void initializeSmartDate()
     }
   }, [user, sync, smartDateInitialized])
 

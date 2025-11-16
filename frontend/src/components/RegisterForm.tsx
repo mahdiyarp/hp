@@ -10,6 +10,16 @@ import {
   retroMuted,
 } from './retroTheme'
 
+type OtpResponse = {
+  session_id?: string
+  detail?: string
+}
+
+type VerifyResponse = {
+  success?: boolean
+  detail?: string
+}
+
 export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) {
   const { login } = useAuth()
   const { t } = useI18n()
@@ -19,7 +29,6 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
-  const [sessionId, setSessionId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -38,14 +47,12 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mobile }),
       })
-      
+
+      const data = (await res.json()) as OtpResponse
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.detail || 'درخواست ناموفق')
       }
-      
-      const data = await res.json()
-      setSessionId(data.session_id)
+
       setStep('otp')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'خرابی در درخواست')
@@ -88,13 +95,11 @@ export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) 
         }),
       })
       
+      const data = (await res.json()) as VerifyResponse
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.detail || 'رجسٹریشن ناموفق')
       }
-      
-      const data = await res.json()
-      
+
       if (data.success) {
         // Auto-login
         await login(username, password)

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import GridLayout, { Layout } from 'react-grid-layout'
-import { apiGet, apiPost, apiPatch, apiDelete } from '../services/api'
+import GridLayout from 'react-grid-layout'
+import { apiGet, apiPost, apiDelete } from '../services/api'
 
 interface Widget {
   id: number
@@ -42,10 +42,9 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
-  const [availableWidgets, setAvailableWidgets] = useState(WIDGET_TYPES)
 
   useEffect(() => {
-    loadWidgets()
+    void loadWidgets()
   }, [])
 
   async function loadWidgets() {
@@ -75,7 +74,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
     try {
       await apiPost('/api/dashboard/widgets', {
         widget_type: widgetType,
-        title: availableWidgets.find(w => w.id === widgetType)?.label,
+        title: WIDGET_TYPES.find(w => w.id === widgetType)?.label,
         position_x: 0,
         position_y: 0,
         width: 3,
@@ -155,7 +154,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 
         {isEditMode && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-            {availableWidgets.map(wt => (
+            {WIDGET_TYPES.map(wt => (
               <button
                 key={wt.id}
                 onClick={() => addWidget(wt.id)}
@@ -201,7 +200,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
               
               {/* Widget Content */}
               <div className="h-full flex items-center justify-center text-[#7a6b4f] text-sm">
-                <WidgetContent type={widget.widget_type} config={widget.config} />
+                <WidgetContent type={widget.widget_type} />
               </div>
             </div>
           ))}
@@ -224,7 +223,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 }
 
 // Widget Content Component
-function WidgetContent({ type, config }: { type: string; config?: string }) {
+function WidgetContent({ type }: { type: string }) {
   const getContent = () => {
     switch (type) {
       case 'sales':

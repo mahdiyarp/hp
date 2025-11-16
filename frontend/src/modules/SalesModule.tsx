@@ -118,6 +118,7 @@ interface ProductOption {
   name: string
   unit?: string | null
   group?: string | null
+  inventory?: number | null
   last_purchase_price?: number | null
   avg_purchase_price?: number | null
   last_sale_price?: number | null
@@ -181,6 +182,37 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     purchase: 'فاکتور خرید',
     proforma: 'پیش‌فاکتور',
   }
+
+  const pickPriceCandidate = useCallback((candidates: Array<number | null | undefined>) => {
+    for (const value of candidates) {
+      if (typeof value === 'number' && value > 0) {
+        return value
+      }
+    }
+    return 0
+  }, [])
+
+  const getSuggestedPrice = useCallback(
+    (product: ProductOption | undefined, invoiceType: InvoiceFormState['invoice_type']) => {
+      if (!product) return 0
+      if (invoiceType === 'purchase') {
+        return pickPriceCandidate([
+          product.last_purchase_price,
+          product.avg_purchase_price,
+          product.avg_sale_price,
+          product.last_sale_price,
+        ])
+      }
+      // sale & proforma default to sale chain
+      return pickPriceCandidate([
+        product.last_sale_price,
+        product.avg_sale_price,
+        product.avg_purchase_price,
+        product.last_purchase_price,
+      ])
+    },
+    [pickPriceCandidate],
+  )
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -448,6 +480,23 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
       setFormError('مقدار و قیمت هر ردیف باید بزرگ‌تر از صفر باشد.')
       return
     }
+    if (invoiceForm.invoice_type === 'sale') {
+      const insufficient: string[] = []
+      invoiceForm.items.forEach(item => {
+        if (!item.product_id) return
+        const product = products.find(p => p.id === item.product_id)
+        if (!product || typeof product.inventory !== 'number') return
+        if (item.quantity > product.inventory) {
+          insufficient.push(
+            `${product.name} (موجودی: ${formatNumberFa(product.inventory ?? 0)})`,
+          )
+        }
+      })
+      if (insufficient.length > 0) {
+        setFormError(`موجودی کافی برای این کالاها وجود ندارد: ${insufficient.join('، ')}`)
+        return
+      }
+    }
     setCreating(true)
     setFormError(null)
     try {
@@ -688,7 +737,22 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 const itemSubtotal = item.quantity * item.unit_price
                 const priceWords = item.unit_price > 0 ? numberToPersianWords(Math.trunc(item.unit_price)) : ''
                 const subtotalWords = itemSubtotal > 0 ? numberToPersianWords(Math.trunc(itemSubtotal)) : ''
-                
+                const selectedProduct = item.product_id ? products.find(p => p.id === item.product_id) : undefined
+                const hasInventoryValue = typeof selectedProduct?.inventory === 'number'
+                const availableInventory = hasInventoryValue ? selectedProduct?.inventory ?? 0 : null
+                const saleShortage =
+                  invoiceForm.invoice_type === 'sale' &&
+                  hasInventoryValue &&
+                  typeof availableInventory === 'number' &&
+                  availableInventory < item.quantity
+                const projectedInventory =
+                  typeof availableInventory === 'number'
+                    ? invoiceForm.invoice_type === 'sale'
+                      ? availableInventory - item.quantity
+                      : availableInventory + item.quantity
+                    : null
+                const suggestedPrice = getSuggestedPrice(selectedProduct, invoiceForm.invoice_type)
+
                 return (
                   <div
                     key={idx}
@@ -713,6 +777,16 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                                         ...row,
                                         unit: matched.unit || row.unit,
                                         product_id: matched.id || row.product_id,
+                                        unit_price:
+                                          row.unit_price && row.unit_price > 0
+                                            ? row.unit_price
+                                            : (() => {
+                                                const suggestion = getSuggestedPrice(
+                                                  matched,
+                                                  prev.invoice_type,
+                                                )
+                                                return suggestion > 0 ? suggestion : row.unit_price
+                                              })(),
                                       }
                                     : row,
                                 )
@@ -732,29 +806,92 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             </option>
                           ))}
                         </datalist>
-                        {item.product_id && (() => {
-                          const selected = products.find(p => p.id === item.product_id)
-                          return selected ? (
-                            <div className="text-[10px] space-y-1 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
-                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">💰 تاریخچه قیمت‌ها:</div>
-                              {selected.last_sale_price && (
-                                <div>🔹 آخرین فروش: <span className="font-semibold">{formatNumberFa(selected.last_sale_price)}</span> ریال</div>
+                        {selectedProduct && (
+                          <div className="text-[10px] space-y-2 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
+                            <div className="space-y-1">
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
+                                📦 وضعیت موجودی
+                              </div>
+                              <div>
+                                موجودی فعلی:{' '}
+                                <span className="font-semibold">
+                                  {typeof availableInventory === 'number'
+                                    ? formatNumberFa(availableInventory)
+                                    : '---'}
+                                </span>{' '}
+                                {selectedProduct.unit || 'عدد'}
+                              </div>
+                              {typeof projectedInventory === 'number' && (
+                                <div className="text-[#7a6b4f]">
+                                  پس از قطعی تقریبی: {formatNumberFa(Math.max(projectedInventory, 0))}{' '}
+                                  {selectedProduct.unit || 'عدد'}
+                                </div>
                               )}
-                              {selected.avg_sale_price && (
-                                <div>📊 میانگین فروش: <span className="font-semibold">{formatNumberFa(selected.avg_sale_price)}</span> ریال</div>
+                              {invoiceForm.invoice_type === 'sale' && saleShortage && (
+                                <div className="text-[#7a0000] font-semibold">
+                                  موجودی ناکافی برای این ردیف است.
+                                </div>
                               )}
-                              {selected.last_purchase_price && (
-                                <div>🔹 آخرین خرید: <span className="font-semibold">{formatNumberFa(selected.last_purchase_price)}</span> ریال</div>
-                              )}
-                              {selected.avg_purchase_price && (
-                                <div>📊 میانگین خرید: <span className="font-semibold">{formatNumberFa(selected.avg_purchase_price)}</span> ریال</div>
-                              )}
-                              {!selected.last_sale_price && !selected.avg_sale_price && !selected.last_purchase_price && !selected.avg_purchase_price && (
-                                <div className="text-[#7a6b4f] italic">هنوز تاریخچه قیمتی ندارد</div>
-                              )}
+                              {invoiceForm.invoice_type === 'sale' &&
+                                !saleShortage &&
+                                typeof availableInventory === 'number' &&
+                                availableInventory <= 5 && (
+                                  <div className="text-[#8a4d2c]">
+                                    ⚠️ موجودی رو به اتمام است.
+                                  </div>
+                                )}
                             </div>
-                          ) : null
-                        })()}
+                            <div className="space-y-1">
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
+                                💰 تاریخچه قیمت‌ها:
+                              </div>
+                              {selectedProduct.last_sale_price && (
+                                <div>
+                                  🔹 آخرین فروش:{' '}
+                                  <span className="font-semibold">
+                                    {formatNumberFa(selectedProduct.last_sale_price)}
+                                  </span>{' '}
+                                  ریال
+                                </div>
+                              )}
+                              {selectedProduct.avg_sale_price && (
+                                <div>
+                                  📊 میانگین فروش:{' '}
+                                  <span className="font-semibold">
+                                    {formatNumberFa(selectedProduct.avg_sale_price)}
+                                  </span>{' '}
+                                  ریال
+                                </div>
+                              )}
+                              {selectedProduct.last_purchase_price && (
+                                <div>
+                                  🔹 آخرین خرید:{' '}
+                                  <span className="font-semibold">
+                                    {formatNumberFa(selectedProduct.last_purchase_price)}
+                                  </span>{' '}
+                                  ریال
+                                </div>
+                              )}
+                              {selectedProduct.avg_purchase_price && (
+                                <div>
+                                  📊 میانگین خرید:{' '}
+                                  <span className="font-semibold">
+                                    {formatNumberFa(selectedProduct.avg_purchase_price)}
+                                  </span>{' '}
+                                  ریال
+                                </div>
+                              )}
+                              {!selectedProduct.last_sale_price &&
+                                !selectedProduct.avg_sale_price &&
+                                !selectedProduct.last_purchase_price &&
+                                !selectedProduct.avg_purchase_price && (
+                                  <div className="text-[#7a6b4f] italic">
+                                    هنوز تاریخچه قیمتی ندارد
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className={retroHeading}>تعداد *</label>
@@ -765,6 +902,19 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           onChange={e => updateItem(idx, 'quantity', e.target.value)}
                           className={`${retroInput} w-full`}
                         />
+                        {selectedProduct && typeof availableInventory === 'number' && (
+                          <div
+                            className={`text-[11px] ${
+                              saleShortage ? 'text-[#7a0000]' : 'text-[#154b5f]'
+                            }`}
+                          >
+                            {saleShortage
+                              ? `نیاز ${formatNumberFa(item.quantity)} در برابر موجودی ${formatNumberFa(
+                                  availableInventory,
+                                )}`
+                              : `موجودی: ${formatNumberFa(availableInventory)} ${selectedProduct.unit || 'عدد'}`}
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className={retroHeading}>واحد</label>
@@ -795,6 +945,11 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           {item.unit_price > 0 && (
                             <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">
                               {priceWords} ریال
+                            </div>
+                          )}
+                          {selectedProduct && suggestedPrice > 0 && (
+                            <div className="text-[10px] text-[#1f2e3b] bg-[#e2eef7] px-2 py-1 rounded border border-dashed border-[#154b5f]">
+                              پیشنهاد بر اساس سوابق: {formatNumberFa(suggestedPrice)} ریال
                             </div>
                           )}
                         </div>
