@@ -38,7 +38,7 @@ cat <<'EOF' > ~/hesabpak_cpanel.sh
 set -euo pipefail
 
 # === مقداردهی ===
-REPO_URL="https://github.com/YOUR-ACCOUNT/hp.git"   # <-- این خط را در صورت نیاز عوض کنید
+REPO_URL="https://github.com/mahdiyarp/hp.git"   # <-- این خط را در صورت نیاز عوض کنید
 APP_ROOT="$HOME/apps/hesabpak"
 PUBLIC_DIR="$HOME/public_html/app"
 BACKEND_PORT=8100        # پورت داخلی که API روی آن اجرا می‌شود
