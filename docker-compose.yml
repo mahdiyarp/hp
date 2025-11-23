@@ -9,6 +9,13 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    container_name: hesabpak_redis
+    ports:
+      - '6379:6379'
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -19,8 +26,11 @@ services:
       - ./backend/.env
     environment:
       DEMO_SEED: "true"
+      # point backend to local redis
+      REDIS_URL: "redis://redis:6379/0"
     depends_on:
       - db
+      - redis
     restart: unless-stopped
 
   frontend:
