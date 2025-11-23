@@ -33,6 +33,17 @@ services:
       - redis
     restart: unless-stopped
 
+  person_sync_consumer:
+    image: hesabpak_backend
+    container_name: hesabpak_person_sync_consumer
+    depends_on:
+      - redis
+      - backend
+    env_file:
+      - ./backend/.env
+    command: ["python", "-u", "./backend/scripts/person_sync_consumer.py"]
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
