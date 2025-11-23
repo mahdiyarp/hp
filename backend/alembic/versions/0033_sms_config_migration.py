@@ -21,11 +21,11 @@ def upgrade() -> None:
     
     # SMS API key اور settings شامل کریں
     op.execute("""
-        INSERT INTO system_settings (key, value, category, description, is_secret, created_at)
+        INSERT INTO system_settings (key, value, setting_type, category, description, is_secret, created_at)
         VALUES 
-            ('sms_provider', 'ippanel', 'sms', 'SMS فراہم کنندہ (ippanel)', false, now()),
-            ('sms_api_key', 'YTA1YmE4NDAtOTc4Ny00YTUzLTlhZmQtMmM0Mzg3ODFhNzZkZDRkNDEwNTRkNjY2MzY1MDU3OTg4YmZhNWI3MjkzN2Y=', 'sms', 'iPanel API کلید', true, now()),
-            ('sms_sender', '', 'sms', 'SMS بھیجنے والا نمبر (اختیاری)', false, now())
+            ('sms_provider', 'ippanel', 'string', 'sms', 'SMS فراہم کنندہ (ippanel)', false, now()),
+            ('sms_api_key', 'YTA1YmE4NDAtOTc4Ny00YTUzLTlhZmQtMmM0Mzg3ODFhNzZkZDRkNDEwNTRkNjY2MzY1MDU3OTg4YmZhNWI3MjkzN2Y=', 'string', 'sms', 'iPanel API کلید', true, now()),
+            ('sms_sender', '', 'string', 'sms', 'SMS بھیجنے والا نمبر (اختیاری)', false, now())
         ON CONFLICT (key) DO NOTHING;
     """)
 

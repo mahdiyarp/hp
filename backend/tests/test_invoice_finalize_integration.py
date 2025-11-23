@@ -1,6 +1,8 @@
 import pytest
+from datetime import date, timedelta
 from app import db, crud
 from app import models, schemas
+from app.accounting import fiscal_service
 
 
 def test_invoice_finalize_updates_ledger_and_person_balance():
@@ -8,6 +10,15 @@ def test_invoice_finalize_updates_ledger_and_person_balance():
     engine = db.create_test_engine()
     Session = db.create_test_session(engine)
     session = Session
+
+    # ensure there is an open/current fiscal year for postings
+    fiscal_service.create_fiscal_year(
+        session,
+        title='FY-TEST',
+        start_date=date.today() - timedelta(days=30),
+        end_date=date.today() + timedelta(days=30),
+        is_current=True,
+    )
 
     # create a product
     p = crud.create_product(session, schemas.ProductCreate(name='TestProd', unit='pcs', group='test', code='TP-001'))

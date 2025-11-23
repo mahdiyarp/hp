@@ -21,6 +21,8 @@ def seed():
         # Create admin user if doesn't exist
         print("[SEED] Checking for admin user", flush=True)
         admin = session.query(models.User).filter(models.User.username == 'admin').first()
+        admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
+        admin_role_id = admin_role.id if admin_role else 1
         if not admin:
             print("[SEED] Admin user not found, creating", flush=True)
             admin = models.User(
@@ -29,12 +31,18 @@ def seed():
                 full_name='Administrator',
                 hashed_password=get_password_hash('admin'),
                 role='Admin',
+                role_id=admin_role_id,
                 is_active=True
             )
             session.add(admin)
             session.commit()
             print("[SEED] Created admin user", flush=True)
         else:
+            if not admin.role_id:
+                admin.role_id = admin_role_id
+                session.add(admin)
+                session.commit()
+                print("[SEED] Admin role_id set to Admin role", flush=True)
             print("[SEED] Admin user already exists", flush=True)
 
         # Create developer user if doesn't exist
@@ -42,9 +50,6 @@ def seed():
         developer = session.query(models.User).filter(models.User.username == 'developer').first()
         if not developer:
             print("[SEED] Developer user not found, creating", flush=True)
-            # Get Admin role (should be ID 1 based on migrations)
-            admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
-            role_id = admin_role.id if admin_role else 1
             developer = models.User(
                 username='developer',
                 email='developer@hesabpak.local',
@@ -52,13 +57,18 @@ def seed():
                 mobile='09123506545',
                 hashed_password=get_password_hash('09123506545'),
                 role='Admin',
-                role_id=role_id,
+                role_id=admin_role_id,
                 is_active=True
             )
             session.add(developer)
             session.commit()
             print("[SEED] Created developer user", flush=True)
         else:
+            if not developer.role_id:
+                developer.role_id = admin_role_id
+                session.add(developer)
+                session.commit()
+                print("[SEED] Developer role_id set to Admin role", flush=True)
             print("[SEED] Developer user already exists", flush=True)
 
         # Create 10 products (skip duplicates)
@@ -74,6 +84,16 @@ def seed():
                     description=f'Demo item {i}',
                     code=f'DEM-{i:03d}'
                 ))
+                # give each product base inventory and a price history so stock valuation/reports work
+                p.inventory = random.randint(200, 600)
+                session.add(p)
+                session.flush()
+                session.add(models.PriceHistory(
+                    product_id=p.id,
+                    price=random.randint(80000, 320000),
+                    type='buy',
+                    effective_at=datetime.now(timezone.utc),
+                ))
                 products.append(p)
                 print(f"[SEED] Created product {i}: {p.id[:8]}...", flush=True)
             except IntegrityError as e:
@@ -81,14 +101,40 @@ def seed():
                 session.rollback()
                 p = session.query(models.Product).filter(models.Product.name == name).first()
                 if p:
+                    if p.inventory is None or p.inventory <= 0:
+                        p.inventory = random.randint(200, 600)
+                        session.add(p)
+                    # ensure at least one price history entry exists
+                    has_price = session.query(models.PriceHistory).filter(models.PriceHistory.product_id == p.id).first()
+                    if not has_price:
+                        session.add(models.PriceHistory(
+                            product_id=p.id,
+                            price=random.randint(80000, 320000),
+                            type='buy',
+                            effective_at=datetime.now(timezone.utc),
+                        ))
                     products.append(p)
+        # Ensure all products have usable inventory before invoices
+        for p in session.query(models.Product).all():
+            if p.inventory is None or p.inventory < 150:
+                p.inventory = max(250, p.inventory or 0)
+                session.add(p)
+            has_price = session.query(models.PriceHistory).filter(models.PriceHistory.product_id == p.id).first()
+            if not has_price:
+                session.add(models.PriceHistory(
+                    product_id=p.id,
+                    price=random.randint(80000, 320000),
+                    type='buy',
+                    effective_at=datetime.now(timezone.utc),
+                ))
+        session.commit()
         
         print(f"[SEED] Total products: {len(products)}", flush=True)
 
         # Create 10 persons (skip duplicates)
         print("[SEED] Creating persons", flush=True)
         persons = []
-        for i in range(1, 11):
+        for i in range(1, 17):
             name = f"Demo Customer {i}"
             try:
                 per = crud.create_person(session, schemas.PersonCreate(
@@ -112,14 +158,16 @@ def seed():
         # Create 10 invoices
         print("[SEED] Creating invoices", flush=True)
         if products and persons:
-            for i in range(1, min(11, len(persons) + 1)):
+            invoice_count = min(16, len(persons))
+            # finalize purchase invoices first to top up inventory, then sales
+            for i in range(1, invoice_count + 1):
                 inv_items = []
-                cnt = random.randint(1, 3)
+                cnt = random.randint(2, 5)
                 for j in range(cnt):
                     if products:
                         prod = random.choice(products)
-                        qty = random.randint(1, 5)
-                        price = random.randint(10000, 50000)
+                        qty = random.randint(2, 12)
+                        price = random.randint(120000, 650000)
                         inv_items.append({
                             'description': prod.name,
                             'quantity': qty,
@@ -128,8 +176,9 @@ def seed():
                             'product_id': prod.id
                         })
 
+                invoice_type = 'sale' if i % 2 == 0 else 'purchase'
                 payload = schemas.InvoiceCreate(
-                    invoice_type='sale' if i % 2 == 0 else 'purchase',
+                    invoice_type=invoice_type,
                     mode='manual',
                     party_name=persons[i-1].name,
                     party_id=persons[i-1].id,
@@ -139,23 +188,33 @@ def seed():
                 )
                 inv = crud.create_invoice_manual(session, payload)
                 print(f"[SEED] Created invoice {i}: {inv.id}", flush=True)
-                # finalize half of them
-                if i % 2 == 0:
+                try:
+                    # finalize everything; purchases first naturally add inventory for later sales
                     crud.finalize_invoice(session, inv.id)
-                    print(f"[SEED] Finalized invoice {i}", flush=True)
+                    print(f"[SEED] Finalized invoice {i} ({invoice_type})", flush=True)
+                except ValueError as exc:
+                    # If inventory shortage happens, top up all products and retry once
+                    print(f"[SEED] Invoice finalize warning, topping up inventory: {exc}", flush=True)
+                    for p in session.query(models.Product).all():
+                        p.inventory = max(120, p.inventory or 0)
+                        session.add(p)
+                    session.commit()
+                    crud.finalize_invoice(session, inv.id)
+                    print(f"[SEED] Finalized invoice {i} after restock ({invoice_type})", flush=True)
         else:
             print(f"[SEED] Cannot create invoices: products={len(products)}, persons={len(persons)}", flush=True)
 
         # Create some payments
         print("[SEED] Creating payments", flush=True)
-        for i in range(1, min(6, len(persons) + 1)):
+        payments_count = min(8, len(persons))
+        for i in range(1, payments_count + 1):
             pay_payload = schemas.PaymentCreate(
                 direction='in',
                 mode='manual',
                 party_id=persons[i-1].id,
                 party_name=persons[i-1].name,
                 method='cash',
-                amount=random.randint(20000, 200000),
+                amount=random.randint(250000, 1200000),
                 reference=None,
                 client_time=datetime.now(timezone.utc),
                 note='Demo payment'

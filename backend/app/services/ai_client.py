@@ -1,0 +1,64 @@
+import os
+import requests
+from typing import Any, Dict, List, Optional
+
+
+class AIClientError(Exception):
+    pass
+
+
+def _default_headers(api_key: Optional[str]) -> Dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = api_key
+    return headers
+
+
+def call_chat(
+    messages: List[Dict[str, str]],
+    model: Optional[str] = None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    tools: Optional[list] = None,
+) -> Dict[str, Any]:
+    base = base_url or os.getenv("AI_BASE_URL") or "https://api.openai.com/v1"
+    url = base.rstrip("/") + "/chat/completions"
+    payload: Dict[str, Any] = {"model": model or os.getenv("AI_MODEL_NAME") or "gpt-4.1", "messages": messages}
+    if temperature is not None:
+        payload["temperature"] = temperature
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+    if tools:
+        payload["tools"] = tools
+    try:
+        resp = requests.post(url, json=payload, headers=_default_headers(api_key or os.getenv("AI_API_KEY")), timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        raise AIClientError(str(exc))
+
+
+def call_vision(
+    file_bytes: bytes,
+    filename: str,
+    instructions: str,
+    language: str = "fa",
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    # For now, mimic vision via text endpoint with base64 or simple prompt note.
+    base = base_url or os.getenv("AI_BASE_URL") or "https://api.openai.com/v1"
+    url = base.rstrip("/") + "/chat/completions"
+    prompt = f"تحلیل فایل ({filename}) به زبان {language}: {instructions}"
+    payload = {
+        "model": os.getenv("AI_MODEL_NAME") or "gpt-4.1",
+        "messages": [{"role": "user", "content": prompt}],
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=_default_headers(api_key or os.getenv("AI_API_KEY")), timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as exc:
+        raise AIClientError(str(exc))

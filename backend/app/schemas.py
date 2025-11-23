@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
-from typing import Optional, List, Any
+from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime, date
+from typing import Optional, List, Any, Dict
 from typing import Literal
 
 
@@ -160,6 +160,7 @@ class ProductOut(ProductBase):
     id: str
     code: str
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     inventory: Optional[int] = 0
     last_purchase_price: Optional[int] = None  # آخرین قیمت خرید
     avg_purchase_price: Optional[int] = None   # میانگین قیمت خرید
@@ -195,8 +196,9 @@ class PersonCreate(PersonBase):
 
 class PersonOut(PersonBase):
     id: str
-    code: str
+    code: Optional[str]
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -211,6 +213,13 @@ class AccountBase(BaseModel):
 
 class AccountCreate(AccountBase):
     pass
+
+
+class AccountUpdate(BaseModel):
+    name: Optional[str] = None
+    kind: Optional[Literal['cash', 'bank', 'pos']] = None
+    details: Optional[Any] = None
+    code: Optional[str] = None
 
 
 class AccountOut(AccountBase):
@@ -246,8 +255,8 @@ class InvoiceCreate(BaseModel):
     mode: Optional[str] = 'manual'
     party_id: Optional[str] = None
     party_name: Optional[str] = None
-    client_time: Optional[datetime] = None
-    client_calendar: Optional[Literal['gregorian', 'jalali']] = None
+    client_time: Optional[str] = Field(None, description="Client date in Jalali format (YYYY/MM/DD) or ISO datetime")
+    client_calendar: Optional[Literal['gregorian', 'jalali']] = Field('jalali', description="Input calendar format (default: jalali)")
     items: List[InvoiceItemCreate]
     note: Optional[str] = None
 
@@ -259,8 +268,10 @@ class InvoiceOut(BaseModel):
     mode: str
     party_id: Optional[str]
     party_name: Optional[str]
-    client_time: Optional[datetime]
+    client_time: Optional[str] = Field(None, description="Client date in Jalali format (YYYY/MM/DD)")
+    client_time_shamsi: Optional[str] = Field(None, description="Alias for client_time in Jalali format")
     server_time: datetime
+    server_time_shamsi: Optional[str] = Field(None, description="Server date in Jalali format (YYYY/MM/DD)")
     status: str
     subtotal: Optional[int]
     tax: Optional[int]
@@ -282,9 +293,9 @@ class PaymentBase(BaseModel):
     amount: int
     reference: Optional[str] = None
     invoice_id: Optional[int] = None
-    due_date: Optional[datetime] = None
-    client_time: Optional[datetime] = None
-    client_calendar: Optional[Literal['gregorian', 'jalali']] = None
+    due_date: Optional[str] = Field(None, description="Due date in Jalali format (YYYY/MM/DD)")
+    client_time: Optional[str] = Field(None, description="Client date in Jalali format (YYYY/MM/DD)")
+    client_calendar: Optional[Literal['gregorian', 'jalali']] = Field('jalali', description="Input calendar format (default: jalali)")
     note: Optional[str] = None
     tracking_code: Optional[str] = None
 
@@ -297,6 +308,8 @@ class PaymentOut(PaymentBase):
     id: int
     payment_number: Optional[str]
     server_time: datetime
+    server_time_shamsi: Optional[str] = Field(None, description="Server date in Jalali format (YYYY/MM/DD)")
+    due_date_shamsi: Optional[str] = Field(None, description="Due date in Jalali format (YYYY/MM/DD)")
     status: str
     tracking_code: Optional[str] = None
 
@@ -309,6 +322,7 @@ class LedgerEntryOut(BaseModel):
     ref_type: Optional[str]
     ref_id: Optional[str]
     entry_date: datetime
+    entry_date_shamsi: Optional[str] = Field(None, description="Entry date in Jalali format (YYYY/MM/DD)")
     debit_account: str
     credit_account: str
     amount: int
@@ -321,8 +335,8 @@ class LedgerEntryOut(BaseModel):
 
 
 class PnLReport(BaseModel):
-    start: Optional[datetime]
-    end: Optional[datetime]
+    start: Optional[str] = Field(None, description="Start date in Jalali format (YYYY/MM/DD)")
+    end: Optional[str] = Field(None, description="End date in Jalali format (YYYY/MM/DD)")
     sales: int
     purchases: int
     gross_profit: int
@@ -356,6 +370,7 @@ class ActivityLogOut(BaseModel):
     status_code: Optional[int]
     detail: Optional[str]
     created_at: Optional[datetime]
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -367,12 +382,13 @@ class ActivityLogUpdate(BaseModel):
 
 class AIReportOut(BaseModel):
     id: int
-    report_date: Optional[datetime]
+    report_date: Optional[str] = Field(None, description="Report date in Jalali format (YYYY/MM/DD)")
     summary: Optional[str]
     findings: Optional[str]
     status: str
     reviewed_by: Optional[int]
     reviewed_at: Optional[datetime]
+    reviewed_at_shamsi: Optional[str] = Field(None, description="Reviewed date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -391,6 +407,7 @@ class IntegrationConfigOut(BaseModel):
     api_key: Optional[str]
     config: Optional[str]
     last_updated: Optional[datetime]
+    last_updated_shamsi: Optional[str] = Field(None, description="Last updated date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -471,23 +488,41 @@ class BackupOut(BaseModel):
         orm_mode = True
 
 
-class FinancialYearIn(BaseModel):
-    name: str
-    start_date: datetime
-    end_date: Optional[datetime] = None
+class RuleMessage(BaseModel):
+    code: str
+    message: str
+    level: str
 
 
-class FinancialYearOut(BaseModel):
+class FiscalYearCreate(BaseModel):
+    title: str
+    start_date: str = Field(..., description="Start date in Jalali format (YYYY/MM/DD)")
+    end_date: str = Field(..., description="End date in Jalali format (YYYY/MM/DD)")
+    is_current: bool = False
+
+
+class FiscalYearOut(BaseModel):
     id: int
-    name: str
-    start_date: datetime
-    end_date: Optional[datetime]
-    is_closed: bool
-    closed_at: Optional[datetime]
-    opening_balances: Optional[str]
+    title: str
+    start_date: str = Field(..., description="Start date in Jalali format (YYYY/MM/DD)")
+    end_date: str = Field(..., description="End date in Jalali format (YYYY/MM/DD)")
+    status: str
+    is_current: bool
+    created_at: Optional[datetime]
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+    locked_at: Optional[datetime]
+    locked_at_shamsi: Optional[str] = Field(None, description="Locked date in Jalali format (YYYY/MM/DD)")
+    closed_by: Optional[str]
+    opening_balances: Optional[str] = None
 
     class Config:
         orm_mode = True
+
+
+class FiscalYearActionResult(BaseModel):
+    fiscal_year: FiscalYearOut
+    warnings: List[RuleMessage] = Field(default_factory=list)
+    status: str = "ok"
 
 
 # SMS Configuration schemas
@@ -515,10 +550,207 @@ class UserSmsConfigOut(BaseModel):
     enabled: bool
     auto_sms_enabled: bool
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
+
+
+# ========== Settings ==========
+
+
+class NotificationSettings(BaseModel):
+    email: bool = False
+    sms: bool = False
+    desktop: bool = False
+
+
+class BackupSettings(BaseModel):
+    path: str = "/data/backups"
+    auto: bool = False
+    cron: str = "0 3 * * *"
+
+
+class AppSettingsBase(BaseModel):
+    theme: str = "system"
+    rtl: bool = True
+    currency: str = "irr"
+    language: str = "fa"
+    default_fiscal_year_id: Optional[int] = None
+    sidebar_order: List[str] = []
+    sidebar_collapsed: bool = False
+    notifications: NotificationSettings = NotificationSettings()
+    backup: BackupSettings = BackupSettings()
+
+
+class AppSettingsIn(AppSettingsBase):
+    pass
+
+
+class AppSettingsOut(AppSettingsBase):
+    pass
+
+
+class AppSettingField(BaseModel):
+    value: Any
+
+
+# ========== SMS ==========
+
+
+class SmsSettingsIn(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    default_sender: Optional[str] = None
+    enabled: Optional[bool] = None
+    low_credit_threshold: Optional[int] = None
+    api_key: Optional[str] = None
+
+
+class SmsSettingsOut(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    default_sender: Optional[str] = None
+    enabled: bool = False
+    low_credit_threshold: Optional[int] = None
+    api_key_masked: Optional[str] = None
+
+
+class SmsTemplateIn(BaseModel):
+    code: str
+    pattern_id: Optional[str] = None
+    text: Optional[str] = None
+    is_active: bool = True
+    description: Optional[str] = None
+
+
+class SmsTemplateOut(BaseModel):
+    id: int
+    code: str
+    pattern_id: Optional[str]
+    text: Optional[str]
+    is_active: bool
+    description: Optional[str]
+
+    class Config:
+        orm_mode = True
+
+
+class SmsTestRequest(BaseModel):
+    to: str
+    message: Optional[str] = None
+    template_code: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
+
+class SmsTemplateTestRequest(BaseModel):
+    to: str
+    template_code: str
+    context: Optional[Dict[str, Any]] = None
+
+
+# ========== Assistant ==========
+
+
+class AssistantSettingsIn(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+    language: Optional[str] = None
+    enable_doc_understanding: Optional[bool] = None
+    enable_journal_suggestions: Optional[bool] = None
+    enable_alerts: Optional[bool] = None
+    max_tokens: Optional[int] = None
+    temperature: Optional[int] = None
+    top_p: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+class AssistantSettingsOut(BaseModel):
+    provider: Optional[str]
+    base_url: Optional[str]
+    model_name: Optional[str]
+    language: Optional[str]
+    enable_doc_understanding: bool
+    enable_journal_suggestions: bool
+    enable_alerts: bool
+    max_tokens: Optional[int]
+    temperature: Optional[int]
+    top_p: Optional[int]
+    enabled: bool
+    api_key_masked: Optional[str]
+
+
+class AssistantChatRequest(BaseModel):
+    session_id: Optional[int] = None
+    title: Optional[str] = None
+    message: str
+    mode: Optional[str] = "general"
+    context: Optional[Dict[str, Any]] = None
+
+
+class AssistantChatResponse(BaseModel):
+    session_id: Optional[int]
+    reply: str
+    mode: Optional[str] = "general"
+
+
+class PartyInfo(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    phone: Optional[str] = None
+    tax_id: Optional[str] = None
+    national_id: Optional[str] = None
+
+
+class ItemInfo(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    quantity: Optional[float] = None
+    unit_price: Optional[float] = None
+    total: Optional[float] = None
+
+
+class TotalsInfo(BaseModel):
+    subtotal: Optional[float] = None
+    tax: Optional[float] = None
+    discount: Optional[float] = None
+    grand_total: Optional[float] = None
+
+
+class ChequeInfo(BaseModel):
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch: Optional[str] = None
+    due_date: Optional[str] = Field(None, description="Due date in Jalali format (YYYY/MM/DD)")
+    amount: Optional[float] = None
+    currency: Optional[str] = None
+    payee_name: Optional[str] = None
+
+
+class JournalSuggestion(BaseModel):
+    account_code: str
+    debit: int
+    credit: int
+    reason: Optional[str] = None
+
+
+class DocumentAnalysisResult(BaseModel):
+    doc_type: str
+    title: Optional[str] = None
+    party: Optional[Dict[str, Any]] = None
+    date_issued: Optional[str] = Field(None, description="Issued date in Jalali format (YYYY/MM/DD)")
+    date_due: Optional[str] = Field(None, description="Due date in Jalali format (YYYY/MM/DD)")
+    currency: Optional[str] = None
+    items: Optional[List[ItemInfo]] = []
+    totals: Optional[TotalsInfo] = None
+    cheque_info: Optional[ChequeInfo] = None
+    confidence_scores: Optional[Dict[str, float]] = None
+    raw_text: Optional[str] = None
+    suggested_journal: Optional[List[JournalSuggestion]] = []
 
 
 class SmsSendRequest(BaseModel):
@@ -561,7 +793,9 @@ class UserPreferencesOut(BaseModel):
     auto_convert_currency: bool
     theme_preference: Optional[str]
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -572,6 +806,8 @@ class UserPreferencesUpdate(BaseModel):
     currency: Optional[str] = None
     auto_convert_currency: Optional[bool] = None
     theme_preference: Optional[str] = None
+    sidebar_order: Optional[List[str]] = None
+    sidebar_collapsed: Optional[bool] = None
 
 
 class DeviceLoginOut(BaseModel):
@@ -583,12 +819,16 @@ class DeviceLoginOut(BaseModel):
     country: Optional[str]
     city: Optional[str]
     login_at: datetime
+    login_at_shamsi: Optional[str] = Field(None, description="Login date in Jalali format (YYYY/MM/DD)")
     logout_at: Optional[datetime]
+    logout_at_shamsi: Optional[str] = Field(None, description="Logout date in Jalali format (YYYY/MM/DD)")
     is_active: bool
     otp_attempts: int
     otp_failed_count: int
     otp_locked_until: Optional[datetime]
+    otp_locked_until_shamsi: Optional[str] = Field(None, description="OTP lock until date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -610,9 +850,13 @@ class DeveloperApiKeyOut(BaseModel):
     rate_limit_per_minute: int
     endpoints: Optional[str]
     last_used_at: Optional[datetime]
+    last_used_at_shamsi: Optional[str] = Field(None, description="Last used date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     expires_at: Optional[datetime]
+    expires_at_shamsi: Optional[str] = Field(None, description="Expires at date in Jalali format (YYYY/MM/DD)")
     revoked_at: Optional[datetime]
+    revoked_at_shamsi: Optional[str] = Field(None, description="Revoked date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -648,7 +892,9 @@ class BlockchainEntryOut(BaseModel):
     merkle_root: Optional[str]
     user_id: Optional[int]
     timestamp: datetime
+    timestamp_shamsi: Optional[str] = Field(None, description="Timestamp in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
 
     class Config:
         orm_mode = True
@@ -680,6 +926,7 @@ class CustomerGroupMemberOut(BaseModel):
     group_id: int
     person_id: str
     added_at: datetime
+    added_at_shamsi: Optional[str] = Field(None, description="Added date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -704,7 +951,9 @@ class CustomerGroupOut(BaseModel):
     created_by_user_id: int
     is_shared: bool
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     members: List[CustomerGroupMemberOut] = []
     
     class Config:
@@ -734,8 +983,11 @@ class IccCategoryOut(BaseModel):
     description: Optional[str]
     parent_external_id: Optional[str]
     last_synced_at: Optional[datetime]
+    last_synced_at_shamsi: Optional[str] = Field(None, description="Last synced date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -773,8 +1025,11 @@ class IccCenterOut(BaseModel):
     location_lat: Optional[str]
     location_lng: Optional[str]
     last_synced_at: Optional[datetime]
+    last_synced_at_shamsi: Optional[str] = Field(None, description="Last synced date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -802,12 +1057,15 @@ class IccUnitOut(BaseModel):
     external_id: str
     center_id: int
     name: str
-    description: Optional[str]
-    unit_type: Optional[str]
-    capacity: Optional[int]
-    last_synced_at: Optional[datetime]
+    description: Optional[str] = None
+    unit_type: Optional[str] = None
+    capacity: Optional[int] = None
+    last_synced_at: Optional[datetime] = None
+    last_synced_at_shamsi: Optional[str] = Field(None, description="Last synced date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -839,8 +1097,11 @@ class IccExtensionOut(BaseModel):
     responsible_mobile: Optional[str]
     status: str
     last_synced_at: Optional[datetime]
+    last_synced_at_shamsi: Optional[str] = Field(None, description="Last synced date in Jalali format (YYYY/MM/DD)")
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -857,7 +1118,9 @@ class SystemSettingOut(BaseModel):
     category: Optional[str]
     is_secret: bool
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -881,6 +1144,26 @@ class SystemSettingUpdate(BaseModel):
     is_secret: Optional[bool] = None
 
 
+class PageTemplateBase(BaseModel):
+    name: str
+    html: Optional[str] = ''
+    css: Optional[str] = ''
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class PageTemplateUpsert(PageTemplateBase):
+    id: Optional[int] = None
+
+
+class PageTemplateOut(PageTemplateBase):
+    id: int
+    updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
+
+    class Config:
+        orm_mode = True
+
+
 # Dashboard Widget schemas
 class DashboardWidgetOut(BaseModel):
     id: int
@@ -895,7 +1178,9 @@ class DashboardWidgetOut(BaseModel):
     enabled: bool
     order: int
     created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
     updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
     
     class Config:
         orm_mode = True
@@ -922,3 +1207,121 @@ class DashboardWidgetUpdate(BaseModel):
     config: Optional[str] = None
     enabled: Optional[bool] = None
     order: Optional[int] = None
+
+
+# ========== Token / Blockchain Lite ==========
+
+class TokenAccountOut(BaseModel):
+    address: str
+    balance: int
+    locked: int
+    nonce: int
+    user_id: Optional[int]
+    created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+    updated_at: datetime
+    updated_at_shamsi: Optional[str] = Field(None, description="Updated date in Jalali format (YYYY/MM/DD)")
+
+    class Config:
+        orm_mode = True
+
+
+class TokenTransferRequest(BaseModel):
+    to_address: str
+    amount: int
+    memo: Optional[str] = None
+
+
+class TokenTransferResponse(BaseModel):
+    tx_hash: str
+    block_height: Optional[int]
+    from_address: Optional[str]
+    to_address: str
+    amount: int
+    fee_amount: int
+    balance_after: int
+    created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+
+
+class TokenTxOut(BaseModel):
+    tx_hash: str
+    from_address: Optional[str]
+    to_address: str
+    amount: int
+    fee_amount: int
+    status: str
+    block_height: Optional[int]
+    created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+
+    class Config:
+        orm_mode = True
+
+
+class BlockOut(BaseModel):
+    height: int
+    hash: str
+    previous_hash: Optional[str]
+    merkle_root: Optional[str]
+    proposer: Optional[str]
+    created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+
+    class Config:
+        orm_mode = True
+
+
+class GasEstimateOut(BaseModel):
+    estimated_fee: int
+    service_type: Optional[str] = None
+    details: Optional[dict] = None
+
+
+class ConsumptionLogOut(BaseModel):
+    id: int
+    service_type: str
+    ref_id: Optional[str]
+    cost_token: int
+    created_at: datetime
+    created_at_shamsi: Optional[str] = Field(None, description="Created date in Jalali format (YYYY/MM/DD)")
+
+    class Config:
+        orm_mode = True
+
+
+# ========== External AI ==========
+
+class ProductMatchRequest(BaseModel):
+    name: str
+    category: Optional[str] = None
+    specs: Optional[str] = None
+
+
+class ProductMatchResponse(BaseModel):
+    matched_name: str
+    code: Optional[str] = None
+    warranty_info: Optional[str] = None
+    confidence: float
+    suggestion: Optional[str] = None
+
+
+class InvoiceAnalysisRequest(BaseModel):
+    content: str  # plain text (extracted) for now
+    filename: Optional[str] = None
+
+
+class InvoiceAnalysisLine(BaseModel):
+    description: str
+    quantity: float
+    unit_price: float
+    total: float
+
+
+class InvoiceAnalysisResponse(BaseModel):
+    supplier: Optional[str] = None
+    invoice_number: Optional[str] = None
+    currency: Optional[str] = None
+    items: list[InvoiceAnalysisLine] = []
+    total: Optional[float] = None
+    note: Optional[str] = None

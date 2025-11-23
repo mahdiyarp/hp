@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from . import db, crud, schemas, security
 from .ocr_parser import parse_invoice_file
 from .ocr_parser import parse_payment_file
@@ -8,8 +9,16 @@ import shutil
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 import jdatetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import os
+import json
+import secrets
+import openai
+from app.accounting import fiscal_service
+from app.core import rule_engine
+from app.settings.router import router as settings_router
+from app.sms_router import router as sms_router
+from app.api.routers import assistant as assistant_router
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -26,10 +35,64 @@ from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, SUPPORTED_PROVIDERS
+from app.sms_router import router as sms_router
+from .rate_limit import limiter
+from .middleware.date_conversion import date_conversion_middleware
 
 DB = db
 
 app = FastAPI(title="hesabpak Backend")
+
+# Add date conversion middleware
+app.add_middleware(BaseHTTPMiddleware, dispatch=date_conversion_middleware)
+
+# Add CORS middleware for development - allow frontend origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://172.22.176.1:5173",
+        "http://172.22.176.1:3000",
+        # Add more origins as needed for production
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+TOKEN_BASE_FEE = 1
+SERVICE_FEE_MAP = {
+    'sms': 3,
+    'ai': 5,
+    'store': 10,
+    'user_signup': 2,
+    'transfer': 1,
+}
+
+PAGE_BUILDER_TEMPLATES_KEY = 'page_builder_templates'
+PAGE_BUILDER_CATEGORY = 'page_builder'
+PAGE_BUILDER_DISPLAY = 'Page builder templates'
+
+
+def charge_token_fee(session: Session, user_id: Optional[int], service_type: str, ref_id: Optional[str] = None):
+    if not user_id:
+        return
+    fee = SERVICE_FEE_MAP.get(service_type, TOKEN_BASE_FEE)
+    account = crud.get_or_create_token_account(session, user_id=user_id)
+    if account.balance < fee:
+        raise HTTPException(status_code=402, detail=f'کافی نیست ({fee} token)')
+    crud.record_token_transfer(
+        session=session,
+        from_account=account,
+        to_address='treasury',
+        amount=fee,
+        fee_amount=0,
+        memo=service_type,
+    )
+    crud.add_consumption_log(session, user_id=user_id, service_type=service_type, ref_id=ref_id, cost_token=fee, metadata_json=None)
 
 
 # Simple audit middleware: logs each request/response to audit_logs table
@@ -92,6 +155,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
     if not user:
         raise HTTPException(status_code=401, detail='User not found')
     return user
+
+# Settings router (auth enforced via dependency below)
+app.include_router(settings_router, dependencies=[Depends(get_current_user)])
+app.include_router(sms_router, dependencies=[Depends(get_current_user)])
+app.include_router(assistant_router.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get('/api/admin/activity', response_model=list[schemas.ActivityLogOut])
@@ -258,6 +326,8 @@ def create_user(user: schemas.UserCreate, session: Session = Depends(db.get_db))
 def register(user_in: schemas.UserCreate, session: Session = Depends(db.get_db)):
     try:
         user = crud.create_user(session, user_in)
+        # create token account with initial airdrop
+        crud.get_or_create_token_account(session, user.id)
         return user
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -270,6 +340,8 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
         raise HTTPException(status_code=400, detail='Incorrect username or password')
     if not user.is_active:
         raise HTTPException(status_code=403, detail='User disabled')
+    # ensure token account exists (airdrop handled in CRUD)
+    crud.get_or_create_token_account(session, user.id)
     form = await request.form()
     otp_code = form.get('otp')
     if user.otp_enabled:
@@ -443,7 +515,7 @@ def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = 
 @app.post('/api/auth/register-mobile-otp', response_model=schemas.MobileOTPResponse)
 def register_mobile_otp(payload: schemas.MobileOTPRequest, session: Session = Depends(db.get_db)):
     """
-    موبائل نمبر سے نیا صارف بنانے کے لیے OTP طلب کریں۔
+    موبائل نمبر سے نیا صارف بنانے کے لیے OTP طلب کریں。
     """
     from .sms import create_otp_session, send_sms
     
@@ -564,19 +636,6 @@ def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Ses
         ),
         access_token=access_token,
         refresh_token=refresh_token
-    )
-
-    
-    # ایجاد access token
-    access_token = security.create_access_token(str(user.username), expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = security.create_refresh_token(str(user.username))
-    crud.set_refresh_token(session, user, refresh_token)
-    
-    return schemas.PhoneOtpVerifyResponse(
-        success=True,
-        access_token=access_token,
-        token_type='bearer',
-        message='ورود موفق'
     )
 
 
@@ -775,6 +834,14 @@ def get_invoice(invoice_id: int, session: Session = Depends(db.get_db), current:
     return inv
 
 
+@app.delete('/api/invoices/{invoice_id}')
+def delete_invoice(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    ok = crud.delete_invoice(session, invoice_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Invoice not found')
+    return {'ok': True}
+
 @app.get('/api/invoices/{invoice_id}/payments', response_model=list[PaymentOut])
 def get_invoice_payments(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
@@ -972,7 +1039,7 @@ def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = D
             except Exception:
                 client_time = None
     try:
-        inv = crud.finalize_invoice(session, invoice_id, client_time=client_time)
+        inv = crud.finalize_invoice(session, invoice_id, client_time=client_time, actor_id=current.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if not inv:
@@ -985,7 +1052,7 @@ def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = D
 @app.post('/api/payments/manual', response_model=schemas.PaymentOut)
 def create_payment_manual(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_create'])(current)
-    pay = crud.create_payment_manual(session, payload)
+    pay = crud.create_payment_manual(session, payload, actor_id=current.id)
     return pay
 
 
@@ -1010,7 +1077,7 @@ def parse_payment_upload(file: UploadFile = File(...), current: models.User = De
 @app.post('/api/payments/from-draft', response_model=schemas.PaymentOut)
 def create_payment_from_draft(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_create'])(current)
-    pay = crud.create_payment_manual(session, payload)
+    pay = crud.create_payment_manual(session, payload, actor_id=current.id)
     return pay
 
 
@@ -1147,12 +1214,24 @@ def reports_query(payload: dict, session: Session = Depends(db.get_db), current:
     return {'query': q, 'matches': res}
 
 
+def _parse_iso_dt(dt_str: Optional[str]):
+    if not dt_str:
+        return None
+    try:
+        # normalize trailing Z to +00:00 so datetime.fromisoformat accepts it
+        if isinstance(dt_str, str) and dt_str.endswith('Z'):
+            dt_str = dt_str[:-1] + '+00:00'
+        from datetime import datetime
+        return datetime.fromisoformat(dt_str)
+    except Exception:
+        return None
+
+
 @app.get('/api/reports/pnl')
 def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
-    from datetime import datetime
-    s = datetime.fromisoformat(start) if start else None
-    e = datetime.fromisoformat(end) if end else None
+    s = _parse_iso_dt(start)
+    e = _parse_iso_dt(end)
     out = crud.report_pnl(session, start=s, end=e)
     return out
 
@@ -1160,9 +1239,8 @@ def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session:
 @app.get('/api/reports/person')
 def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
-    from datetime import datetime
-    s = datetime.fromisoformat(start) if start else None
-    e = datetime.fromisoformat(end) if end else None
+    s = _parse_iso_dt(start)
+    e = _parse_iso_dt(end)
     out = crud.report_person_turnover(session, party_id=party_id, party_name=party_name, start=s, end=e)
     return out
 
@@ -1314,6 +1392,12 @@ def api_search(payload: dict, session: Session = Depends(db.get_db), current: mo
 @app.post('/api/admin/ai_reports/run', response_model=schemas.AIReportOut)
 def run_ai_report(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin'])(current)
+    try:
+        charge_token_fee(session, current.id if hasattr(current, 'id') else None, 'ai', ref_id='ai_report')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'fee charge failed: {e}')
     from .ai_analyzer import analyze_period, run_and_persist
     from datetime import datetime
     s = None
@@ -1365,29 +1449,116 @@ def download_backup(bid: int, session: Session = Depends(db.get_db), current: mo
     return FileResponse(bk.file_path, filename=bk.filename or 'backup.json')
 
 
-@app.post('/api/financial-years', response_model=schemas.FinancialYearOut)
-def create_financial_year(payload: schemas.FinancialYearIn, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+@app.post('/api/fiscal-years', response_model=schemas.FiscalYearOut)
+def create_fiscal_year(payload: schemas.FiscalYearCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin'])(current)
     try:
-        fy = crud.create_financial_year(session, name=payload.name, start_date=payload.start_date.isoformat(), end_date=payload.end_date.isoformat() if payload.end_date else None)
+        fy = fiscal_service.create_fiscal_year(
+            session=session,
+            title=payload.title,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            is_current=payload.is_current,
+        )
         return fy
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except fiscal_service.FiscalYearError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get('/api/financial-years', response_model=list[schemas.FinancialYearOut])
-def list_financial_years(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin'])(current)
-    return crud.get_financial_years(session)
+@app.get('/api/fiscal-years', response_model=list[schemas.FiscalYearOut])
+def list_fiscal_years(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    return fiscal_service.list_fiscal_years(session)
 
 
-@app.post('/api/financial-years/{fid}/close', response_model=schemas.FinancialYearOut)
-def close_financial_year_endpoint(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin'])(current)
-    fy = crud.close_financial_year(session, fid, create_rollover=True, closed_by=current.id)
+@app.get('/api/fiscal-years/current', response_model=schemas.FiscalYearOut)
+def get_current_fiscal_year(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    fy = fiscal_service.get_current_year(session)
     if not fy:
-        raise HTTPException(status_code=404, detail='Financial year not found')
+        raise HTTPException(status_code=404, detail='سال مالی فعالی وجود ندارد.')
     return fy
+
+
+@app.post('/api/fiscal-years/{fid}/activate', response_model=schemas.FiscalYearOut)
+def activate_fiscal_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    try:
+        fy = fiscal_service.set_current_year(session, fid)
+        return fy
+    except fiscal_service.FiscalYearError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post('/api/fiscal-years/{fid}/close', response_model=schemas.FiscalYearActionResult)
+def close_fiscal_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    try:
+        fy, re = fiscal_service.close_year(session, fid, closed_by=current.username if current else None, create_rollover=True)
+        return {'fiscal_year': fy, 'warnings': re.warnings, 'status': 'closed'}
+    except fiscal_service.FiscalYearError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except rule_engine.RuleEngineError as rex:
+        raise HTTPException(status_code=400, detail=rex.errors[0].message if rex.errors else 'خطای سال مالی')
+
+
+@app.post('/api/fiscal-years/{fid}/lock', response_model=schemas.FiscalYearActionResult)
+def lock_fiscal_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    try:
+        fy = fiscal_service.lock_year(session, fid, closed_by=current.username if current else None)
+        return {'fiscal_year': fy, 'warnings': [], 'status': 'locked'}
+    except fiscal_service.FiscalYearError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# Backward-compatibility aliases
+@app.post('/api/financial-years', response_model=schemas.FiscalYearOut)
+def legacy_create_financial_year(payload: schemas.FiscalYearCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    return create_fiscal_year(payload, session, current)
+
+
+@app.get('/api/financial-years', response_model=list[schemas.FiscalYearOut])
+def legacy_list_financial_years(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    return list_fiscal_years(session, current)
+
+
+@app.post('/api/financial-years/{fid}/close', response_model=schemas.FiscalYearActionResult)
+def legacy_close_financial_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    return close_fiscal_year(fid, session, current)
+
+
+@app.get('/api/financial/auto-context')
+def financial_auto_context(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    from .financial_automation import auto_determine_financial_context, get_smart_date_suggestions
+    ctx = auto_determine_financial_context(session)
+    suggestions = get_smart_date_suggestions(session)
+    return {'context': ctx, 'date_suggestions': suggestions}
+
+
+@app.get('/api/users/preferences/sidebar-order')
+def get_sidebar_order(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    prefs = crud.get_user_preferences(session, current.id) or crud.create_user_preferences(session, current.id)
+    order = []
+    try:
+        order = json.loads(prefs.sidebar_order) if prefs.sidebar_order else []
+    except Exception:
+        order = []
+    return order
+
+
+@app.post('/api/users/preferences/sidebar-order')
+def set_sidebar_order(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    order = payload.get('order', [])
+    collapsed = bool(payload.get('collapsed', False))
+    prefs = crud.get_user_preferences(session, current.id) or crud.create_user_preferences(session, current.id)
+    prefs.sidebar_order = json.dumps(order, ensure_ascii=False) if order is not None else None
+    prefs.sidebar_collapsed = collapsed
+    session.add(prefs)
+    session.commit()
+    session.refresh(prefs)
+    return {'order': order, 'collapsed': collapsed}
 
 
 @app.get('/api/admin/ai_reports/{rid}', response_model=schemas.AIReportOut)
@@ -1399,363 +1570,41 @@ def get_ai_report(rid: int, session: Session = Depends(db.get_db), current: mode
     return r
 
 
-@app.patch('/api/admin/ai_reports/{rid}', response_model=schemas.AIReportOut)
-def review_ai_report(rid: int, payload: schemas.AIReportReview, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin'])(current)
-    status = payload.status
-    if status not in ['approved', 'dismissed', 'reviewed']:
-        raise HTTPException(status_code=400, detail='invalid status')
-    rep = crud.review_ai_report(session, rid, status=status, reviewer_id=current.id if hasattr(current, 'id') else None)
-    if not rep:
-        raise HTTPException(status_code=404, detail='Report not found')
-    # log the review action
+@app.get('/api/accounts', response_model=list[schemas.AccountOut])
+def list_accounts(kind: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    return crud.list_accounts(session, kind=kind)
+
+
+@app.post('/api/accounts', response_model=schemas.AccountOut)
+def create_account(payload: schemas.AccountCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     try:
-        log_activity(session, current.username if hasattr(current, 'username') else None, f"بررسی گزارش هوش مصنوعی {rid} - وضعیت: {status}", path=f"/api/admin/ai_reports/{rid}", method='PATCH', status_code=200, detail={'note': payload.note})
-    except Exception:
-        pass
-    return rep
+        return crud.create_account(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get('/api/search/live')
-def api_search_live(q: Optional[str] = None, index: Optional[str] = 'products', limit: Optional[int] = 7, current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
-    if not q:
-        return {'hits': []}
-    hits = suggest_live(q, index=index, limit=limit)
-    return {'hits': hits}
-
-
-@app.post("/api/products", response_model=ProductOut)
-def api_create_product(p: ProductCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # basic RBAC: only Accountant or Admin can create products
-    require_roles(role_names=["Admin", "Accountant"])(current)
-    prod = crud.create_product(session, p)
-    return prod
-
-
-@app.get("/api/products")
-def api_get_products(q: Optional[str] = None, limit: int = 50, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # viewers and above can list
-    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
-    limit = max(1, min(int(limit or 50), 500))
-    return crud.get_products(session, q=q, limit=limit)
-
-
-
-@app.post('/api/products/external/search')
-def api_products_external_search(payload: ExternalSearchRequest, current: models.User = Depends(get_current_user)):
-    """Search external Iranian marketplaces (Digikala, Torob, Emalls) and return aggregated results.
-    This is best-effort scraping and may be rate-limited or blocked by the remote sites.
-    """
-    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
-    q = payload.q
-    sources = payload.sources
-    limit = int(payload.limit or 6)
+@app.put('/api/accounts/{account_id}', response_model=schemas.AccountOut)
+def update_account(account_id: str, payload: schemas.AccountUpdate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
     try:
-        res = external_search.aggregate_search(q, sources=sources, limit=limit)
-        return res
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        acc = crud.update_account(session, account_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not acc:
+        raise HTTPException(status_code=404, detail='Account not found')
+    return acc
 
 
-@app.post('/api/products/external/save', response_model=ProductOut)
-def api_products_external_save(payload: SaveExternalProductRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    """Save an external product result as a local product so it can be used in invoices.
-    The external metadata is embedded into the product description as JSON. Optionally a price history entry is added.
-    """
-    require_roles(role_names=["Admin", "Accountant"])(current)
-    try:
-        external = {
-            'source': payload.source,
-            'title': payload.title,
-            'price': payload.price,
-            'currency': payload.currency,
-            'image': payload.image,
-            'description': payload.description,
-            'link': payload.link,
-        }
-        prod = crud.create_product_from_external(session, external=external, unit=payload.unit, group=payload.group, create_price_history=payload.create_price_history)
-        return prod
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get('/api/products/{product_id}/movement')
-def product_movement(product_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    """Get movement history for a product with invoice and party details"""
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
-    
-    # Get product details
-    product = session.query(models.Product).filter(models.Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail='Product not found')
-    
-    # Get all invoice items for this product
-    invoice_items = session.query(models.InvoiceItem).filter(
-        models.InvoiceItem.product_id == product_id
-    ).order_by(models.InvoiceItem.id.desc()).all()
-    
-    movements = []
-    current_stock = product.inventory or 0
-    
-    for item in invoice_items:
-        invoice = session.query(models.Invoice).filter(models.Invoice.id == item.invoice_id).first()
-        if not invoice:
-            continue
-            
-        person = None
-        if invoice.party_id:
-            person = session.query(models.Person).filter(models.Person.id == invoice.party_id).first()
-        
-        # Determine movement type based on invoice type
-        is_sale = invoice.invoice_type == 'sale'
-        is_purchase = invoice.invoice_type == 'purchase'
-        quantity_change = -item.quantity if is_sale else item.quantity if is_purchase else 0
-        
-        movements.append({
-            'id': item.id,
-            'invoice_id': invoice.id,
-            'invoice_number': invoice.invoice_number,
-            'invoice_date': (invoice.client_time or invoice.server_time).isoformat() if (invoice.client_time or invoice.server_time) else None,
-            'invoice_type': invoice.invoice_type,
-            'direction': 'out' if is_sale else 'in' if is_purchase else 'neutral',
-            'type': 'فروش' if is_sale else 'خرید' if is_purchase else 'سایر',
-            'quantity': item.quantity,
-            'quantity_change': quantity_change,
-            'unit_price': item.unit_price,
-            'total_price': item.total or (item.unit_price * item.quantity),
-            'party': {
-                'id': person.id,
-                'name': person.name,
-                'kind': person.kind,
-            } if person else None,
-            'status': invoice.status,
-        })
-    
-    # Calculate running stock (from most recent backwards)
-    running_stock = current_stock
-    for movement in movements:
-        movement['stock_after'] = running_stock
-        running_stock -= movement['quantity_change']
-        movement['stock_before'] = running_stock
-    
-    return {
-        'product': {
-            'id': product.id,
-            'name': product.name,
-            'unit': product.unit,
-            'group': product.group,
-            'current_stock': current_stock,
-        },
-        'movements': movements,
-        'total_movements': len(movements),
-    }
-
-
-@app.get('/api/sms/providers', response_model=list[schemas.IntegrationConfigOut])
-def list_sms_providers(session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
-    cfgs = session.query(models.IntegrationConfig).filter(models.IntegrationConfig.provider.in_(list(SUPPORTED_PROVIDERS))).all()
-    out = []
-    for c in cfgs:
-        out.append({
-            'id': c.id,
-            'name': c.name,
-            'provider': c.provider,
-            'enabled': c.enabled,
-            'api_key': None,
-            'config': c.config,
-            'last_updated': c.last_updated,
-        })
-    return out
-
-
-@app.post('/api/sms/send')
-def api_sms_send(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
-    to = (payload or {}).get('to')
-    msg = (payload or {}).get('message')
-    provider = (payload or {}).get('provider')
-    if not to or not msg:
-        raise HTTPException(status_code=400, detail='to and message required')
-    ok, info = send_sms(session, to, msg, provider)
+@app.delete('/api/accounts/{account_id}')
+def delete_account(account_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    ok = crud.delete_account(session, account_id)
     if not ok:
-        raise HTTPException(status_code=502, detail=info)
-    try:
-        log_activity(session, current.username if hasattr(current, 'username') else None, f"ارسال پیامک به {to}")
-    except Exception:
-        pass
-    return {"ok": True, "detail": info}
+        raise HTTPException(status_code=404, detail='Account not found')
+    return {'deleted': True}
 
-
-@app.post('/api/sms/register-user', response_model=schemas.UserOut)
-def api_sms_register_user(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
-    import secrets, string
-    username = (payload or {}).get('username')
-    mobile = (payload or {}).get('mobile')
-    full_name = (payload or {}).get('full_name')
-    role_id = (payload or {}).get('role_id')
-    if not username or not mobile:
-        raise HTTPException(status_code=400, detail='username and mobile required')
-    alphabet = string.ascii_letters + string.digits
-    temp_pass = ''.join(secrets.choice(alphabet) for _ in range(10))
-    try:
-        u = crud.create_user(session, schemas.UserCreate(username=username, password=temp_pass, full_name=full_name, role_id=role_id, email=None))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    msg = f"کاربر شما در حساب‌پاک ایجاد شد.\nنام کاربری: {username}\nرمز عبور: {temp_pass}"
-    ok, info = send_sms(session, mobile, msg, None)
-    if not ok:
-        try:
-            session.delete(u)
-            session.commit()
-        except Exception:
-            pass
-        raise HTTPException(status_code=502, detail=f'SMS failed: {info}')
-    try:
-        log_activity(session, current.username if hasattr(current, 'username') else None, f"ایجاد کاربر {username} و ارسال پیامک")
-    except Exception:
-        pass
-    return u
-
-
-@app.post('/api/assistant/query', response_model=AssistantResponse)
-def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # execute assistant command on behalf of the current user if enabled
-    res = None
-    try:
-        res = __import__('app.ai_assistant', fromlist=['']).run_assistant(session, current, payload.text)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    if not isinstance(res, dict):
-        raise HTTPException(status_code=500, detail='assistant error')
-    # map to AssistantResponse
-    return AssistantResponse(ok=bool(res.get('ok')), message=res.get('message', ''), data={k: v for k, v in res.items() if k not in ('ok', 'message')})
-
-
-@app.post('/api/assistant/toggle', response_model=schemas.UserOut)
-def api_assistant_toggle(payload: AssistantToggle, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # allow user to toggle their own assistant
-    try:
-        u = crud.set_assistant_enabled(session, current.id, bool(payload.enabled))
-        # log action
-        try:
-            log_activity(session, current.username if hasattr(current, 'username') else None, f"تغییر وضعیت دستیار به {payload.enabled}")
-        except Exception:
-            pass
-        return u
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post('/api/exports/invoice/{invoice_id}')
-def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
-    try:
-        if format == 'pdf':
-            path = export_invoice_pdf(session, invoice_id)
-        elif format == 'csv':
-            path = export_invoice_csv(session, invoice_id)
-        elif format in ('xls','xlsx'):
-            path = export_invoice_excel(session, invoice_id)
-        else:
-            raise HTTPException(status_code=400, detail='unsupported format')
-        # create share token
-        import secrets
-        token = secrets.token_urlsafe(18)
-        filename = os.path.basename(path)
-        # default expiry 24h
-        from datetime import datetime, timedelta
-        expires = datetime.utcnow() + timedelta(hours=24)
-        sf = crud.create_shared_file(session, token=token, file_path=path, filename=filename, created_by=current.id, expires_at=expires.isoformat())
-        link = f"/api/exports/shared/{token}"
-        return {'token': token, 'download_url': link, 'expires_at': sf.expires_at}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get('/api/exports/shared/{token}')
-def download_shared_file(token: str):
-    # public download of shared file if not expired
-    # create a short-lived session to lookup the shared file
-    sf = crud.get_shared_file_by_token(DB.SessionLocal(), token)
-    if not sf:
-        raise HTTPException(status_code=404, detail='not found')
-    from datetime import datetime
-    if sf.expires_at and sf.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail='expired')
-    # serve file
-    from fastapi.responses import FileResponse
-    return FileResponse(sf.file_path, filename=sf.filename or os.path.basename(sf.file_path))
-
-
-@app.get('/api/prints/invoice/{invoice_id}', response_class=HTMLResponse)
-def print_invoice_html(invoice_id: int):
-    """Return a responsive HTML invoice template that will fetch invoice JSON and render for print."""
-    tpl = os.path.join(os.path.dirname(__file__), '..', 'templates', 'invoice.html')
-    if not os.path.exists(tpl):
-        raise HTTPException(status_code=404, detail='template not found')
-    return FileResponse(tpl, media_type='text/html')
-
-
-@app.post("/api/persons", response_model=PersonOut)
-def api_create_person(p: PersonCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=["Admin", "Accountant"])(current)
-    person = crud.create_person(session, p)
-    return person
-
-
-@app.get("/api/persons")
-def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
-    return crud.get_persons(session, q=q)
-
-
-@app.get('/api/financial/auto-context')
-def get_financial_auto_context(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    """Get smart financial context - auto-creates current financial year and provides date suggestions"""
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
-    try:
-        from .financial_automation import auto_determine_financial_context, get_smart_date_suggestions
-        
-        context = auto_determine_financial_context(session)
-        suggestions = get_smart_date_suggestions(session)
-        
-        return {
-            "context": context,
-            "date_suggestions": suggestions,
-            "blockchain_ready": True,  # هنگامی که در آینده با blockchain ادغام شود
-            "auto_managed": True
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post('/api/financial/smart-year')
-def create_smart_financial_year(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    """Auto-create financial year based on current Jalali calendar"""
-    require_roles(role_names=['Admin'])(current)
-    try:
-        from .financial_automation import get_or_create_current_financial_year
-        
-        fy = get_or_create_current_financial_year(session)
-        
-        return {
-            "financial_year": {
-                "id": fy.id,
-                "name": fy.name,
-                "start_date": fy.start_date.isoformat() if fy.start_date else None,
-                "end_date": fy.end_date.isoformat() if fy.end_date else None,
-                "is_closed": fy.is_closed
-            },
-            "auto_created": True,
-            "blockchain_compatible": True
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ==================== Users Management Endpoints ====================
 
 @app.get('/api/roles', response_model=List[schemas.RoleOut])
 async def list_roles(current: models.User = Depends(require_roles(role_ids=[1])), session: Session = Depends(db.get_db)):
@@ -1871,6 +1720,12 @@ async def create_user_endpoint(
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
+    try:
+        charge_token_fee(session, current.id if hasattr(current, 'id') else None, 'user_signup', ref_id=str(db_user.id))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'کسر توکن برای ایجاد کاربر شکست خورد: {e}')
     
     log_activity(session, current.id, f'/api/users', 'POST', 201, f'کاربر {user.username} ایجاد شد')
     return db_user
@@ -1919,7 +1774,8 @@ async def delete_user(
     session.delete(user)
     session.commit()
     
-    log_activity(session, current.id, f'/api/users/{user_id}', 'DELETE', 200, f'کاربر {username} حذف شد')
+    log_activity(session, current.id, f'/api/users/{user_id}', 'DELETE', 200, 
+                f'کاربر {username} حذف شد')
     return {'detail': 'کاربر حذف شد'}
 
 
@@ -1969,117 +1825,6 @@ async def get_user_preferences(
     return prefs
 
 
-@app.get('/api/users/preferences/sidebar-order')
-def get_sidebar_order(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
-    """Return saved sidebar order for the current user (list of module ids) or []"""
-    key = f'user_sidebar_order:{current.id}'
-    # Use existing CRUD helper to fetch system setting; stored as JSON in SystemSettings.value
-    try:
-        setting = crud.get_system_setting(session, key)
-    except Exception:
-        setting = None
-    if not setting or not setting.value:
-        return []
-    import json
-    try:
-        return json.loads(setting.value)
-    except Exception:
-        # If stored value is plain string or malformed, return empty list
-        return []
-
-
-@app.post('/api/users/preferences/sidebar-order')
-def set_sidebar_order(payload: dict, current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
-    """Persist sidebar order for the current user. Expects JSON body: { order: ["dashboard","sales",...] }"""
-    order = payload.get('order') if isinstance(payload, dict) else None
-    if not isinstance(order, list):
-        raise HTTPException(status_code=400, detail='order must be a list of module ids')
-    key = f'user_sidebar_order:{current.id}'
-    # store as json string in system_settings table
-    import json
-    existing = None
-    try:
-        existing = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
-        if existing:
-            existing.value = json.dumps(order, ensure_ascii=False)
-            existing.setting_type = 'json'
-            existing.updated_by = current.id
-            session.add(existing)
-        else:
-            ss = models.SystemSettings(key=key, value=json.dumps(order, ensure_ascii=False), setting_type='json', display_name=f'Sidebar order for user {current.id}', category='user_pref', is_secret=False, updated_by=current.id)
-            session.add(ss)
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    return {'ok': True}
-
-
-@app.get('/api/users/preferences/sidebar-side')
-def get_sidebar_side(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
-    """Return saved sidebar side for the current user ('left'|'right') or empty string"""
-    key = f'user_sidebar_side:{current.id}'
-    try:
-        setting = crud.get_system_setting(session, key)
-    except Exception:
-        setting = None
-    if not setting or not setting.value:
-        return ''
-    try:
-        return setting.value
-    except Exception:
-        return ''
-
-
-@app.post('/api/users/preferences/sidebar-side')
-def set_sidebar_side(payload: dict, current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
-    """Persist sidebar side for the current user. Expects JSON body: { side: 'left'|'right' }"""
-    side = payload.get('side') if isinstance(payload, dict) else None
-    if side not in ('left', 'right'):
-        raise HTTPException(status_code=400, detail="side must be 'left' or 'right'")
-    key = f'user_sidebar_side:{current.id}'
-    try:
-        existing = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
-        if existing:
-            existing.value = side
-            existing.setting_type = 'string'
-            existing.updated_by = current.id
-            session.add(existing)
-        else:
-            ss = models.SystemSettings(key=key, value=side, setting_type='string', display_name=f'Sidebar side for user {current.id}', category='user_pref', is_secret=False, updated_by=current.id)
-            session.add(ss)
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    return {'ok': True}
-
-
-@app.put('/api/users/preferences', response_model=schemas.UserPreferencesOut)
-async def update_user_preferences(
-    payload: schemas.UserPreferencesUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """به‌روزرسانی تنظیمات کاربر فعلی"""
-    # Validate language and currency
-    valid_languages = ['fa', 'en', 'ar', 'ku']
-    valid_currencies = ['irr', 'usd', 'aed']
-    
-    if payload.language and payload.language not in valid_languages:
-        raise HTTPException(status_code=400, detail=f'زبان نامعتبر است. موارد قابل قبول: {valid_languages}')
-    
-    if payload.currency and payload.currency not in valid_currencies:
-        raise HTTPException(status_code=400, detail=f'واحد پولی نامعتبر است. موارد قابل قبول: {valid_currencies}')
-    
-    prefs = crud.get_user_preferences(session, current.id)
-    if not prefs:
-        prefs = crud.create_user_preferences(session, current.id)
-    
-    prefs = crud.update_user_preferences(session, current.id, payload)
-    return prefs
-
-
 @app.get('/api/security/devices', response_model=List[schemas.DeviceLoginOut])
 async def get_user_devices(
     current: models.User = Depends(get_current_user),
@@ -2108,10 +1853,11 @@ async def logout_from_device(
     success = crud.logout_device(session, device_id)
     
     if success:
-        log_activity(session, current.id, f'/api/security/devices/{device_id}', 'DELETE', 200, f'خروج از دستگاه {device_id}')
+        log_activity(session, current.id, f'/api/security/devices/{device_id}', 'DELETE', 200, 
+                    f'خروج از دستگاه {device_id}')
         return {'detail': 'شما از این دستگاه خارج شدید'}
     
-    raise HTTPException(status_code=500, detail='خروج ناموفق بود')
+    raise HTTPException(status_code=500, detail='خارج کردن ناموفق بود')
 
 
 @app.get('/api/security/login-history')
@@ -2207,7 +1953,10 @@ async def rotate_api_key(
     if old_key.user_id != current.id:
         raise HTTPException(status_code=403, detail='مجاز به چرخش این کلید نیستید')
     
-    new_key, plain_key = crud.rotate_api_key(session, key_id)
+    try:
+        new_key, plain_key = crud.rotate_api_key(session, key_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
     
     log_activity(session, current.id, f'/api/developer/keys/{key_id}/rotate', 'POST', 200, 
                 f'کلید API {old_key.name} چرخش داده شد')
@@ -2374,8 +2123,7 @@ async def get_audit_log(
     session: Session = Depends(db.get_db),
     limit: int = 100
 ):
-    """
-    دریافت blockchain audit log برای کاربر فعلی
+    """دریافت blockchain audit log برای کاربر فعلی
     نمایش تمام تغییرات ثبت شده توسط user
     """
     from . import blockchain
@@ -2453,36 +2201,11 @@ async def update_customer_group(
     """
     به‌روزرسانی گروه مشتری
     """
-    group = crud.get_customer_group(session, group_id)
+    group = crud.update_customer_group(session, group_id, payload)
     if not group:
         raise HTTPException(status_code=404, detail='گروه یافت نشد')
     
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را تغییر دهد')
-    
-    updated = crud.update_customer_group(session, group_id, payload)
-    return updated
-
-
-@app.patch('/api/customer-groups/{group_id}', response_model=schemas.CustomerGroupOut)
-async def patch_customer_group(
-    group_id: int,
-    payload: schemas.CustomerGroupUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    به‌روزرسانی جزئی گروه مشتری
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را تغییر دهد')
-    
-    updated = crud.update_customer_group(session, group_id, payload)
-    return updated
+    return group
 
 
 @app.delete('/api/customer-groups/{group_id}')
@@ -2491,9 +2214,7 @@ async def delete_customer_group(
     current: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_db)
 ):
-    """
-    حذف گروه مشتری
-    """
+    """حذف گروه مشتری"""
     group = crud.get_customer_group(session, group_id)
     if not group:
         raise HTTPException(status_code=404, detail='گروه یافت نشد')
@@ -2639,6 +2360,12 @@ async def create_icc_center(
     session: Session = Depends(db.get_db)
 ):
     """ایجاد مرکز ICC"""
+    try:
+        charge_token_fee(session, current.id if hasattr(current, 'id') else None, 'store', ref_id=f'icc_center:{payload.name}')
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'کسر توکن برای ایجاد مرکز شکست خورد: {exc}')
     center = crud.create_icc_center(session, payload)
     return center
 
@@ -2704,6 +2431,12 @@ async def create_icc_unit(
     session: Session = Depends(db.get_db)
 ):
     """ایجاد واحد ICC"""
+    try:
+        charge_token_fee(session, current.id if hasattr(current, 'id') else None, 'store', ref_id=f'icc_unit:{payload.name}')
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'کسر توکن برای ایجاد واحد شکست خورد: {exc}')
     unit = crud.create_icc_unit(session, payload)
     return unit
 
@@ -2769,6 +2502,12 @@ async def create_icc_extension(
     session: Session = Depends(db.get_db)
 ):
     """ایجاد شاخه ICC"""
+    try:
+        charge_token_fee(session, current.id if hasattr(current, 'id') else None, 'store', ref_id=f'icc_extension:{payload.name}')
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f'کسر توکن برای ایجاد شعبه شکست خورد: {exc}')
     extension = crud.create_icc_extension(session, payload)
     return extension
 
@@ -2992,7 +2731,7 @@ async def reorder_widgets(
     current: models.User = Depends(get_current_user),
     session: Session = Depends(db.get_db)
 ):
-    """تغییر موقعیت و اندازه widgets (برای drag-and-drop)"""
+    """تغییر ترتیب و اندازه widgets (برای drag-and-drop)"""
     widgets = payload.get('widgets', [])
     success = crud.reorder_dashboard_widgets(session, current.id, widgets)
     if not success:
@@ -3018,7 +2757,7 @@ async def test_send_sms(
         raise HTTPException(status_code=400, detail='mobile و message الزامی است')
     
     from .sms import send_sms
-    success, msg = send_sms(session, mobile, message)
+    success, msg = send_sms(session, mobile, message, user_id=current.id if current else None)
     
     return {
         'success': success,
@@ -3026,3 +2765,421 @@ async def test_send_sms(
         'mobile': mobile,
         'text': message
     }
+
+
+# ========== Token / Blockchain Lite API ==========
+
+
+def _estimate_fee(service_type: Optional[str]) -> int:
+    if service_type and service_type in SERVICE_FEE_MAP:
+        return SERVICE_FEE_MAP[service_type]
+    return TOKEN_BASE_FEE
+
+
+@app.get('/api/token/balance', response_model=schemas.TokenAccountOut)
+async def get_token_balance(
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    """دریافت بالانس توکن کاربر (همراه airdrop اولیه برای حساب‌های جدید)"""
+    account = crud.get_or_create_token_account(session, current.id)
+    return account
+
+
+@app.get('/api/token/tx', response_model=List[schemas.TokenTxOut])
+async def list_token_tx(
+    limit: int = 50,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    """لیست تراکنش‌های توکن برای آدرس کاربر"""
+    account = crud.get_or_create_token_account(session, current.id)
+    txs = crud.list_token_transactions(session, account.address, limit=limit)
+    return txs
+
+
+@app.post('/api/token/transfer', response_model=schemas.TokenTransferResponse)
+async def transfer_token(
+    payload: schemas.TokenTransferRequest,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    """انتقال توکن بین کاربران/آدرس‌ها با fee ساده"""
+    to_address = payload.to_address.strip()
+    if not to_address:
+        raise HTTPException(status_code=400, detail='آدرس مقصد خالی است')
+    fee = _estimate_fee('transfer')
+    from_account = crud.get_or_create_token_account(session, current.id)
+    try:
+        tx, _ = crud.record_token_transfer(
+            session=session,
+            from_account=from_account,
+            to_address=to_address,
+            amount=payload.amount,
+            fee_amount=fee,
+            memo=payload.memo,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    balance_after = session.query(models.TokenAccount.balance).filter(models.TokenAccount.id == from_account.id).scalar() if from_account else 0
+    return schemas.TokenTransferResponse(
+        tx_hash=tx.tx_hash,
+        block_height=tx.block_height,
+        from_address=tx.from_address,
+        to_address=tx.to_address,
+        amount=tx.amount,
+        fee_amount=tx.fee_amount,
+        balance_after=balance_after or 0,
+        created_at=tx.created_at,
+    )
+
+
+@app.get('/api/token/gas-estimate', response_model=schemas.GasEstimateOut)
+async def estimate_token_fee(service_type: Optional[str] = None):
+    """برآورد fee ساده برای سرویس‌های پرهزینه (sms/ai/store)"""
+    fee = _estimate_fee(service_type)
+    return schemas.GasEstimateOut(estimated_fee=fee, service_type=service_type, details={'base': SERVICE_FEE_MAP})
+
+
+@app.get('/api/blockchain/blocks', response_model=List[schemas.BlockOut])
+async def list_blocks(
+    limit: int = 50,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    """نمایش بلاک‌های اخیر (حالت تک‌نودی)"""
+    blocks = crud.list_blocks(session, limit=limit)
+    return blocks
+
+
+# ========== External AI (product-match / invoice-analysis) ==========
+
+
+def _get_openai_key(session: Session) -> Optional[str]:
+    setting = session.query(models.SystemSettings).filter(
+        models.SystemSettings.key == 'openai_api_key',
+        models.SystemSettings.category == 'ai'
+    ).first()
+    if not setting:
+        return None
+    try:
+        return security.decrypt_value(setting.value) if setting.is_secret else setting.value
+    except Exception:
+        return None
+
+
+@app.post('/api/external/ai/product-match', response_model=schemas.ProductMatchResponse)
+def ai_product_match(payload: schemas.ProductMatchRequest, request: Request, session: Session = Depends(db.get_db)):
+    """Allow access via Developer API key (x-api-key) or user token. If developer key provided, skip token charge.
+    """
+    # Resolve auth: prefer x-api-key
+    xkey = request.headers.get('x-api-key') or request.headers.get('X-API-KEY')
+    dev_key = None
+    user = None
+    if xkey:
+        kh = crud.hash_api_key(xkey)
+        dev_key = crud.get_api_key_by_hash(session, kh)
+        if not dev_key:
+            raise HTTPException(status_code=401, detail='Invalid API key')
+        # update last used
+        try:
+            crud.update_api_key_last_used(session, dev_key.id)
+        except Exception:
+            pass
+    else:
+        # try bearer token
+        auth = request.headers.get('authorization')
+        if not auth or not auth.lower().startswith('bearer '):
+            raise HTTPException(status_code=401, detail='Authentication required')
+        token = auth.split(None, 1)[1]
+        try:
+            payload_tok = security.decode_token(token)
+            username = payload_tok.get('sub')
+            if not username:
+                raise Exception('invalid token payload')
+            user = crud.get_user_by_username(session, username)
+            if not user:
+                raise HTTPException(status_code=401, detail='User not found')
+        except Exception:
+            raise HTTPException(status_code=401, detail='Invalid token')
+
+    # rate limit: determine key: prefer developer api key hash, else user id
+    rl_key = None
+    rl_rate = 50  # default per-minute for ai product-match
+    if dev_key:
+        rl_key = f"dev:{dev_key.api_key_hash}"
+        rl_rate = int(dev_key.rate_limit_per_minute or rl_rate)
+    elif user:
+        rl_key = f"user:{user.id}"
+        rl_rate = 50
+    else:
+        rl_key = f"ip:{request.client.host if request.client else 'anon'}"
+
+    if not limiter.allow(rl_key, rate_per_min=rl_rate, burst=max(rl_rate, 5)):
+        raise HTTPException(status_code=429, detail='Rate limit exceeded')
+
+    # charge token fee only for user-based requests
+    if user:
+        try:
+            charge_token_fee(session, user.id if hasattr(user, 'id') else None, 'ai', ref_id='product-match')
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f'fee charge failed: {e}')
+
+    key = _get_openai_key(session)
+    if not key:
+        raise HTTPException(status_code=400, detail='OpenAI key not configured')
+    client = openai.OpenAI(api_key=key)
+    prompt = f"Suggest best matching product name, global code, warranty info for: {payload.name}. Category: {payload.category or 'n/a'}. Specs: {payload.specs or 'n/a'}. Respond JSON with keys matched_name, code, warranty_info, confidence(0-1), suggestion."
+    try:
+        resp = client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt,
+            max_output_tokens=200,
+        )
+        content = resp.output[0].content[0].text if resp.output else ''
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'AI call failed: {e}')
+    # naive parse: look for JSON-like pairs
+    matched = payload.name.title()
+    import hashlib, re, json as _json
+    code = hashlib.sha256(payload.name.encode()).hexdigest()[:10].upper()
+    warranty = "12-month standard"
+    confidence = 0.7
+    suggestion = payload.name
+    try:
+        m = re.search(r'\{.*\}', content, re.S)
+        if m:
+            data = _json.loads(m.group(0))
+            matched = data.get('matched_name', matched)
+            code = data.get('code', code)
+            warranty = data.get('warranty_info', warranty)
+            confidence = float(data.get('confidence', confidence))
+            suggestion = data.get('suggestion', suggestion)
+    except Exception:
+        pass
+    return schemas.ProductMatchResponse(
+        matched_name=str(matched),
+        code=str(code),
+        warranty_info=str(warranty),
+        confidence=confidence,
+        suggestion=str(suggestion),
+    )
+
+
+@app.post('/api/external/ai/invoice-analysis', response_model=schemas.InvoiceAnalysisResponse)
+def ai_invoice_analysis(payload: schemas.InvoiceAnalysisRequest, request: Request, session: Session = Depends(db.get_db)):
+    """Allow access via Developer API key (x-api-key) or user token. If developer key provided, skip token charge.
+    """
+    xkey = request.headers.get('x-api-key') or request.headers.get('X-API-KEY')
+    dev_key = None
+    user = None
+    if xkey:
+        kh = crud.hash_api_key(xkey)
+        dev_key = crud.get_api_key_by_hash(session, kh)
+        if not dev_key:
+            raise HTTPException(status_code=401, detail='Invalid API key')
+        # update last used
+        try:
+            crud.update_api_key_last_used(session, dev_key.id)
+        except Exception:
+            pass
+    else:
+        auth = request.headers.get('authorization')
+        if not auth or not auth.lower().startswith('bearer '):
+            raise HTTPException(status_code=401, detail='Authentication required')
+        token = auth.split(None, 1)[1]
+        try:
+            payload_tok = security.decode_token(token)
+            username = payload_tok.get('sub')
+            if not username:
+                raise Exception('invalid token payload')
+            user = crud.get_user_by_username(session, username)
+            if not user:
+                raise HTTPException(status_code=401, detail='User not found')
+        except Exception:
+            raise HTTPException(status_code=401, detail='Invalid token')
+
+    # rate limit: determine key: prefer developer api key hash, else user id
+    rl_key = None
+    rl_rate = 20
+    if dev_key:
+        rl_key = f"dev:{dev_key.api_key_hash}"
+        rl_rate = int(dev_key.rate_limit_per_minute or rl_rate)
+    elif user:
+        rl_key = f"user:{user.id}"
+        rl_rate = 20
+    else:
+        rl_key = f"ip:{request.client.host if request.client else 'anon'}"
+
+    if not limiter.allow(rl_key, rate_per_min=rl_rate, burst=max(rl_rate, 5)):
+        raise HTTPException(status_code=429, detail='Rate limit exceeded')
+
+    key = _get_openai_key(session)
+    if not key:
+        raise HTTPException(status_code=400, detail='OpenAI key not configured')
+    client = openai.OpenAI(api_key=key)
+    text = payload.content or ''
+    prompt = f"Extract supplier, invoice_number, currency, items (description, quantity, unit_price, total) from this invoice text. Return JSON with keys supplier, invoice_number, currency, items (list), total, note. Text: {text}"
+    try:
+        resp = client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt,
+            max_output_tokens=400,
+        )
+        content = resp.output[0].content[0].text if resp.output else ''
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'AI call failed: {e}')
+    import re, json as _json
+    parsed = {}
+    try:
+        m = re.search(r'\{.*\}', content, re.S)
+        if m:
+            parsed = _json.loads(m.group(0))
+    except Exception:
+        parsed = {}
+    items = []
+    for it in parsed.get('items', []) if isinstance(parsed.get('items', []), list) else []:
+        try:
+            items.append(
+                schemas.InvoiceAnalysisLine(
+                    description=str(it.get('description', '')),
+                    quantity=float(it.get('quantity', 1) or 1),
+                    unit_price=float(it.get('unit_price', 0) or 0),
+                    total=float(it.get('total', 0) or 0),
+                )
+            )
+        except Exception:
+            continue
+    return schemas.InvoiceAnalysisResponse(
+        supplier=parsed.get('supplier'),
+        invoice_number=parsed.get('invoice_number'),
+        currency=parsed.get('currency', 'IRR'),
+        items=items if items else [schemas.InvoiceAnalysisLine(description=text[:60] or 'unknown', quantity=1, unit_price=0, total=0)],
+        total=parsed.get('total'),
+        note=parsed.get('note', content[:120]),
+    )
+
+
+@app.get("/api/products", response_model=List[schemas.ProductOut])
+def api_list_products(
+    q: Optional[str] = None,
+    limit: int = 100,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
+    safe_limit = max(1, min(int(limit or 100), 500))
+    return crud.get_products(session, q=q, limit=safe_limit)
+
+
+@app.post("/api/products", response_model=schemas.ProductOut)
+def api_create_product(
+    payload: schemas.ProductCreate,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=["Admin", "Accountant", "Manager"])(current)
+    data = payload.dict()
+    code = (data.get('code') or '').strip()
+    if not code:
+        code = f"P-{secrets.token_hex(4)}".upper()
+    exists = session.query(models.Product).filter(models.Product.code == code).first()
+    if exists:
+        raise HTTPException(status_code=400, detail='Product code already exists')
+    data['code'] = code
+    prod_payload = schemas.ProductCreate(**data)
+    product = crud.create_product(session, prod_payload, actor_id=current.id if current else None)
+    return product
+
+
+@app.get("/api/products/{product_id}/movement")
+def api_product_movement(
+    product_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
+    product = session.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail='Product not found')
+
+    rows = (
+        session.query(models.InvoiceItem, models.Invoice)
+        .join(models.Invoice, models.InvoiceItem.invoice_id == models.Invoice.id)
+        .filter(models.InvoiceItem.product_id == product_id, models.Invoice.status == 'final')
+        .order_by(models.Invoice.server_time.asc())
+        .all()
+    )
+
+    movements: List[Dict[str, Any]] = []
+    total_change = 0
+    for item, inv in rows:
+        direction = 'in' if inv.invoice_type == 'purchase' else 'out'
+        qty_change = int(item.quantity or 0) * (1 if direction == 'in' else -1)
+        total_change += qty_change
+        party = None
+        if inv.party_id or inv.party_name:
+            person = session.query(models.Person).filter(models.Person.id == inv.party_id).first() if inv.party_id else None
+            party = {
+                'id': inv.party_id if inv.party_id else None,
+                'name': person.name if person else (inv.party_name or ''),
+                'kind': person.kind if person else None,
+            }
+        inv_time = inv.server_time or inv.client_time or datetime.now(timezone.utc)
+        movements.append({
+            'id': item.id,
+            'invoice_id': inv.id,
+            'invoice_number': inv.invoice_number or '',
+            'invoice_date': inv_time.isoformat(),
+            'direction': direction,
+            'type': inv.invoice_type,
+            'quantity': int(item.quantity or 0),
+            'quantity_change': qty_change,
+            'unit_price': int(item.unit_price or 0),
+            'total_price': int(item.total or (item.unit_price or 0) * (item.quantity or 0)),
+            'stock_before': 0,
+            'stock_after': 0,
+            'party': party,
+            'status': inv.status,
+        })
+
+    current_stock = int(product.inventory or 0)
+    start_stock = current_stock - total_change
+    running = start_stock
+    for m in movements:
+        m['stock_before'] = running
+        running += m['quantity_change']
+        m['stock_after'] = running
+
+    movements_sorted = sorted(movements, key=lambda mv: mv['invoice_date'], reverse=True)
+
+    return {
+        'product': {
+            'id': product.id,
+            'name': product.name,
+            'unit': product.unit,
+            'group': product.group,
+            'current_stock': current_stock,
+        },
+        'movements': movements_sorted,
+        'total_movements': len(movements),
+    }
+@app.get("/api/persons")
+def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
+    people = crud.get_persons(session, q=q)
+    # compute balances for each person (debit/credit/balance) using ledger
+    out = []
+    for p in people:
+        entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == str(p.id)).all()
+        debit_total = sum(e.amount for e in entries if e.debit_account == 'AccountsReceivable')
+        credit_total = sum(e.amount for e in entries if e.credit_account == 'AccountsReceivable')
+        net = debit_total - credit_total
+        # attach attributes for client convenience
+        p.debit = debit_total
+        p.credit = credit_total
+        p.balance = net
+        out.append(p)
+    return out

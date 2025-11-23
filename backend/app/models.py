@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, ForeignKey, JSON, UniqueConstraint, Enum
+from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import func
 from .db import Base
 
@@ -253,13 +253,32 @@ class Backup(Base):
 class FinancialYear(Base):
     __tablename__ = 'financial_years'
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(128), nullable=False, unique=True)
-    start_date = Column(DateTime(timezone=True), nullable=False)
-    end_date = Column(DateTime(timezone=True), nullable=True)
-    is_closed = Column(Boolean, nullable=False, default=False)
-    closed_at = Column(DateTime(timezone=True), nullable=True)
+    # Keep DB column name `name` for backward-compatibility, expose it as `title` in code.
+    title = Column('name', String(128), nullable=False, unique=True)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    status = Column(
+        Enum('open', 'closed', 'locked', name='fiscalyearstatus'),
+        nullable=False,
+        default='open',
+        server_default='open',
+    )
+    is_current = Column(Boolean, nullable=False, default=False, index=True)
+    locked_at = Column(DateTime(timezone=True), nullable=True)
+    closed_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     opening_balances = Column(Text, nullable=True)  # JSON: account -> amount
+    name = synonym('title')
+
+    # Helper methods for domain logic
+    def is_active(self) -> bool:
+        return self.status == 'open'
+
+    def can_post(self) -> bool:
+        return self.status == 'open'
+
+    def is_locked(self) -> bool:
+        return self.status == 'locked'
 
 
 class UserSmsConfig(Base):
@@ -285,6 +304,8 @@ class UserPreferences(Base):
     currency = Column(String(3), nullable=False, default='irr')  # irr, usd, aed
     auto_convert_currency = Column(Boolean, nullable=False, default=False)
     theme_preference = Column(String(50), nullable=True, default='default')
+    sidebar_order = Column(Text, nullable=True)
+    sidebar_collapsed = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -344,6 +365,72 @@ class BlockchainEntry(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     user = relationship('User', backref='blockchain_entries')
+
+
+class BlockchainBlock(Base):
+    __tablename__ = 'blockchain_blocks'
+    height = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    hash = Column(String(128), nullable=False, unique=True, index=True)
+    previous_hash = Column(String(128), nullable=True, index=True)
+    merkle_root = Column(String(128), nullable=True)
+    proposer = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class TokenAccount(Base):
+    __tablename__ = 'token_accounts'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, unique=True, index=True)
+    address = Column(String(128), nullable=False, unique=True, index=True)
+    balance = Column(Integer, nullable=False, default=0)
+    locked = Column(Integer, nullable=False, default=0)
+    nonce = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    user = relationship('User', backref='token_account')
+
+
+class TokenTransaction(Base):
+    __tablename__ = 'token_transactions'
+    id = Column(Integer, primary_key=True, index=True)
+    tx_hash = Column(String(128), nullable=False, unique=True, index=True)
+    from_address = Column(String(128), nullable=True, index=True)
+    to_address = Column(String(128), nullable=False, index=True)
+    amount = Column(Integer, nullable=False)
+    fee_amount = Column(Integer, nullable=False, default=0)
+    memo = Column(String(256), nullable=True)
+    status = Column(String(32), nullable=False, default='confirmed')  # pending, confirmed, failed
+    block_height = Column(Integer, ForeignKey('blockchain_blocks.height', ondelete='SET NULL'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    block = relationship('BlockchainBlock', backref='transactions')
+
+
+class Node(Base):
+    __tablename__ = 'nodes'
+    id = Column(Integer, primary_key=True, index=True)
+    node_id = Column(String(128), nullable=False, unique=True, index=True)
+    name = Column(String(128), nullable=True)
+    pubkey = Column(String(256), nullable=True)
+    stake = Column(Integer, nullable=False, default=0)
+    reputation = Column(Integer, nullable=False, default=0)
+    role = Column(String(32), nullable=False, default='validator')  # validator, full, light
+    last_seen = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ConsumptionLog(Base):
+    __tablename__ = 'consumption_logs'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    service_type = Column(String(64), nullable=False, index=True)  # sms, ai, storage, etc.
+    ref_id = Column(String(128), nullable=True, index=True)
+    cost_token = Column(Integer, nullable=False, default=0)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship('User', backref='consumption_logs')
 
 
 class CustomerGroup(Base):

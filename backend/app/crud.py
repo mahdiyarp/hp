@@ -15,6 +15,11 @@ import hashlib
 import json
 from . import search as search_client
 from .security import encrypt_value
+from . import blockchain
+import uuid
+import os
+import threading
+import time
 
 
 # ==================== Role & Permission CRUD ====================
@@ -89,7 +94,7 @@ def make_hash_id(obj: dict) -> str:
     return h.hexdigest()
 
 
-def create_product(session: Session, p: ProductCreate) -> models.Product:
+def create_product(session: Session, p: ProductCreate, actor_id: Optional[int] = None) -> models.Product:
     norm = normalize_for_search(p.name)
     raw = {"name": p.name, "unit": p.unit or '', "group": p.group or '', "created_at": str(func.now())}
     pid = make_hash_id(raw)
@@ -117,10 +122,16 @@ def create_product(session: Session, p: ProductCreate) -> models.Product:
         log_activity(session, uname, f"ایجاد کالا: {product.name} (id={product.id})", path=f"/api/products", method='POST', status_code=201, detail={'product_id': product.id})
     except Exception:
         pass
+    # create blockchain entry for product creation
+    try:
+        data = {'id': product.id, 'name': product.name, 'code': product.code, 'unit': product.unit, 'group': product.group, 'description': product.description}
+        blockchain.create_blockchain_entry(session, entity_type='product', entity_id=str(product.id), action='create', data=data, user_id=actor_id)
+    except Exception:
+        pass
     return product
 
 
-def create_product_from_external(session: Session, external: dict, unit: Optional[str] = None, group: Optional[str] = None, create_price_history: bool = True) -> models.Product:
+def create_product_from_external(session: Session, external: dict, unit: Optional[str] = None, group: Optional[str] = None, create_price_history: bool = True, actor_id: Optional[int] = None) -> models.Product:
     """
     Create a local product from external search result. `external` expected keys: title, price, image, description, link, source
     Stores the external metadata inside the product.description as a JSON blob (best-effort).
@@ -139,7 +150,7 @@ def create_product_from_external(session: Session, external: dict, unit: Optiona
     }
     full_desc = desc + '\n\n' + json.dumps(meta, ensure_ascii=False)
     p = ProductCreate(name=title, unit=unit, group=group, description=full_desc)
-    prod = create_product(session, p)
+    prod = create_product(session, p, actor_id=actor_id)
     # optional price history
     try:
         price = external.get('price')
@@ -207,7 +218,7 @@ def get_products(session: Session, q: Optional[str] = None, limit: int = 50):
     return products
 
 
-def create_person(session: Session, p: PersonCreate) -> models.Person:
+def create_person(session: Session, p: PersonCreate, actor_id: Optional[int] = None) -> models.Person:
     norm = normalize_for_search(p.name)
     raw = {"name": p.name, "kind": p.kind or '', "mobile": p.mobile or '', "created_at": str(func.now())}
     pid = make_hash_id(raw)
@@ -229,6 +240,12 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
         log_activity(session, None, f"ایجاد شخص: {person.name} (id={person.id})", path=f"/api/persons", method='POST', status_code=201, detail={'person_id': person.id})
     except Exception:
         pass
+    # blockchain entry
+    try:
+        data = {'id': person.id, 'name': person.name, 'kind': person.kind, 'mobile': person.mobile, 'description': person.description}
+        blockchain.create_blockchain_entry(session, entity_type='person', entity_id=str(person.id), action='create', data=data, user_id=actor_id)
+    except Exception:
+        pass
     return person
 
 
@@ -238,6 +255,97 @@ def get_persons(session: Session, q: Optional[str] = None, limit: int = 50):
         qn = normalize_for_search(q)
         qs = qs.filter(models.Person.name_norm.contains(qn))
     return qs.limit(limit).all()
+
+
+# ==================== Account (Cash/Bank/POS) CRUD ====================
+
+def _normalize_name(raw: str) -> str:
+    return normalize_for_search(raw or '')
+
+
+def list_accounts(session: Session, kind: Optional[str] = None) -> List[models.Account]:
+    qs = session.query(models.Account)
+    if kind:
+        qs = qs.filter(models.Account.kind == kind)
+    return qs.order_by(models.Account.created_at.desc()).all()
+
+
+def create_account(session: Session, payload: schemas.AccountCreate) -> models.Account:
+    if payload.kind not in ['cash', 'bank', 'pos']:
+        raise ValueError('invalid kind')
+    name = (payload.name or '').strip()
+    if not name:
+        raise ValueError('name required')
+    code = (payload.code or f"{payload.kind.upper()}-{uuid.uuid4().hex[:6]}").strip()
+
+    exists = session.query(models.Account).filter(models.Account.code == code).first()
+    if exists:
+        raise ValueError('code already exists')
+
+    acc = models.Account(
+        id=uuid.uuid4().hex,
+        code=code,
+        name=name,
+        name_norm=_normalize_name(name),
+        kind=payload.kind,
+        details=payload.details or None,
+    )
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+    try:
+        from .activity_logger import log_activity
+        log_activity(session, None, f"ایجاد حساب/صندوق: {acc.name}", path="/api/accounts", method='POST', status_code=201, detail={'account_id': acc.id})
+    except Exception:
+        pass
+    return acc
+
+
+def update_account(session: Session, account_id: str, payload: schemas.AccountUpdate) -> Optional[models.Account]:
+    acc = session.query(models.Account).filter(models.Account.id == account_id).first()
+    if not acc:
+        return None
+
+    if payload.name is not None:
+        acc.name = payload.name.strip()
+        acc.name_norm = _normalize_name(payload.name)
+    if payload.kind is not None:
+        if payload.kind not in ['cash', 'bank', 'pos']:
+            raise ValueError('invalid kind')
+        acc.kind = payload.kind
+    if payload.code is not None:
+        new_code = payload.code.strip()
+        if new_code != acc.code:
+            exists = session.query(models.Account).filter(models.Account.code == new_code).first()
+            if exists:
+                raise ValueError('code already exists')
+            acc.code = new_code
+    if payload.details is not None:
+        acc.details = payload.details
+
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+    try:
+        from .activity_logger import log_activity
+        log_activity(session, None, f"ویرایش حساب/صندوق: {acc.name}", path=f"/api/accounts/{acc.id}", method='PUT', status_code=200, detail={'account_id': acc.id})
+    except Exception:
+        pass
+    return acc
+
+
+def delete_account(session: Session, account_id: str) -> bool:
+    acc = session.query(models.Account).filter(models.Account.id == account_id).first()
+    if not acc:
+        return False
+    session.delete(acc)
+    session.commit()
+    try:
+        from .activity_logger import log_activity
+        log_activity(session, None, f"حذف حساب/صندوق: {acc.name}", path=f"/api/accounts/{account_id}", method='DELETE', status_code=200, detail={'account_id': account_id})
+    except Exception:
+        pass
+    return True
 
 
 def get_users(session: Session):
@@ -260,8 +368,21 @@ def get_time_syncs(session: Session, limit: int = 100):
 
 
 def get_user_by_username(session: Session, username: str):
-    uname = _normalize_username(username)
-    return session.query(models.User).filter(func.lower(models.User.username) == uname).first()
+    # Try to find by normalized username first (case-insensitive)
+    try:
+        uname = _normalize_username(username)
+    except Exception:
+        uname = (username or '').lower()
+    user = session.query(models.User).filter(func.lower(models.User.username) == uname).first()
+    if user:
+        return user
+    # If not found by username, try exact mobile match (allow passing phone as username)
+    if username:
+        phone = username.strip()
+        user = session.query(models.User).filter(models.User.mobile == phone).first()
+        if user:
+            return user
+    return None
 
 
 def get_user(session: Session, user_id: int):
@@ -478,7 +599,16 @@ def update_invoice(session: Session, invoice_id: int, data: dict):
     return inv
 
 
-def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[datetime] = None):
+def delete_invoice(session: Session, invoice_id: int) -> bool:
+    inv = session.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
+    if not inv:
+        return False
+    session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == invoice_id).delete()
+    session.delete(inv)
+    session.commit()
+    return True
+
+def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[datetime] = None, actor_id: Optional[int] = None):
     inv = session.query(models.Invoice).filter(models.Invoice.id == invoice_id).first()
     if not inv:
         return None
@@ -507,6 +637,7 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
             if insufficient:
                 details = '، '.join(
                     f"«{entry['name']}»: نیاز {entry['required']} / موجود {entry['available']}"
+
                     for entry in insufficient
                 )
                 raise ValueError(f'موجودی کافی برای کالاهای زیر وجود ندارد: {details}')
@@ -561,6 +692,52 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
 
     session.refresh(inv)
 
+    # Create blockchain entry for finalized invoice
+    try:
+        invoice_data = {
+            'id': inv.id,
+            'invoice_number': inv.invoice_number,
+            'total': inv.total,
+            'status': inv.status,
+            'items': [{ 'product_id': it.product_id, 'description': it.description, 'quantity': it.quantity, 'unit_price': it.unit_price, 'total': it.total } for it in items]
+        }
+        blockchain.create_blockchain_entry(session, entity_type='invoice', entity_id=str(inv.id), action='finalize', data=invoice_data, user_id=actor_id)
+    except Exception:
+        pass
+
+    # re-index affected products and person for search + sync
+    try:
+        # reindex products
+        for pid in product_ids:
+            p = product_map.get(pid)
+            if p:
+                try:
+                    search_client.index_product({
+                        'id': p.id,
+                        'name': p.name,
+                        'description': p.description,
+                        'unit': p.unit,
+                        'group': p.group,
+                        'inventory': p.inventory,
+                    })
+                except Exception:
+                    pass
+        # reindex person if present
+        if inv.party_id:
+            try:
+                person = session.query(models.Person).filter(models.Person.id == inv.party_id).first()
+                if person:
+                    search_client.index_person({
+                        'id': person.id,
+                        'name': person.name,
+                        'mobile': person.mobile,
+                        'description': person.description,
+                    })
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     # Create ledger entries for inventory and revenue based on invoice_type
     try:
         # sale: debit AR/Cash, credit Sales (or COGS/Inventory)
@@ -596,6 +773,30 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
         log_activity(session, inv.party_name or None, f"تأیید/پایان فاکتور {inv.invoice_number}", path=f"/api/invoices/{inv.id}/finalize", method='POST', status_code=200, detail={'invoice_id': inv.id})
     except Exception:
         pass
+
+    # sync person balances: create ledger entries already done; explicitly update person search index and cache if any
+    try:
+        if inv.party_id:
+            person = session.query(models.Person).filter(models.Person.id == inv.party_id).first()
+            if person:
+                # index person
+                try:
+                    search_client.index_person({
+                        'id': person.id,
+                        'name': person.name,
+                        'mobile': person.mobile,
+                        'description': person.description,
+                    })
+                except Exception:
+                    pass
+                # notify external systems (pubsub/webhook)
+                try:
+                    notify_person_sync(person.id, {'balance_updated': True})
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     return inv
 
 
@@ -605,7 +806,7 @@ def _generate_payment_number(session: Session, direction: str) -> str:
     return f"{prefix}{now.year:04d}{now.month:02d}{now.day:02d}"
 
 
-def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.Payment:
+def create_payment_manual(session: Session, p: schemas.PaymentCreate, actor_id: Optional[int] = None) -> models.Payment:
     server_time = datetime.now(timezone.utc)
     client_time = p.client_time or server_time
     
@@ -614,7 +815,6 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         invoice = session.query(models.Invoice).filter(models.Invoice.id == p.invoice_id).first()
         if not invoice:
             raise ValueError(f"Invoice with id {p.invoice_id} not found")
-        # Auto-fill reference with invoice_number if not provided
         if not p.reference and invoice.invoice_number:
             p.reference = invoice.invoice_number
             # propagate tracking code
@@ -641,29 +841,8 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
     session.add(pay)
     session.commit()
     session.refresh(pay)
-    reference_dt = client_time or server_time
-    ref_for_calendar = reference_dt
-    if isinstance(ref_for_calendar, datetime) and ref_for_calendar.tzinfo is not None:
-        ref_for_calendar = ref_for_calendar.astimezone(timezone.utc).replace(tzinfo=None)
-    if isinstance(reference_dt, datetime):
-        if reference_dt.tzinfo is None:
-            ref_aware = reference_dt.replace(tzinfo=timezone.utc)
-        else:
-            ref_aware = reference_dt.astimezone(timezone.utc)
-    else:
-        ref_aware = server_time
-    date_part = ref_aware.strftime('%Y%m%d')
-    if p.client_calendar == 'jalali':
-        try:
-            jdt = jdatetime.datetime.fromgregorian(datetime=ref_for_calendar)
-            date_part = jdt.strftime('%Y%m%d')
-        except Exception:
-            date_part = ref_aware.strftime('%Y%m%d')
-    prefix = pay.direction[:1].upper()
-    pay.payment_number = f"{prefix}-{date_part}-{pay.id:06d}"
-    session.add(pay)
-    session.commit()
-    session.refresh(pay)
+    # ... numbering code ...
+    # after commits and indexing
     try:
         search_client.index_payment({
             'id': pay.id,
@@ -682,6 +861,12 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         log_activity(session, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
     except Exception:
         pass
+    # blockchain entry for payment
+    try:
+        payment_data = {'id': pay.id, 'payment_number': pay.payment_number, 'amount': pay.amount, 'direction': pay.direction, 'party_id': pay.party_id}
+        blockchain.create_blockchain_entry(session, entity_type='payment', entity_id=str(pay.id), action='create', data=payment_data, user_id=actor_id)
+    except Exception:
+        pass
     return pay
 
 
@@ -690,6 +875,7 @@ def get_payments(session: Session, q: Optional[str] = None, limit: int = 100):
     if q:
         qn = q.lower()
         qs = qs.filter((models.Payment.payment_number.ilike(f"%{qn}%")) | (models.Payment.party_name.ilike(f"%{qn}%")))
+
     return qs.limit(limit).all()
 
 
@@ -713,7 +899,8 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     try:
         if pay.direction == 'in':
             # receipt: debit Cash/Bank, credit AccountsReceivable
-            acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
+            method_val = (pay.method or '').lower()
+            acct = 'Cash' if (not method_val or method_val.startswith('cash')) else ('Bank' if method_val.startswith('bank') else 'POS')
             create_ledger_entry(session, 
                                 ref_type='payment', 
                                 ref_id=str(pay.id), 
@@ -726,7 +913,8 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
                                 tracking_code=pay.tracking_code)
         else:
             # payment out: debit AccountsPayable/Expense, credit Cash/Bank
-            acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
+            method_val = (pay.method or '').lower()
+            acct = 'Cash' if (not method_val or method_val.startswith('cash')) else ('Bank' if method_val.startswith('bank') else 'POS')
             create_ledger_entry(session, 
                                 ref_type='payment', 
                                 ref_id=str(pay.id), 
@@ -747,10 +935,24 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     except Exception:
         pass
     
+    # notify person sync for payments
+    try:
+        if pay.party_id:
+            notify_person_sync(pay.party_id, {'payment_posted': True, 'amount': int(pay.amount or 0)})
+    except Exception:
+        pass
+
     return pay
 
 
-def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optional[str], debit_account: str, credit_account: str, amount: int, party_id: Optional[str] = None, party_name: Optional[str] = None, description: Optional[str] = None, tracking_code: Optional[str] = None) -> models.LedgerEntry:
+def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optional[str], debit_account: str, credit_account: str, amount: int, party_id: Optional[str] = None, party_name: Optional[str] = None, description: Optional[str] = None, tracking_code: Optional[str] = None, entry_date: Optional[datetime] = None) -> models.LedgerEntry:
+    """Create a ledger entry after validating fiscal year state."""
+    from app.accounting import fiscal_service
+
+    when = entry_date or datetime.now(timezone.utc)
+    # Ensure current fiscal year is open and date is in range
+    fiscal_service.ensure_fiscal_year_allows_posting(session, when)
+
     le = models.LedgerEntry(
         ref_type=ref_type,
         ref_id=ref_id,
@@ -761,6 +963,7 @@ def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optio
         party_name=party_name,
         description=description,
         tracking_code=tracking_code,
+        entry_date=when,
     )
     session.add(le)
     session.commit()
@@ -878,6 +1081,7 @@ def create_backup(session: Session, created_by: Optional[int] = None, kind: str 
         data['invoice_items'] = [ {c.name: getattr(r, c.name) for c in r.__table__.columns} for r in session.query(models.InvoiceItem).all() ]
         data['payments'] = [ {c.name: getattr(r, c.name) for c in r.__table__.columns} for r in session.query(models.Payment).all() ]
         data['ledger_entries'] = [ {c.name: getattr(r, c.name) for c in r.__table__.columns} for r in session.query(models.LedgerEntry).all() ]
+
         # metadata counts
         meta = {k: len(v) for k, v in data.items()}
         payload = {'created_at': now.isoformat(), 'meta': meta, 'data': data}
@@ -913,79 +1117,24 @@ def get_backup(session: Session, backup_id: int):
     return session.query(models.Backup).filter(models.Backup.id == backup_id).first()
 
 
-def create_financial_year(session: Session, name: str, start_date: str, end_date: Optional[str] = None):
-    """Create new financial year record. start_date/end_date are ISO strings."""
-    from datetime import datetime
-    s = datetime.fromisoformat(start_date)
-    e = None
-    if end_date:
-        try:
-            e = datetime.fromisoformat(end_date)
-        except Exception:
-            e = None
-    fy = models.FinancialYear(name=name, start_date=s, end_date=e)
-    session.add(fy)
-    session.commit()
-    session.refresh(fy)
-    return fy
+def create_financial_year(session: Session, name: str, start_date: str, end_date: Optional[str] = None, is_current: bool = False):
+    """Backward-compatible wrapper for fiscal service creation."""
+    from app.accounting import fiscal_service
+
+    return fiscal_service.create_fiscal_year(session, title=name, start_date=start_date, end_date=end_date, is_current=is_current)
 
 
 def get_financial_years(session: Session):
-    return session.query(models.FinancialYear).order_by(models.FinancialYear.start_date.desc()).all()
+    from app.accounting import fiscal_service
+
+    return fiscal_service.list_fiscal_years(session)
 
 
 def close_financial_year(session: Session, fy_id: int, create_rollover: bool = True, closed_by: Optional[int] = None):
-    """Close the financial year: compute account balances from ledger and create balancing entries moving net to RetainedEarnings.
-    This is a simple implementation and should be reviewed for accounting correctness for production use.
-    """
-    import json
-    from datetime import datetime
-    fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fy_id).first()
-    if not fy:
-        return None
-    if fy.is_closed:
-        return fy
-    # determine period end: use fy.end_date or now
-    end = fy.end_date if fy.end_date else datetime.utcnow()
-    # compute balances per account: debit - credit
-    accounts = {}
-    entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.entry_date <= end).all()
-    for e in entries:
-        accounts.setdefault(e.debit_account, 0)
-        accounts.setdefault(e.credit_account, 0)
-        try:
-            amt = int(e.amount or 0)
-        except Exception:
-            amt = 0
-        accounts[e.debit_account] += amt
-        accounts[e.credit_account] -= amt
-    # create closing entries moving net to RetainedEarnings
-    rollover = {}
-    for acct, bal in accounts.items():
-        if acct == 'RetainedEarnings' or bal == 0:
-            continue
-        # if positive balance (debit), credit the account and debit RetainedEarnings
-        try:
-            if bal > 0:
-                create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account='RetainedEarnings', credit_account=acct, amount=int(bal), description=f'Closing {acct} for FY {fy.name}')
-            else:
-                # negative balance (credit), debit the account and credit RetainedEarnings
-                create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account=acct, credit_account='RetainedEarnings', amount=int(abs(bal)), description=f'Closing {acct} for FY {fy.name}')
-            rollover[acct] = int(bal)
-        except Exception:
-            pass
-    # mark closed
-    fy.is_closed = True
-    fy.closed_at = datetime.utcnow()
-    fy.opening_balances = json.dumps(rollover, ensure_ascii=False)
-    session.add(fy)
-    session.commit()
-    session.refresh(fy)
-    try:
-        from .activity_logger import log_activity
-        log_activity(session, None, f"بستن سال مالی {fy.name}", path=f"/api/financial-years/{fy.id}/close", method='POST', status_code=200, detail={'closed_by': closed_by})
-    except Exception:
-        pass
+    """Backward-compatible wrapper for closing fiscal years."""
+    from app.accounting import fiscal_service
+
+    fy, _ = fiscal_service.close_year(session, fy_id, closed_by=str(closed_by) if closed_by is not None else None, create_rollover=create_rollover)
     return fy
 
 
@@ -1053,7 +1202,7 @@ def report_stock_valuation(session: Session):
 def report_cash_balance(session: Session, method: Optional[str] = None):
     q = session.query(models.Payment).filter(models.Payment.status == 'posted')
     if method:
-        q = q.filter(models.Payment.method.ilike(f"%{method}%"))
+        q = q.filter(models.Payment.method.ilike(f"{method}%"))
     # balance = sum(in receipts) - sum(out payments)
     receipts = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'in').all())
     outs = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'out').all())
@@ -1259,6 +1408,10 @@ def update_user_preferences(session: Session, user_id: int,
         prefs.auto_convert_currency = update.auto_convert_currency
     if update.theme_preference is not None:
         prefs.theme_preference = update.theme_preference
+    if getattr(update, 'sidebar_order', None) is not None:
+        prefs.sidebar_order = json.dumps(update.sidebar_order, ensure_ascii=False)
+    if getattr(update, 'sidebar_collapsed', None) is not None:
+        prefs.sidebar_collapsed = bool(update.sidebar_collapsed)
     
     session.commit()
     session.refresh(prefs)
@@ -2034,3 +2187,161 @@ def reorder_dashboard_widgets(session: Session, user_id: int, widget_positions: 
         return True
     except:
         return False
+
+
+# ========== Token / Blockchain Lite ==========
+
+def get_or_create_token_account(session: Session, user_id: Optional[int], address: Optional[str] = None) -> models.TokenAccount:
+    account = None
+    if user_id:
+        account = session.query(models.TokenAccount).filter(models.TokenAccount.user_id == user_id).first()
+    if not account and address:
+        account = session.query(models.TokenAccount).filter(models.TokenAccount.address == address).first()
+    if account:
+        return account
+    addr = address or f"addr-{uuid.uuid4().hex[:18]}"
+    initial_balance = 100 if user_id else 0  # small airdrop for new local accounts
+    account = models.TokenAccount(user_id=user_id, address=addr, balance=initial_balance, locked=0, nonce=0)
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+    return account
+
+
+def _next_block_hash(prev_hash: Optional[str], merkle_root: str) -> str:
+    payload = f"{prev_hash or ''}-{merkle_root}-{datetime.utcnow().isoformat()}"
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def create_block(session: Session, merkle_root: str, proposer: str = 'system') -> models.BlockchainBlock:
+    last_block = session.query(models.BlockchainBlock).order_by(models.BlockchainBlock.height.desc()).first()
+    prev_hash = last_block.hash if last_block else None
+    block = models.BlockchainBlock(
+        previous_hash=prev_hash,
+        merkle_root=merkle_root,
+        hash=_next_block_hash(prev_hash, merkle_root),
+        proposer=proposer,
+    )
+    session.add(block)
+    session.commit()
+    session.refresh(block)
+    return block
+
+
+def record_token_transfer(
+    session: Session,
+    from_account: Optional[models.TokenAccount],
+    to_address: str,
+    amount: int,
+    fee_amount: int,
+    memo: Optional[str],
+) -> Tuple[models.TokenTransaction, models.TokenAccount]:
+    if amount <= 0:
+        raise ValueError('amount must be > 0')
+    if fee_amount < 0:
+        raise ValueError('fee must be >= 0')
+
+    to_account = session.query(models.TokenAccount).filter(models.TokenAccount.address == to_address).first()
+    if not to_account:
+        to_account = models.TokenAccount(address=to_address, balance=0, locked=0, nonce=0)
+        session.add(to_account)
+        session.flush()
+
+    from_addr = from_account.address if from_account else None
+    total_debit = amount + fee_amount
+    if from_account:
+        if from_account.balance < total_debit:
+            raise ValueError('insufficient balance')
+        from_account.balance -= total_debit
+        from_account.nonce = (from_account.nonce or 0) + 1
+
+    to_account.balance += amount
+
+    merkle_seed = f"{from_addr or 'mint'}-{to_address}-{amount}-{fee_amount}-{datetime.utcnow().isoformat()}"
+    tx_hash = hashlib.sha256(merkle_seed.encode()).hexdigest()
+    block = create_block(session, merkle_root=tx_hash)
+
+    tx = models.TokenTransaction(
+        tx_hash=tx_hash,
+        from_address=from_addr,
+        to_address=to_address,
+        amount=amount,
+        fee_amount=fee_amount,
+        memo=memo,
+        status='confirmed',
+        block_height=block.height,
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    session.refresh(to_account)
+    if from_account:
+        session.refresh(from_account)
+    return tx, to_account
+
+
+def list_token_transactions(session: Session, address: Optional[str], limit: int = 50) -> List[models.TokenTransaction]:
+    qs = session.query(models.TokenTransaction).order_by(models.TokenTransaction.created_at.desc())
+    if address:
+        qs = qs.filter(
+            (models.TokenTransaction.from_address == address) |
+            (models.TokenTransaction.to_address == address)
+        )
+    return qs.limit(limit).all()
+
+
+def list_blocks(session: Session, limit: int = 50) -> List[models.BlockchainBlock]:
+    return session.query(models.BlockchainBlock).order_by(models.BlockchainBlock.height.desc()).limit(limit).all()
+
+
+def add_consumption_log(session: Session, user_id: Optional[int], service_type: str, ref_id: Optional[str], cost_token: int, metadata_json: Optional[str] = None) -> models.ConsumptionLog:
+    log = models.ConsumptionLog(
+        user_id=user_id,
+        service_type=service_type,
+        ref_id=ref_id,
+        cost_token=cost_token,
+        metadata_json=metadata_json,
+    )
+    session.add(log)
+    session.commit()
+    session.refresh(log)
+    return log
+
+def notify_person_sync(person_id: str, payload: dict | None = None):
+    """Notify external systems that a person's data/balance changed.
+
+    Behavior:
+    - If REDIS_URL env var present and redis package available -> publish to `person_sync` channel with JSON payload
+    - If PERSON_SYNC_WEBHOOK env var present -> POST JSON payload to that URL (done in background thread, best-effort)
+    """
+    try:
+        data = {'person_id': person_id}
+        if payload:
+            data.update(payload)
+        # background worker
+        def _worker(d):
+            # try redis publish
+            try:
+                import redis
+                redis_url = os.getenv('REDIS_URL')
+                if redis_url:
+                    r = redis.from_url(redis_url)
+                    r.publish('person_sync', json.dumps(d, ensure_ascii=False))
+            except Exception:
+                pass
+            # try webhook
+            try:
+                # import requests locally so test can monkeypatch sys.modules before worker runs
+                import requests as _requests
+                webhook = os.getenv('PERSON_SYNC_WEBHOOK')
+                if webhook:
+                    try:
+                        _requests.post(webhook, json=d, timeout=2)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        t = threading.Thread(target=_worker, args=(data,), daemon=True)
+        t.start()
+    except Exception:
+        pass
