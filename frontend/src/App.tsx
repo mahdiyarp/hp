@@ -1,4 +1,5 @@
 import React from 'react'
+import ApiStatus from './components/ApiStatus'
 
 const App: React.FC = () => {
 	return (
@@ -8,12 +9,13 @@ const App: React.FC = () => {
 				<div className="max-w-7xl mx-auto flex items-center gap-4">
 					<div className="text-2xl font-bold tracking-wide">حساب‌پاک</div>
 					<div className="flex-1" />
-					<div className="hidden md:flex items-center gap-2">
+					<div className="hidden md:flex items-center gap-3">
 						<input
 							className="hp-input w-72"
 							placeholder="جستجو..."
 						/>
 						<button className="hp-button">جستجو</button>
+						<ApiStatus />
 					</div>
 				</div>
 			</header>
