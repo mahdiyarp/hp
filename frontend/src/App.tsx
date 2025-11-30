@@ -1,5 +1,6 @@
 import React from 'react'
 import ApiStatus from './components/ApiStatus'
+import LoginPanel from './components/LoginPanel'
 
 const App: React.FC = () => {
 	return (
@@ -16,6 +17,7 @@ const App: React.FC = () => {
 						/>
 						<button className="hp-button">جستجو</button>
 						<ApiStatus />
+						<LoginPanel />
 					</div>
 				</div>
 			</header>
