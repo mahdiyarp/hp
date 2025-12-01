@@ -108,22 +108,22 @@ def list_payments(
         q = q.filter(models.Payment.method == method)
     if status:
         q = q.filter(models.Payment.status == status)
-    # Date filters on created_at (ISO format)
+    # Date filters on server_time (ISO format)
     if date_from:
         try:
             dt_from = datetime.fromisoformat(date_from)
-            q = q.filter(models.Payment.created_at >= dt_from)
+            q = q.filter(models.Payment.server_time >= dt_from)
         except Exception:
             pass
     if date_to:
         try:
             dt_to = datetime.fromisoformat(date_to)
-            q = q.filter(models.Payment.created_at <= dt_to)
+            q = q.filter(models.Payment.server_time <= dt_to)
         except Exception:
             pass
     page = max(1, int(page or 1))
     limit = min(max(int(limit or 1), 1), 500)
-    return q.order_by(models.Payment.created_at.desc()).offset((page-1)*limit).limit(limit).all()
+    return q.order_by(models.Payment.server_time.desc()).offset((page-1)*limit).limit(limit).all()
 
 
 @router.get("/count")
@@ -149,13 +149,13 @@ def count_payments(
     if date_from:
         try:
             dt_from = datetime.fromisoformat(date_from)
-            q = q.filter(models.Payment.created_at >= dt_from)
+            q = q.filter(models.Payment.server_time >= dt_from)
         except Exception:
             pass
     if date_to:
         try:
             dt_to = datetime.fromisoformat(date_to)
-            q = q.filter(models.Payment.created_at <= dt_to)
+            q = q.filter(models.Payment.server_time <= dt_to)
         except Exception:
             pass
     return {"count": q.count()}
@@ -256,22 +256,22 @@ def export_payments(
     if date_from:
         try:
             dt_from = datetime.fromisoformat(date_from)
-            q = q.filter(models.Payment.created_at >= dt_from)
+            q = q.filter(models.Payment.server_time >= dt_from)
         except Exception:
             pass
     if date_to:
         try:
             dt_to = datetime.fromisoformat(date_to)
-            q = q.filter(models.Payment.created_at <= dt_to)
+            q = q.filter(models.Payment.server_time <= dt_to)
         except Exception:
             pass
-    rows = q.order_by(models.Payment.created_at.desc()).limit(min(limit, 5000)).all()
+    rows = q.order_by(models.Payment.server_time.desc()).limit(min(limit, 5000)).all()
     if format == "csv":
         import csv, io
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["id", "invoice_id", "direction", "method", "amount", "status", "created_at"]) 
+        writer.writerow(["id", "invoice_id", "direction", "method", "amount", "status", "server_time"]) 
         for p in rows:
-            writer.writerow([p.id, p.invoice_id, p.direction, p.method, p.amount, p.status, getattr(p, "created_at", None)])
+            writer.writerow([p.id, p.invoice_id, p.direction, p.method, p.amount, p.status, getattr(p, "server_time", None)])
         return Response(content=buf.getvalue(), media_type="text/csv")
     raise HTTPException(status_code=400, detail="Unsupported export format")
