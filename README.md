@@ -83,6 +83,28 @@ popd
 docker compose exec backend sh -lc "pip install -q pytest && pytest -q backend/tests"
 ```
 
+## 🧪 تنظیمات تست و موتور پایگاه داده
+
+برای تست‌های سریع، ما از SQLite in-memory استفاده می‌کنیم. دو متغیر محیطی رفتار ساخت موتور را کنترل می‌کنند:
+
+- `CACHE_TEST_ENGINE=1`: در تست‌هایی که چند درخواست پشت سر هم نیازمند اشتراک یک وضعیت (مثل تست‌های فاکتور و پرداخت) هستند، یک موتور مشترک در حافظه ایجاد می‌شود تا آبجکت‌های ساخته‌شده در درخواست قبلی قابل مشاهده باشند.
+- عدم تنظیم یا خالی بودن این متغیر: هر بار یک موتور جدید ساخته می‌شود و ایزولیشن کامل برای تست‌هایی مثل سال مالی فراهم می‌شود.
+- `TEST_ISOLATED_ENGINE=1`: حتی اگر `CACHE_TEST_ENGINE` فعال باشد، اجبار به ساخت موتور جدید برای هر تست (ایزولیشن سخت)؛ در تست‌های سال مالی و یکپارچگی نهایی استفاده شده است.
+
+نمونه استفاده در PowerShell:
+
+```powershell
+$env:CACHE_TEST_ENGINE = '1'
+python -m pytest backend/tests/test_invoice_api.py::test_invoice_api_crud_flow -q
+
+Remove-Item Env:CACHE_TEST_ENGINE  # بازگشت به حالت ایزوله
+python -m pytest backend/tests/test_fiscal_year_module.py::test_close_and_lock_transitions -q
+```
+
+## 🔗 بلاک‌چین داخلی (Audit Trail)
+
+هر رویداد (ایجاد/به‌روزرسانی پرداخت یا فاکتور) در جدول بلاک‌چین ثبت می‌شود. برای جلوگیری از خطای `UNIQUE constraint failed` روی هش تکراری داده، فیلد `_nonce` (ترکیب timestamp ریزدانه و uuid کوتاه) به payload رویداد تزریق می‌گردد تا هش هر ورودی یکتا باشد ولی ساختار اصلی داده حفظ شود.
+
 ---
 
 **نسخه:** 1.0.0

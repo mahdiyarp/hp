@@ -1057,6 +1057,8 @@ app.include_router(assistant_router.router, dependencies=[Depends(lambda: None)]
 app.include_router(contacts_router.router)
 app.include_router(invoices_router.router)
 app.include_router(payments_router.router)
+from app.api.routers import external_ai as external_ai_router
+app.include_router(external_ai_router.router)
 from app.api.routers import persons as persons_router
 app.include_router(persons_router.router)
 from app.api.routers import activity as activity_router

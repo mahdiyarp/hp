@@ -44,20 +44,27 @@ from sqlalchemy.orm import Session
 
 
 from . import models
+import uuid
 
 
 def hash_event(session: Session, entity: str, entity_id: int | str, payload: dict, user_id: Optional[int] = None) -> models.BlockchainEntry:
-    """
-    Backwards-compatible helper used across routers to record a blockchain entry.
-    Maps to create_blockchain_entry with action inferred from payload.
+    """Record a blockchain entry with a per-call nonce to guarantee unique data_hash.
+
+    Previously identical payloads (e.g. multiple payments with same amount and action)
+    produced duplicate data_hash values causing UNIQUE constraint violations. We inject
+    a high-resolution timestamp + uuid nonce so each event is unique while preserving
+    original payload fields for later audit.
     """
     action = (payload or {}).get("action", "update")
+    payload_with_nonce = dict(payload or {})
+    # Microsecond timestamp + random uuid fragment for uniqueness
+    payload_with_nonce["_nonce"] = f"{datetime.utcnow().isoformat(timespec='microseconds')}:{uuid.uuid4().hex[:8]}"
     return create_blockchain_entry(
         session=session,
         entity_type=str(entity),
         entity_id=str(entity_id),
         action=str(action),
-        data=dict(payload or {}),
+        data=payload_with_nonce,
         user_id=user_id,
     )
 

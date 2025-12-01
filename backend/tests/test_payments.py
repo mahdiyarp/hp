@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 # Ensure DATABASE_URL is set before importing app modules to avoid init errors
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("CACHE_TEST_ENGINE", "1")  # ensure shared engine for multi-request payment flow
 
 from app import db  # noqa: E402
 from app.main import app  # noqa: E402
