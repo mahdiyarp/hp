@@ -1,5 +1,6 @@
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
@@ -43,9 +44,15 @@ def get_db():
 
 
 def create_test_engine():
-    """Helper for tests: create an in-memory sqlite engine and return it."""
-    from sqlalchemy import create_engine
-    e = create_engine('sqlite:///:memory:', connect_args={})
+    """Helper for tests: return an isolated in-memory sqlite engine per call.
+    Uses StaticPool to share connections within the same engine, but does not
+    cache globally to avoid cross-test module state leakage.
+    """
+    e = create_engine(
+        'sqlite://',
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     return e
 
 
