@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Body
 from typing import Any, Dict
 
 
@@ -125,7 +125,7 @@ def get_settings(session: Session = Depends(db.get_db), current: models.User = D
 
 
 @router.put("/settings", response_model=schemas.AssistantSettingsOut)
-def put_settings(payload: Dict[str, Any], session: Session = Depends(db.get_db), current: models.User = Depends(lambda: models.User())):
+def put_settings(payload: Dict[str, Any] = Body(...), session: Session = Depends(db.get_db), current: models.User = Depends(lambda: models.User())):
 
 
 
