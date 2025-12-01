@@ -76,13 +76,13 @@ def get_settings(session: Session) -> SmartAssistantSettings:
 
 
     try:
-        st = session.query(SmartAssistantSettings).first()
+        st = session.query(SmartAssistantSettings).order_by(SmartAssistantSettings.id.desc()).first()
     except OperationalError:
         try:
             SmartAssistantSettings.__table__.create(bind=session.get_bind(), checkfirst=True)
         except Exception:
             pass
-        st = session.query(SmartAssistantSettings).first()
+        st = session.query(SmartAssistantSettings).order_by(SmartAssistantSettings.id.desc()).first()
 
 
 
