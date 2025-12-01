@@ -151,6 +151,14 @@ def put_settings(payload: Dict[str, Any] = Body(...), session: Session = Depends
 
     # Accept raw payload dict to avoid schema drop of unknown/camelCase fields in tests
     st = assistant_service.save_settings(session, dict(payload))
+    if "model_name" in payload:
+        try:
+            st.model_name = payload["model_name"]
+            session.add(st)
+            session.commit()
+            session.refresh(st)
+        except Exception:
+            pass
 
 
 
