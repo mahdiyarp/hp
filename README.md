@@ -34,6 +34,9 @@ A lightweight background scheduler can emit automation events (e.g., overdue che
 	- `payment.posted`
 	- `cheque.overdue`
 	These trigger best-effort SMS notifications when a phone number is resolvable for the counterparty.
+  
+- Webhooks: enable an integration with `provider=webhook` and JSON `config` including `{ "url": "https://your.receiver/endpoint" }`. If you set a secret in `api_key`, events will include `X-HP-Signature: sha256=<hmac>` header over the JSON body.
+- Test your receiver with `POST /api/integrations/test/webhook?url=...&secret=...` (Admin only).
 
 ## Tooling
 

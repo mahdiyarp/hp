@@ -106,3 +106,29 @@ def test_sms_endpoint(
     if not ok:
         raise HTTPException(status_code=502, detail=info)
     return {"ok": True, "detail": info}
+
+
+@router.post("/test/webhook")
+def test_webhook_endpoint(
+    url: str,
+    secret: Optional[str] = None,
+    session: Session = Depends(db.get_db),
+    _: models.User = Depends(require_roles(role_names=["Admin"]))
+):
+    import json, time, hmac, hashlib, requests
+    headers = {'Content-Type': 'application/json'}
+    body = {
+        'event': 'test.ping',
+        'payload': {'message': 'Webhook test OK'},
+        'sent_at': int(time.time()),
+        'source': 'hesabpak'
+    }
+    data = json.dumps(body, ensure_ascii=False).encode('utf-8')
+    if secret:
+        sig = hmac.new(secret.encode('utf-8'), data, hashlib.sha256).hexdigest()
+        headers['X-HP-Signature'] = f'sha256={sig}'
+    try:
+        r = requests.post(url, data=data, headers=headers, timeout=5)
+        return {"ok": r.status_code in (200, 201, 202), "status": r.status_code}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))

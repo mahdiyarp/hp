@@ -1,8 +1,13 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
 from .. import models
 from ..sms import send_sms
+import json
+import hmac
+import hashlib
+import time
+import requests
 
 # Simple event dispatcher. Can be extended to Telegram, WhatsApp, webhooks, etc.
 # Supported events: invoice.finalized, payment.posted, cheque.overdue
@@ -32,7 +37,7 @@ def _safe_send_sms(session: Session, to: Optional[str], message: Optional[str]) 
 
 def trigger_event(session: Session, event: str, payload: Dict[str, Any]) -> None:
     # Load enabled integrations (for future expansion)
-    _ = session.query(models.IntegrationConfig).filter(models.IntegrationConfig.enabled == True).all()  # noqa: E712
+    enabled_integrations: List[models.IntegrationConfig] = session.query(models.IntegrationConfig).filter(models.IntegrationConfig.enabled == True).all()  # noqa: E712
 
     if event == 'cheque.overdue':
         try:
@@ -66,5 +71,43 @@ def trigger_event(session: Session, event: str, payload: Dict[str, Any]) -> None
         except Exception:
             pass
 
+    # Dispatch to any webhook integrations
+    try:
+        _dispatch_webhooks(enabled_integrations, event, payload)
+    except Exception:
+        pass
+
     # Other events: no-ops for now
     return
+
+
+def _dispatch_webhooks(integrations: List[models.IntegrationConfig], event: str, payload: Dict[str, Any]) -> None:
+    for integ in integrations:
+        if (integ.provider or '').lower() not in ('webhook', 'webhook_json'):
+            continue
+        url = None
+        headers = {'Content-Type': 'application/json'}
+        try:
+            cfg = json.loads(integ.config) if integ.config else {}
+        except Exception:
+            cfg = {}
+        url = cfg.get('url') or cfg.get('endpoint')
+        if not url:
+            continue
+        body = {
+            'event': event,
+            'payload': payload,
+            'sent_at': int(time.time()),
+            'source': 'hesabpak',
+            'integration': {'id': integ.id, 'name': integ.name},
+        }
+        data = json.dumps(body, ensure_ascii=False).encode('utf-8')
+        secret = (integ.api_key or '').encode('utf-8') if integ.api_key else None
+        if secret:
+            sig = hmac.new(secret, data, hashlib.sha256).hexdigest()
+            headers['X-HP-Signature'] = f'sha256={sig}'
+        try:
+            requests.post(url, data=data, headers=headers, timeout=5)
+        except Exception:
+            # Ignore failures to avoid impacting main workflow
+            pass
