@@ -1,0 +1,5 @@
+/* Auto-fix fallback CSS appended by Playwright when needed */
+.force-font, .widget *, .chart-label *, .MuiTypography-root, .ant-typography {
+  font-family: 'Vazirmatn', 'Yekan', 'IRANSansX', sans-serif !important;
+}
+body * { direction: rtl !important; unicode-bidi: plaintext !important; }

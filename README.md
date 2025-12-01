@@ -1,71 +1,88 @@
-# Hesabpak (HP)
+# HesabPak - سیستم حسابداری فارسی 💰
 
-Monorepo for the Hesabpak accounting platform. The project currently contains:
+سیستم جامع حسابداری و مدیریت تراکنش‌های مالی با رابط کاربری فارسی و امکانات کامل.
 
-- `backend/` — FastAPI service with PostgreSQL, Alembic migrations, and pytest suite.
-- `frontend/` — React + Vite client (RTL, Jalali-aware UI).
-- `infra/` — Deployment notes and docker-compose files.
-- `docs/` — Architectural references and planning material.
+## 🚀 راه‌اندازی سریع
 
-## Getting Started
+### پیش‌نیازها
+- Docker و Docker Compose نصب شده
+- Windows, macOS یا Linux
 
-```bash
-docker compose up --build
+### شروع بلافاصله (Windows)
+```batch
+start.bat
 ```
 
-Backend swagger UI (once running): `http://localhost:8000/docs`  
-Frontend app: `http://localhost:3000`
-
-For local development copy `backend/.env.example` → `backend/.env` and adjust secrets.
-
-## Tooling
-
-- Python: `pytest`, `black`, `isort` (managed via `pre-commit`).
-- Node: `eslint`, `prettier`, `lint-staged` (configured in `frontend`).
-- CI: GitHub Actions workflow under `.github/workflows/ci.yml`.
-- Optional 2FA (TOTP) for sign-in flows is available via `/api/auth/otp/*` endpoints.
-
-### Developer Setup
-
+### شروع دستی
 ```bash
-# backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-pip install pre-commit black isort flake8
-pre-commit install
-
-# frontend
-cd frontend
-npm install
-npm run prepare   # installs husky hooks
+docker compose up -d --build
 ```
 
-See `docs/architecture.md` for module breakdown and roadmap.
+## 📱 دسترسی
 
-## 📚 Documentation
+| سرویس | آدرس | توضیح |
+|------|------|------|
+| **رابط کاربری** | http://localhost:3000 | صفحه اصلی برنامه |
+| **API** | http://localhost:8000 | سرویس REST API |
+| **Swagger Docs** | http://localhost:8000/docs | مستندات API تعاملی |
 
-The project includes comprehensive documentation:
+## 🔐 اطلاعات ورود
 
-- **[DEVELOPER_PROFILE.md](DEVELOPER_PROFILE.md)** — Developer account details, responsibilities, and legal restrictions for Mehdi Pakzamir
-- **[TEAM_AND_ACCESS_CONTROL.md](TEAM_AND_ACCESS_CONTROL.md)** — RBAC structure with 6 roles, 23 permissions, and access matrix
-- **[API_SECURITY.md](API_SECURITY.md)** — Authentication, authorization, and API security guidelines
+```
+نام کاربری: developer
+رمز عبور: 09123506545
+```
 
-### Developer Access
+## 📚 ماژول‌های اصلی
 
-**Developer User**: `mehdi_pakzamir` (ID: 19)
-- **Permissions**: All 23 system permissions (finance, sales, people, inventory, settings, backup)
-- **Modules**: reports, finance, sales, people, inventory, settings
-- **Contact**: mahdiyarp@gmail.com | 09123506545
+- Dashboard: خلاصه‌ی فعالیت‌ها
+- فاکتورها: مدیریت فاکتورهای فروش/خرید
+- پرداخت‌ها: رفت‌ورو پرداخت‌ها
+- دریافت‌ها: مدیریت دریافت‌های وجه
+- انبار: کنترل موجودی
+- اشخاص: مدیریت مشتریان
+- گزارش‌ها: تحلیل مالی
 
-### Role-Based Access Control (RBAC)
+## 🛠️ دستورات مفید
 
-The system implements 6 roles with permission-based authorization:
+```bash
+# توقف سرویس‌ها
+docker compose down
 
-| Role | Use Case | Key Permissions |
-|------|----------|-----------------|
-| **Admin** | Full system access | All 23 permissions |
-| **Manager** | Operations management | Finance, Sales, People (create/edit), Inventory |
-| **Accountant** | Financial management | Finance (view/create/edit/report), People (view) |
-| **Salesman** | Sales management | Sales (create/edit/finalize), Inventory (view), People (view/create) |
-| **Viewer** | Read-only access | All modules (view only) |
-| **Developer** | System development | All 23 permissions (with legal restrictions) |
+# توقف و حذف داده‌ها
+docker compose down -v
+
+# مشاهده لاگ‌ها
+docker compose logs -f
+
+# دسترسی به Backend
+docker exec -it hesabpak_backend bash
+```
+
+## ✅ اجرای تست‌های Backend
+
+برای اجرای تست‌ها در محیط محلی (بدون Docker):
+
+```powershell
+# ایجاد/فعال‌سازی محیط مجازی (Windows PowerShell)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# نصب وابستگی‌ها
+python -m pip install -r backend\requirements-dev.txt
+
+# اجرای تست‌ها
+pushd backend
+python -m pytest
+popd
+```
+
+یا درون کانتینر (در صورت نصب بودن pytest):
+
+```powershell
+docker compose exec backend sh -lc "pip install -q pytest && pytest -q backend/tests"
+```
+
+---
+
+**نسخه:** 1.0.0

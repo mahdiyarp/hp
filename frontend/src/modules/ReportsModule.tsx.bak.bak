@@ -1,0 +1,276 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import type { ModuleComponentProps } from '../components/layout/AppShell'
+import { apiGet } from '../services/api'
+import { formatNumberFa, isoToJalali, formatPrice } from '../utils/num'
+import {
+  retroBadge,
+  retroButton,
+  retroHeading,
+  retroInput,
+  retroPanel,
+  retroPanelPadded,
+  retroTableHeader,
+  retroMuted,
+} from '../components/retroTheme'
+
+interface PnLReport {
+  sales: number
+  purchases: number
+  gross_profit: number
+  start: string | null
+  end: string | null
+}
+
+interface CashReport {
+  method: string
+  balance: number
+}
+
+interface StockValuation {
+  product_id: string
+  name: string
+  inventory: number
+  unit_price: number | null
+  total_value: number
+}
+
+const CASH_METHODS = ['cash', 'bank', 'pos']
+
+export default function ReportsModule({ smartDate }: ModuleComponentProps) {
+  const [rangeDays, setRangeDays] = useState(30)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
+  const [pnl, setPnl] = useState<PnLReport | null>(null)
+  const [cashAll, setCashAll] = useState<CashReport | null>(null)
+  const [cashMethods, setCashMethods] = useState<Record<string, number>>({})
+  const [stock, setStock] = useState<StockValuation[]>([])
+
+  useEffect(() => {
+    loadReports(rangeDays)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeDays, smartDate.isoDate])
+
+  async function loadReports(days: number) {
+    setLoading(true)
+    setError(null)
+    const newWarnings: string[] = []
+    try {
+      const endDate = smartDate.isoDate ? new Date(`${smartDate.isoDate}T00:00:00Z`) : new Date()
+      const startDate = new Date(endDate.getTime())
+      startDate.setUTCDate(startDate.getUTCDate() - days)
+
+      const startParam = startDate.toISOString()
+      const endParam = new Date(endDate.getTime() + 24 * 3600 * 1000).toISOString()
+      try {
+        const pnlData = await apiGet<PnLReport>(
+          `/api/reports/pnl?start=${encodeURIComponent(startParam)}&end=${encodeURIComponent(
+            endParam,
+          )}`,
+        )
+        setPnl(pnlData)
+      } catch (err) {
+        console.error(err)
+        newWarnings.push('ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´ ط·آ³ط¸ث†ط·آ¯ ط¸ث† ط·آ²ط؛إ’ط·آ§ط¸â€  ط·آ¯ط·آ± ط·آ¯ط·آ³ط·ع¾ط·آ±ط·آ³ ط¸â€ ط؛إ’ط·آ³ط·ع¾.')
+      }
+
+      try {
+        const cashData = await apiGet<CashReport>('/api/reports/cash')
+        setCashAll(cashData)
+      } catch (err) {
+        console.error(err)
+        newWarnings.push('ط·ع¾ط·آ±ط·آ§ط·آ² ط¸â€ ط¸â€ڑط·آ¯ط؛إ’ ط¹آ©ط¸â€‍ط؛إ’ ط¸â€ڑط·آ§ط·آ¨ط¸â€‍ ط·آ¯ط·آ³ط·ع¾ط·آ±ط·آ³ ط¸â€ ط؛إ’ط·آ³ط·ع¾.')
+      }
+
+      const methodEntries: Record<string, number> = {}
+      await Promise.all(
+        CASH_METHODS.map(method =>
+          apiGet<CashReport>(`/api/reports/cash?method=${method}`)
+            .then(res => {
+              methodEntries[method] = res.balance
+            })
+            .catch(err => {
+              console.error(err)
+              newWarnings.push(`ط·ع¾ط·آ±ط·آ§ط·آ² ط·آ±ط¸ث†ط·آ´ ${method} ط¸â€ڑط·آ§ط·آ¨ط¸â€‍ ط·آ®ط¸ث†ط·آ§ط¸â€ ط·آ¯ط¸â€  ط¸â€ ط؛إ’ط·آ³ط·ع¾.`)
+            }),
+        ),
+      )
+      setCashMethods(methodEntries)
+
+      try {
+        const stockData = await apiGet<StockValuation[]>('/api/reports/stock')
+        setStock(stockData)
+      } catch (err) {
+        console.error(err)
+        newWarnings.push('ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´ ط·آ§ط·آ±ط·آ²ط·آ´ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’ ط¸â€ ط·آ§ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑ ط·آ¨ط¸ث†ط·آ¯.')
+      }
+    } catch (err) {
+      console.error(err)
+      setError('ط·آ¨ط·آ§ط·آ±ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§ ط·آ¨ط·آ§ ط·آ®ط·آ·ط·آ§ ط·آ±ط¸ث†ط·آ¨ط¸â€،أ¢â‚¬إ’ط·آ±ط¸ث† ط·آ´ط·آ¯.')
+    } finally {
+      setWarnings(newWarnings)
+      setLoading(false)
+    }
+  }
+
+  const stockTotals = useMemo(() => {
+    const count = stock.length
+    const totalValue = stock.reduce((acc, item) => acc + (item.total_value || 0), 0)
+    return { count, totalValue }
+  }, [stock])
+
+  if (loading) {
+    return (
+      <div className={`${retroPanel} p-10 flex items-center justify-center`}>
+        <div className="space-y-3 text-center">
+          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+          <p className={`${retroHeading} text-[#1f2e3b]`}>ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط¹آ¯ط·آ±ط·آ¯ط·آ¢ط¸ث†ط·آ±ط؛إ’ ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {error && (
+        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
+          {error}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className={`${retroPanel} p-4 space-y-2`}>
+          <p className={`${retroHeading} text-[#7a6b4f]`}>ط¸â€،ط·آ´ط·آ¯ط·آ§ط·آ±ط¸â€،ط·آ§ط؛إ’ ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´</p>
+          <ul className="list-disc list-inside text-xs text-[#7a6b4f] space-y-1">
+            {warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p className={retroHeading}>ط¸آ¾ط؛إ’ط·آ´ط·آ®ط¸ث†ط·آ§ط¸â€  ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§</p>
+            <h2 className="text-2xl font-semibold mt-2">ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط·آ§ط¸â€‍ط؛إ’ ط¸ث† ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ط؛إ’</h2>
+            <p className={`text-xs ${retroMuted} mt-2`}>
+              ط¸â€¦ط·آ¨ط¸â€ ط·آ§: ط·ع¾ط·آ§ط·آ±ط؛إ’ط·آ® {smartDate.jalali ?? 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ'} (ISO {smartDate.isoDate ?? '---'})
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3 items-center">
+            <label className={`${retroHeading} text-[#f5f1e6] flex items-center gap-2`}>
+              ط·آ¨ط·آ§ط·آ²ط¸â€، (ط·آ±ط¸ث†ط·آ²)
+              <select
+                value={rangeDays}
+                onChange={e => setRangeDays(Number(e.target.value))}
+                className={`${retroInput} w-32`}
+              >
+                <option value={7}>ط؛آ· (ط؛إ’ط¹آ© ط¸â€،ط¸ظ¾ط·ع¾ط¸â€،)</option>
+                <option value={30}>ط؛آ³ط؛آ° (ط؛إ’ط¹آ© ط¸â€¦ط·آ§ط¸â€،)</option>
+                <option value={90}>ط؛آ¹ط؛آ° (ط·آ³ط¸â€، ط¸â€¦ط·آ§ط¸â€،)</option>
+                <option value={365}>ط؛آ³ط؛آ¶ط؛آµ (ط؛إ’ط¹آ© ط·آ³ط·آ§ط¸â€‍)</option>
+              </select>
+            </label>
+            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadReports(rangeDays)}>
+              ط·آ¨ط·آ±ط¸ث†ط·آ²ط·آ±ط·آ³ط·آ§ط¸â€ ط؛إ’ ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´
+            </button>
+          </div>
+        </header>
+
+        {pnl ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>ط¸ظ¾ط·آ±ط¸ث†ط·آ´</p>
+              <p className="text-lg font-semibold">{formatPrice(pnl.sales, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}</p>
+            </div>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>ط·آ®ط·آ±ط؛إ’ط·آ¯</p>
+              <p className="text-lg font-semibold">{formatPrice(pnl.purchases, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}</p>
+            </div>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>ط·آ³ط¸ث†ط·آ¯ ط¸â€ ط·آ§ط·آ®ط·آ§ط¸â€‍ط·آµ</p>
+              <p className="text-lg font-semibold">{formatPrice(pnl.gross_profit, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}</p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-[#7a6b4f]">ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´ ط·آ³ط¸ث†ط·آ¯ ط¸ث† ط·آ²ط؛إ’ط·آ§ط¸â€  ط·آ¨ط·آ§ط·آ±ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط¸â€ ط·آ´ط·آ¯.</p>
+        )}
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header>
+          <p className={retroHeading}>ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾ ط¸â€ ط¸â€ڑط·آ¯ط؛إ’ط¸â€ ط¹آ¯ط؛إ’</p>
+          <h3 className="text-lg font-semibold mt-2">ط·ع¾ط·آ±ط·آ§ط·آ² ط·آµط¸â€ ط·آ¯ط¸ث†ط¸â€ڑ/ط·آ¨ط·آ§ط¸â€ ط¹آ©</h3>
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>ط¹آ©ط¸â€‍ ط¸â€¦ط¸â€ ط·آ§ط·آ¨ط·آ¹ ط¸â€ ط¸â€ڑط·آ¯ط؛إ’</p>
+            <p className="text-lg font-semibold">
+              {formatPrice(cashAll?.balance ?? 0, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}
+            </p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>ط·آ±ط¸ث†ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ§ط·آµط¸â€‍ط؛إ’</p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              {CASH_METHODS.map(method => (
+                <span key={method} className={retroBadge}>
+                  {method === 'cash' ? 'ط·آµط¸â€ ط·آ¯ط¸ث†ط¸â€ڑ' : method === 'bank' ? 'ط·آ­ط·آ³ط·آ§ط·آ¨ ط·آ¨ط·آ§ط¸â€ ط¹آ©ط؛إ’' : 'ط¹آ©ط·آ§ط·آ±ط·ع¾ط·آ®ط¸ث†ط·آ§ط¸â€ '} :{' '}
+                  {formatNumberFa(cashMethods[method] ?? 0)} ط·آ±ط؛إ’ط·آ§ط¸â€‍
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header>
+          <p className={retroHeading}>ط·آ§ط·آ±ط·آ²ط·آ´ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’</p>
+          <h3 className="text-lg font-semibold mt-2">ط·آ§ط·آ±ط·آ²ط·آ´أ¢â‚¬إ’ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط¹آ©ط·آ§ط¸â€‍ط·آ§</h3>
+          <p className={`text-xs ${retroMuted} mt-2`}>
+            ط·ع¾ط·آ¹ط·آ¯ط·آ§ط·آ¯ ط¹آ©ط·آ§ط¸â€‍ط·آ§: {formatNumberFa(stockTotals.count)} | ط·آ§ط·آ±ط·آ²ط·آ´ ط¹آ©ط¸â€‍: {formatPrice(stockTotals.totalValue, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}
+          </p>
+        </header>
+        {stock.length > 0 ? (
+          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+            <thead>
+              <tr>
+                <th className={retroTableHeader}>ط¹آ©ط·آ§ط¸â€‍ط·آ§</th>
+                <th className={retroTableHeader}>ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’</th>
+                <th className={retroTableHeader}>ط¸â€ڑط؛إ’ط¸â€¦ط·ع¾ ط¸ث†ط·آ§ط·آ­ط·آ¯</th>
+                <th className={retroTableHeader}>ط·آ§ط·آ±ط·آ²ط·آ´ ط¹آ©ط¸â€‍</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stock.slice(0, 12).map(item => (
+                <tr key={item.product_id} className="border-b border-[#d9cfb6]">
+                  <td className="px-3 py-2">{item.name}</td>
+                  <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
+                  <td className="px-3 py-2 text-left">
+                    {item.unit_price ? formatPrice(item.unit_price, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍') : 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ'}
+                  </td>
+                  <td className="px-3 py-2 text-left">
+                    {formatPrice(item.total_value, 'ط·آ±ط؛إ’ط·آ§ط¸â€‍')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-xs text-[#7a6b4f]">ط·آ§ط·آ·ط¸â€‍ط·آ§ط·آ¹ط·آ§ط·ع¾ ط·آ§ط·آ±ط·آ²ط·آ´ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’ ط·آ¯ط·آ± ط·آ¯ط·آ³ط·ع¾ط·آ±ط·آ³ ط¸â€ ط؛إ’ط·آ³ط·ع¾.</p>
+        )}
+      </section>
+
+      {pnl?.start && pnl?.end && (
+        <section className={`${retroPanel} p-4 text-xs text-[#7a6b4f]`}>
+          <p className={retroHeading}>ط·آ¨ط·آ§ط·آ²ط¸â€، ط¸â€¦ط·آ­ط·آ§ط·آ³ط·آ¨ط¸â€،</p>
+          <p className="mt-2">
+            ط·آ§ط·آ² {isoToJalali(pnl.start ?? '')} ط·ع¾ط·آ§ {isoToJalali(pnl.end ?? '')}
+          </p>
+        </section>
+      )}
+    </div>
+  )
+}
+

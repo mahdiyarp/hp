@@ -1,0 +1,84 @@
+import DashboardModule from './DashboardModule'
+import SalesModule from './SalesModule'
+import FinanceModule from './FinanceModule'
+import InventoryModule from './InventoryModule'
+import PeopleModule from './PeopleModule'
+import ReportsModule from './ReportsModule'
+import SettingsModule from './SettingsModule'
+import DeveloperModule from './DeveloperModule'
+import AIModule from './AIModule'
+import PageBuilderModule from './PageBuilderModule'
+import type { ModuleDefinition } from '../components/layout/AppShell'
+
+export const modules: ModuleDefinition[] = [
+  {
+    id: 'dashboard',
+    label: 'ط·آ¯ط·آ§ط·آ´ط·آ¨ط¸ث†ط·آ±ط·آ¯',
+    description: 'ط¸â€ ط¸â€¦ط·آ§ط؛إ’ ط·آ®ط¸â€‍ط·آ§ط·آµط¸â€، ط¸ث† ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ ط·آ³ط·آ±ط؛إ’ط·آ¹ ط·آ¹ط¸â€¦ط¸â€‍ط؛إ’ط·آ§ط·ع¾ ط¸â€¦ط·آ§ط¸â€‍ط؛إ’',
+    component: DashboardModule,
+    badge: 'DASH',
+  },
+  {
+    id: 'reports',
+    label: 'ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§',
+    description: 'ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ط؛إ’ ط¸ث† ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·ع¾ط·آµط¸â€¦ط؛إ’ط¸â€¦أ¢â‚¬إ’ط¹آ¯ط؛إ’ط·آ±ط؛إ’',
+    component: ReportsModule,
+    badge: 'REPORTS',
+  },
+  {
+    id: 'sales',
+    label: 'ط¸ظ¾ط·آ±ط¸ث†ط·آ´',
+    description: 'ط·آµط·آ¯ط¸ث†ط·آ± ط¸ظ¾ط·آ§ط¹آ©ط·ع¾ط¸ث†ط·آ±ط·إ’ ط¸آ¾ط؛إ’ط·آ´أ¢â‚¬إ’ط¸ظ¾ط·آ§ط¹آ©ط·ع¾ط¸ث†ط·آ± ط¸ث† ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ ط¸ظ¾ط·آ±ط¸ث†ط·آ´ ط·آ±ط¸ث†ط·آ²ط·آ§ط¸â€ ط¸â€،',
+    component: SalesModule,
+    badge: 'SALES',
+  },
+  {
+    id: 'finance',
+    label: 'ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط¸ث† ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾',
+    description: 'ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€،ط·إ’ ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾/ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾ط·إ’ ط·ع¾ط·آ³ط¸ث†ط؛إ’ط¸â€، ط¸ث† ط¹â€ ط¹آ©',
+    component: FinanceModule,
+    badge: 'FIN',
+  },
+  {
+    id: 'inventory',
+    label: 'ط·آ§ط¸â€ ط·آ¨ط·آ§ط·آ±',
+    description: 'ط¹آ©ط¸â€ ط·ع¾ط·آ±ط¸â€‍ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’ط·إ’ ط¹آ©ط·آ§ط·آ±ط·ع¾ ط¹آ©ط·آ§ط¸â€‍ط·آ§ ط¸ث† ط·آ§ط·آ±ط·آ²ط·آ´ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’',
+    component: InventoryModule,
+    badge: 'STOCK',
+  },
+  {
+    id: 'people',
+    label: 'ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨ط·آ§ط¸â€ ',
+    description: 'ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ ط¸â€¦ط·آ´ط·ع¾ط·آ±ط؛إ’ط·آ§ط¸â€ ط·إ’ ط·ع¾ط·آ§ط¸â€¦ط؛إ’ط¸â€ أ¢â‚¬إ’ط¹آ©ط¸â€ ط¸â€ ط·آ¯ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ ط¸ث† ط·آ³ط·آ§ط؛إ’ط·آ± ط·آ§ط·آ´ط·آ®ط·آ§ط·آµ',
+    component: PeopleModule,
+    badge: 'PEOPLE',
+  },
+  {
+    id: 'settings',
+    label: 'ط·ع¾ط¸â€ ط·آ¸ط؛إ’ط¸â€¦ط·آ§ط·ع¾ ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦',
+    description: 'ط¸آ¾ط؛إ’ط¹آ©ط·آ±ط·آ¨ط¸â€ ط·آ¯ط؛إ’ ط·آ³ط·آ§ط¸â€‍ ط¸â€¦ط·آ§ط¸â€‍ط؛إ’ط·إ’ ط¸آ¾ط·آ´ط·ع¾ط؛إ’ط·آ¨ط·آ§ط¸â€ أ¢â‚¬إ’ط¹آ¯ط؛إ’ط·آ±ط؛إ’ط·إ’ ط·ع¾ط·آ±ط·آ¬ط؛إ’ط·آ­ط·آ§ط·ع¾ ط¸ث† ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’',
+    component: SettingsModule,
+    badge: 'SYSTEM',
+  },
+  {
+    id: 'developer',
+    label: 'ط·ع¾ط¸ث†ط·آ³ط·آ¹ط¸â€،أ¢â‚¬إ’ط·آ¯ط¸â€،ط¸â€ ط·آ¯ط¸â€،',
+    description: 'ط·آ§ط·آ¨ط·آ²ط·آ§ط·آ±ط¸â€،ط·آ§ط؛إ’ API ط¸ث† ط·آ¨ط·آ±ط·آ±ط·آ³ط؛إ’ endpointأ¢â‚¬إ’ط¸â€،ط·آ§',
+    component: DeveloperModule,
+    badge: 'DEV',
+  },
+  {
+    id: 'page-builder',
+    label: 'ط·آµط¸ظ¾ط·آ­ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²',
+    description: 'ط·آµط¸ظ¾ط·آ­ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ Drag & Drop ط·آ¨ط·آ§ GrapesJS (ط¸â€ ط·آ³ط·آ®ط¸â€، ط·ع¾ط¸ث†ط·آ³ط·آ¹ط¸â€،)',
+    component: PageBuilderModule,
+    badge: 'DEV/PAGE',
+  },
+  {
+    id: 'ai',
+    label: 'ط·آ¯ط·آ³ط·ع¾ط؛إ’ط·آ§ط·آ± ط¸â€،ط¸ث†ط·آ´ط¸â€¦ط¸â€ ط·آ¯',
+    description: 'ط¹آ¯ط¸ظ¾ط·ع¾أ¢â‚¬إ’ط¸ث†ط¹آ¯ط¸ث†ط؛إ’ ط¸â€،ط¸ث†ط·آ´ط¸â€¦ط¸â€ ط·آ¯ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ±ط·آ§ط¸â€،ط¸â€ ط¸â€¦ط·آ§ط؛إ’ط؛إ’ ط¸ث† ط·آ³ط·آ§ط·آ®ط·ع¾ ط¸â€¦ط·آ­ط·ع¾ط¸ث†ط·آ§ ط·آ¨ط·آ§ OpenAI',
+    component: AIModule,
+    badge: 'AI',
+  },
+]

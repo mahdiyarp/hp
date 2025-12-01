@@ -1,0 +1,768 @@
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Set
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ROADMAP_DIR = PROJECT_ROOT / "roadmap"
+GENERATED_PAGE_DIR = ROADMAP_DIR / "generated-page"
+ROADMAP_JSON = ROADMAP_DIR / "roadmap.json"
+STATUS_JSON = ROADMAP_DIR / "status.json"
+ROADMAP_MD = ROADMAP_DIR / "roadmap.md"
+LIVE_HTML = GENERATED_PAGE_DIR / "live.html"
+PROGRESS_LOG = ROADMAP_DIR / "progress.log"
+PHASE_DOCS_DIR = PROJECT_ROOT / "docs" / "phases"
+
+# Default NeuroChainX roadmap phases (Fibonacci-weighted 10-stage plan).
+DEFAULT_PHASES: List[Dict] = [
+    {
+        "id": 1,
+        "code": "F01-ID",
+        "name": "ط¸â€،ط¸ث†ط؛إ’ط·ع¾ ط·آ¨ط·آ°ط·آ±",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 1,
+        "summary": "ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ ط·آ§ط¸ث†ط¸â€‍ط؛إ’ط¸â€، NeuroChainXط·إ’ ط·آ±ط·آ§ط¸â€،ط·آ¨ط·آ±ط·آ¯ DID ط¸ث† ط¸â€¦ط·آ³ط؛إ’ط·آ±ط¸â€،ط·آ§ط؛إ’ ط·آ¨ط·آ§ط·آ²ط؛إ’ط·آ§ط·آ¨ط؛إ’ ط·آ§ط¸â€¦ط¸â€ .",
+        "dependencies": [],
+        "outcomes": [
+            "ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ ط¸â€¦ط·آ´ط·آ®ط·آµط·آ§ط·ع¾ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ (ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ط·إ’ ط·آ´ط¸â€ ط·آ§ط·آ³ط¸â€،ط·إ’ ط·آ§ط·آ¯ط·آ¹ط·آ§ط¸â€،ط·آ§)",
+            "ط·آ³ط؛إ’ط·آ§ط·آ³ط·ع¾ ط·آ¨ط·آ§ط·آ²ط؛إ’ط·آ§ط·آ¨ط؛إ’ ط¸ث† ط¸â€ ط¹آ¯ط¸â€،ط·آ¯ط·آ§ط·آ´ط·ع¾ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط·آ¨ط·آ§ ط¸â€¦ط·آ¯ط¸â€‍ ط·ع¾ط¸â€،ط·آ¯ط؛إ’ط·آ¯",
+            "ط¸â€ ط¸â€¦ط¸ث†ط¸â€ ط¸â€، ط·آ§ط¸ث†ط¸â€‍ط؛إ’ط¸â€، API ط·آµط·آ¯ط¸ث†ط·آ± ط¸ث† ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±ط·آ³ط¸â€ ط·آ¬ط؛إ’ ط·آ§ط·آ¯ط·آ¹ط·آ§ط¸â€،ط·آ§ط؛إ’ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ط؛إ’",
+        ],
+        "milestones": [
+            {"id": "F1-M1", "task": "ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط¸آ¾ط·آ§ط؛إ’ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ NeuroChainX ط¸ث† ط·آ§ط¸â€¦ط·آ¶ط·آ§ط؛إ’ ط¸â€ ط·آ§ط¸â€¦/ط·آ¨ط·آ±ط¸â€ ط·آ¯", "done": False},
+            {"id": "F1-M2", "task": "ط·آ·ط·آ±ط·آ§ط·آ­ط؛إ’ ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط¹آ©ط؛إ’ط¸ظ¾أ¢â‚¬إ’ط¸آ¾ط¸ث†ط¸â€‍ط·إ’ ط·آ±ط·آ¬ط؛إ’ط·آ³ط·ع¾ط·آ±ط؛إ’ DID ط¸ث† ط¸â€¦ط·آ³ط؛إ’ط·آ±ط¸â€،ط·آ§ط؛إ’ ط·آ¨ط·آ§ط·آ²ط؛إ’ط·آ§ط·آ¨ط؛إ’", "done": False},
+            {"id": "F1-M3", "task": "ط¸â€¦ط·آ¯ط¸â€‍ ط·ع¾ط¸â€،ط·آ¯ط؛إ’ط·آ¯ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¸â€ ط¹آ¯ط¸â€،ط·آ¯ط·آ§ط·آ´ط·ع¾ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ ط¸ث† ط¸â€ ط¹آ¯ط¸â€،ط·آ¨ط·آ§ط¸â€ ط·آ§ط¸â€  ط·آ§ط¸ث†ط¸â€‍ط؛إ’ط¸â€،", "done": False},
+            {"id": "F1-M4", "task": "ط¸â€ ط¸â€¦ط¸ث†ط¸â€ ط¸â€، ط·آ§ط¸ث†ط¸â€‍ط؛إ’ط¸â€، API ط·آµط·آ¯ط¸ث†ط·آ± ط¸ث† ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±ط·آ³ط¸â€ ط·آ¬ط؛إ’ ط·آ§ط·آ¯ط·آ¹ط·آ§ط؛إ’ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ط؛إ’", "done": False},
+        ],
+    },
+    {
+        "id": 2,
+        "code": "F02-LEDGER",
+        "name": "ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸â€،ط·آ³ط·ع¾ط¸â€،",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 1,
+        "summary": "ط·آ³ط·آ§ط·آ®ط·ع¾ ط¸â€¦ط·آ¯ط¸â€‍ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸ث† ط·آ­ط·آ§ط¸â€‍ط·ع¾ ط¸â€ڑط·آ·ط·آ¹ط؛إ’ ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦.",
+        "dependencies": ["F01-ID"],
+        "outcomes": [
+            "ط·آ·ط·آ±ط·آ­ ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸ث† ط¸آ¾ط¸ث†ط·آ´ط·آ´ ط·ع¾ط·آ±ط·آ§ط¹آ©ط¸â€ ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§ ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط·آ´ط·آ¯",
+            "ط¸â€ڑط¸ث†ط·آ§ط¸â€ ط؛إ’ط¸â€  ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±ط·آ³ط¸â€ ط·آ¬ط؛إ’ ط¸ث† ط¸â€،ط·آ´ ط¸â€ڑط·آ·ط·آ¹ط؛إ’ ط¸آ¾ط؛إ’ط·آ§ط·آ¯ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ´ط·آ¯",
+            "ط·آ«ط·آ¨ط·ع¾ ط¸ث†ط¸â€ڑط·آ§ط؛إ’ط·آ¹ ط¸â€ڑط·آ§ط·آ¨ط¸â€‍ ط¸â€¦ط¸â€¦ط؛إ’ط·آ²ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ±ط·آ®ط·آ¯ط·آ§ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط·آ­ط؛إ’ط·آ§ط·ع¾ط؛إ’",
+        ],
+        "milestones": [
+            {"id": "F2-M1", "task": "ط·آ§ط¸â€ ط·ع¾ط·آ®ط·آ§ط·آ¨ ط¸â€¦ط·آ¯ط¸â€‍ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸ث† ط·آ´ط¸ع¯ط¸â€¦ط·آ§ط؛إ’ ط·آ¨ط¸â€‍ط·آ§ط¹آ©/ط¸ث†ط·آ±ط¸ث†ط·آ¯ط؛إ’", "done": False},
+            {"id": "F2-M2", "task": "ط¸آ¾ط؛إ’ط·آ§ط·آ¯ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط¹â€ ط·آ±ط·آ®ط¸â€، ط·ع¾ط·آ±ط·آ§ط¹آ©ط¸â€ ط·آ´ (ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯/ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±ط·آ³ط¸â€ ط·آ¬ط؛إ’/ط·آ«ط·آ¨ط·ع¾)", "done": False},
+            {"id": "F2-M3", "task": "ط¸â€،ط·آ´ ط¸â€ڑط·آ·ط·آ¹ط؛إ’ ط·آ­ط·آ§ط¸â€‍ط·ع¾ ط¸ث† ط¸â€‍ط·آ§ط¹آ¯ ط¸â€¦ط¸â€¦ط؛إ’ط·آ²ط؛إ’ ط¸ظ¾ط¸â€ڑط·آ·-ط·آ§ط¸ظ¾ط·آ²ط¸ث†ط·آ¯ط¸â€ ط؛إ’", "done": False},
+            {"id": "F2-M4", "task": "ط·ع¾ط·آ³ط·ع¾ ط¸ث†ط·آ§ط·آ­ط·آ¯/ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€، ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¸â€،ط·آ³ط·ع¾ط¸â€، ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸ث† ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±ط·آ³ط¸â€ ط·آ¬ط؛إ’", "done": False},
+        ],
+    },
+    {
+        "id": 3,
+        "code": "F03-P2P",
+        "name": "ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط¸â€،ط¸â€¦ط·ع¾ط·آ§أ¢â‚¬إ’ط·آ¨ط¸â€،أ¢â‚¬إ’ط¸â€،ط¸â€¦ط·ع¾ط·آ§",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 2,
+        "summary": "ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط¸آ¾ط·آ§ط؛إ’ط·آ¯ط·آ§ط·آ± ط¸â€،ط¸â€¦ط·ع¾ط·آ§أ¢â‚¬إ’ط·آ¨ط¸â€،أ¢â‚¬إ’ط¸â€،ط¸â€¦ط·ع¾ط·آ§ ط·آ¨ط·آ§ ط·آ­ط¸â€‍ ط·ع¾ط·آ¹ط·آ§ط·آ±ط·آ¶.",
+        "dependencies": ["F02-LEDGER"],
+        "outcomes": [
+            "ط·آ§ط·آ³ط·ع¾ط·آ±ط·آ§ط·ع¾ط¹ع©ط؛إ’ ط¸â€¦ط·آ´ P2P ط·آ¨ط·آ§ ط¹آ©ط·آ´ط¸ظ¾ ط¸ث† ط¹آ¯ط·آ§ط·آ³ط¸آ¾",
+            "ط·آ§ط¸â€‍ط¹آ¯ط¸ث†ط؛إ’ ط·آ­ط¸â€‍ ط·ع¾ط·آ¹ط·آ§ط·آ±ط·آ¶ (CRDT/ط¸â€¦ط·آ±ط¹آ©ط¸â€‍) ط¸â€¦ط·آ´ط·آ®ط·آµ",
+            "ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ¢ط¸ظ¾ط¸â€‍ط·آ§ط؛إ’ط¸â€ -ط·آ§ط¸ث†ط¸â€‍ ط¸â€،ط¸â€¦ط·آ±ط·آ§ط¸â€، ط·آ¨ط·آ§ ط·آ³ط¸â€ ط·آ¬ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§",
+        ],
+        "milestones": [
+            {"id": "F3-M1", "task": "ط·آ·ط·آ±ط·آ§ط·آ­ط؛إ’ ط¹آ©ط·آ´ط¸ظ¾ ط¸â€،ط¸â€¦ط·ع¾ط·آ§ ط¸ث† ط¹آ¯ط·آ§ط·آ³ط¸آ¾ ط·آ¨ط·آ±ط·آ§ط؛إ’ LAN/WAN", "done": False},
+            {"id": "F3-M2", "task": "ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ±ط·آ§ط¸â€،ط·آ¨ط·آ±ط·آ¯ ط·آ­ط¸â€‍ ط·ع¾ط·آ¹ط·آ§ط·آ±ط·آ¶ (CRDT/ط¸â€¦ط·آ±ط¹آ©ط¸â€‍ ط·آ¯ط؛إ’ط¸ظ¾)", "done": False},
+            {"id": "F3-M3", "task": "ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ¢ط¸ظ¾ط¸â€‍ط·آ§ط؛إ’ط¸â€ -ط·آ§ط¸ث†ط¸â€‍ ط·آ¨ط·آ§ ط¸â€ ط·آ´ط·آ³ط·ع¾أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€ڑط·آ§ط·آ¨ط¸â€‍ ط·آ§ط·آ²ط·آ³ط·آ±ط¹آ¯ط؛إ’ط·آ±ط؛إ’", "done": False},
+            {"id": "F3-M4", "task": "ط·آ±ط¸â€،ط¹آ¯ط؛إ’ط·آ±ط؛إ’ observability ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ¬ط·آ±ط؛إ’ط·آ§ط¸â€ أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ¯ط·آ± ط¸â€ ط¸ث†ط·آ¯ ط¸â€‍ط·آ¨ط¸â€،", "done": False},
+        ],
+    },
+    {
+        "id": 4,
+        "code": "F04-CRM",
+        "name": "ط·آ¢ط·ط›ط·آ§ط·آ² CRM ط¸â€،ط¸ث†ط·آ´ط¸â€¦ط¸â€ ط·آ¯",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 3,
+        "summary": "ط·آ±ط·آ§ط¸â€،أ¢â‚¬إ’ط·آ§ط¸â€ ط·آ¯ط·آ§ط·آ²ط؛إ’ ط¸â€،ط·آ³ط·ع¾ط¸â€، CRM ط¸â€¦ط·آ±ط·ع¾ط·آ¨ط·آ· ط·آ¨ط·آ§ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ ط¸ث† ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍.",
+        "dependencies": ["F01-ID", "F02-LEDGER", "F03-P2P"],
+        "outcomes": [
+            "ط·آ´ط¸ع¯ط¸â€¦ط·آ§ط؛إ’ CRM ط¸â€¦ط·آ±ط·ع¾ط·آ¨ط·آ· ط·آ¨ط·آ§ ط¹آ¯ط·آ±ط·آ§ط¸ظ¾ ط¸â€،ط¸ث†ط؛إ’ط·ع¾",
+            "ط·ع¾ط·آ§ط؛إ’ط¸â€¦ط¸â€‍ط·آ§ط؛إ’ط¸â€  ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€¦ط·آ­ط¸ث†ط·آ± ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨ ط·آ¨ط·آ§ ط·آ§ط·آ¹ط¸â€‍ط·آ§ط¸â€ ",
+            "ط¸آ¾ط·آ§ط؛إ’ط¸â€‍ط¸ث†ط·ع¾ UI ط·آ§ط¸آ¾ط·آ±ط·آ§ط·ع¾ط¸ث†ط·آ± ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ³ط·آ±ط¸â€ ط·آ®/ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨",
+        ],
+        "milestones": [
+            {"id": "F4-M1", "task": "ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط·آ´ط¸ع¯ط¸â€¦ط·آ§ط؛إ’ ط·آ¯ط·آ§ط·آ¯ط¸â€، CRM ط¸â€¦ط·ع¾ط·آµط¸â€‍ ط·آ¨ط¸â€، ط¹آ¯ط·آ±ط·آ§ط¸ظ¾ ط¸â€،ط¸ث†ط؛إ’ط·ع¾", "done": False},
+            {"id": "F4-M2", "task": "ط·ع¾ط·آ§ط؛إ’ط¸â€¦ط¸â€‍ط·آ§ط؛إ’ط¸â€  ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€¦ط·آ­ط¸ث†ط·آ± ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨ ط¸ث† ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط·آ³ط؛إ’ط¹آ¯ط¸â€ ط·آ§ط¸â€‍", "done": False},
+            {"id": "F4-M3", "task": "ط·آ³ط·آ±ط¸ث†ط؛إ’ط·آ³ ط·آ±ط·آ¶ط·آ§ط؛إ’ط·ع¾ ط¸ث† ط·ع¾ط·آ±ط·آ¬ط؛إ’ط·آ­ط·آ§ط·ع¾ ط·آ§ط·آ¹ط¸â€‍ط·آ§ط¸â€ ", "done": False},
+            {"id": "F4-M4", "task": "ط·آ³ط·آ·ط·آ­ ط·آ§ط¸ث†ط¸â€‍ط؛إ’ط¸â€، API CRM (ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨/ط·آ³ط·آ±ط¸â€ ط·آ®/ط·ع¾ط·آ§ط؛إ’ط¸â€¦ط¸â€‍ط·آ§ط؛إ’ط¸â€ )", "done": False},
+            {"id": "F4-M5", "task": "ط¸آ¾ط·آ§ط؛إ’ط¸â€‍ط¸ث†ط·ع¾ UI ط·آ§ط¸آ¾ط·آ±ط·آ§ط·ع¾ط¸ث†ط·آ± ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¸â€ ط¸â€¦ط·آ§ط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط·آ®ط·آ§ط·آ·ط·آ¨ ط¸ث† ط·آ³ط·آ±ط¸â€ ط·آ®", "done": False},
+        ],
+    },
+    {
+        "id": 5,
+        "code": "F05-ECON",
+        "name": "ط¸â€‍ط·آ§ط؛إ’ط¸â€، ط·آ§ط¸â€ڑط·ع¾ط·آµط·آ§ط·آ¯ط؛إ’",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 5,
+        "summary": "ط¸â€¦ط·آ¹ط·آ±ط¸ظ¾ط؛إ’ ط·ع¾ط¸ث†ط¹آ©ط¸â€ ط¸ث†ط¸â€¦ط؛إ’ط¹آ©ط·آ³ط·إ’ ط¸â€ڑط؛إ’ط¸â€¦ط·ع¾أ¢â‚¬إ’ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط¸ث† ط·آ±ط؛إ’ط¸â€‍أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط·آ³ط¸ث†ط؛إ’ط¸â€،.",
+        "dependencies": ["F02-LEDGER"],
+        "outcomes": [
+            "ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ ط·ع¾ط¸ث†ط¹آ©ط¸â€ ط¸ث†ط¸â€¦ط؛إ’ط¹آ©ط·آ³ ط¸ث† ط·آ¨ط·آ±ط¸â€ ط·آ§ط¸â€¦ط¸â€، ط·آ§ط¸â€ ط·ع¾ط·آ´ط·آ§ط·آ±",
+            "ط¸â€¦ط¸ث†ط·ع¾ط¸ث†ط·آ± ط¹آ©ط·آ§ط·آ±ط¸â€¦ط·آ²ط·آ¯ ط¸ث† ط·آ³ط¸â€ ط·آ¬ط·آ´ ط¸â€¦ط·ع¾ط·آµط¸â€‍ ط·آ¨ط¸â€، ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍",
+            "ط·آ±ط·آµط·آ¯ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€، ط¸ث† ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾أ¢â‚¬إ’ط¸â€،ط·آ§",
+        ],
+        "milestones": [
+            {"id": "F5-M1", "task": "ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ ط·ع¾ط¸ث†ط¹آ©ط¸â€ ط¸ث†ط¸â€¦ط؛إ’ط¹آ©ط·آ³ط·إ’ ط·آ²ط¸â€¦ط·آ§ط¸â€ أ¢â‚¬إ’ط·آ¨ط¸â€ ط·آ¯ط؛إ’ ط·آ§ط¸â€ ط·ع¾ط·آ´ط·آ§ط·آ± ط¸ث† ط¸â€¦ط·آ¯ط¸â€‍ ط¸â€¦ط·آ´ط¸ث†ط¸â€ڑ", "done": False},
+            {"id": "F5-M2", "task": "ط·آ§ط¸ث†ط·آ±ط·آ§ط¹آ©ط¸â€‍ ط¸â€ڑط؛إ’ط¸â€¦ط·ع¾/FX ط¸ث† ط¸â€¦ط·آ­ط·آ¯ط¸ث†ط·آ¯ط؛إ’ط·ع¾ ط·آ±ط؛إ’ط·آ³ط¹آ©", "done": False},
+            {"id": "F5-M3", "task": "ط¸â€¦ط¸ث†ط·ع¾ط¸ث†ط·آ± ط¹آ©ط·آ§ط·آ±ط¸â€¦ط·آ²ط·آ¯ ط·آ¯ط¸ظ¾ط·ع¾ط·آ±ط¹آ©ط¸â€‍ ط¸ث† ط¸â€ڑط¸â€‍ط·آ§ط·آ¨أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ³ط¸â€ ط·آ¬ط·آ´", "done": False},
+            {"id": "F5-M4", "task": "ط·آ¬ط·آ±ط؛إ’ط·آ§ط¸â€ أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط·آ³ط¸ث†ط؛إ’ط¸â€، ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾ ط·آ±ط¸ث†ط؛إ’ ط·آ±ط؛إ’ط¸â€‍ ط·آ¯ط·آ§ط·آ®ط¸â€‍ط؛إ’/ط·آ®ط·آ§ط·آ±ط·آ¬ط؛إ’", "done": False},
+            {"id": "F5-M5", "task": "ط·آ±ط·آµط·آ¯ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€، ط¸ث† ط·آ¯ط·آ§ط·آ´ط·آ¨ط¸ث†ط·آ±ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط·آ­ط·آ³ط·آ§ط·آ¨ط·آ¯ط·آ§ط·آ±ط؛إ’", "done": False},
+        ],
+    },
+    {
+        "id": 6,
+        "code": "F06-AIOBS",
+        "name": "ط·آ±ط·آµط·آ¯ ط¸â€،ط¸ث†ط·آ´ ط¸â€¦ط·آµط¸â€ ط¸ث†ط·آ¹ط؛إ’",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 8,
+        "summary": "ط·آ¬ط¸â€¦ط·آ¹أ¢â‚¬إ’ط·آ¢ط¸ث†ط·آ±ط؛إ’ ط·ع¾ط¸â€‍ط¸â€¦ط·ع¾ط·آ±ط؛إ’ ط¸ث† ط·آ¢ط¸â€¦ط·آ§ط·آ¯ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ¨ط؛إ’ط¸â€ ط·آ´ ط¸ث† ط·آ§ط؛إ’ط¸â€¦ط¸â€ ط؛إ’ AI.",
+        "dependencies": ["F03-P2P", "F05-ECON"],
+        "outcomes": [
+            "ط¸â€¦ط·آ´ط·آ®ط·آµط·آ§ط·ع¾ ط·ع¾ط¸â€‍ط¸â€¦ط·ع¾ط·آ±ط؛إ’ ط·آ¨ط·آ§ ط¸â€ڑط¸ث†ط·آ§ط·آ¹ط·آ¯ ط·آ­ط·آ±ط؛إ’ط¸â€¦ ط·آ®ط·آµط¸ث†ط·آµط؛إ’ ط¸ث† ط·آ­ط·آ°ط¸ظ¾ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ­ط·آ³ط·آ§ط·آ³",
+            "ط·آ®ط·آ· ط¸â€‍ط¸ث†ط¸â€‍ط¸â€، ط¹آ©ط·آ´ط¸ظ¾ ط¸â€ ط·آ§ط¸â€،ط¸â€ ط·آ¬ط·آ§ط·آ±ط؛إ’ ط¸ث† ط·آ³ط؛إ’ط¹آ¯ط¸â€ ط·آ§ط¸â€‍",
+            "ط·آ­ط¸â€‍ط¸â€ڑط¸â€، ط·آ¨ط·آ§ط·آ²ط·آ®ط¸ث†ط·آ±ط·آ¯ ط·آ§ط¸â€ ط·آ³ط·آ§ط¸â€ ط؛إ’ ط·آ¯ط·آ± ط·آ­ط·آ§ط¹آ©ط¸â€¦ط؛إ’ط·ع¾",
+        ],
+        "milestones": [
+            {"id": "F6-M1", "task": "ط¸â€¦ط·آ´ط·آ®ط·آµط·آ§ط·ع¾ ط·ع¾ط¸â€‍ط¸â€¦ط·ع¾ط·آ±ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¸â€ ط·آ§ط·آ¸ط·آ±ط·آ§ط¸â€  AI ط¸ث† ط¸â€ڑط¸ث†ط·آ§ط·آ¹ط·آ¯ ط·آ­ط·آ°ط¸ظ¾ ط·آ¯ط·آ§ط·آ¯ط¸â€،", "done": False},
+            {"id": "F6-M2", "task": "ط·آ¨ط·آ±ط¹â€ ط·آ³ط·آ¨أ¢â‚¬إ’ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط¸ث† ط¸â€ ط·آ§ط·آ´ط¸â€ ط·آ§ط·آ³أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ³ط؛إ’ط¹آ¯ط¸â€ ط·آ§ط¸â€‍أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ¢ط¸â€¦ط¸ث†ط·آ²ط·آ´ط؛إ’", "done": False},
+            {"id": "F6-M3", "task": "ط·آ§ط¸â€ ط·ع¾ط·آ®ط·آ§ط·آ¨ ط¸â€¦ط·آ¯ط¸â€‍ ط¸آ¾ط·آ§ط؛إ’ط¸â€، ط¸ث† ط¸â€،ط·آ§ط·آ±ط¸â€ ط·آ³ ط·آ§ط·آ±ط·آ²ط؛إ’ط·آ§ط·آ¨ط؛إ’", "done": False},
+            {"id": "F6-M4", "task": "ط·آ®ط·آ· ط¸â€‍ط¸ث†ط¸â€‍ط¸â€، ط¹آ©ط·آ´ط¸ظ¾ ط¸â€ ط·آ§ط¸â€،ط¸â€ ط·آ¬ط·آ§ط·آ±ط؛إ’ (ط¸â€ ط¸â€¦ط¸ث†ط¸â€ ط¸â€، ط¸â€¦ط¸ظ¾ط¸â€،ط¸ث†ط¸â€¦ط؛إ’)", "done": False},
+            {"id": "F6-M5", "task": "ط·آ§ط·آ¨ط·آ²ط·آ§ط·آ± ط·آ­ط¸â€‍ط¸â€ڑط¸â€، ط·آ¨ط·آ§ط·آ²ط·آ®ط¸ث†ط·آ±ط·آ¯ ط·آ¨ط·آ§ ط·آ§ط¸â€ ط·آ³ط·آ§ط¸â€  ط·آ¯ط·آ± ط·آ­ط¸â€‍ط¸â€ڑط¸â€،", "done": False},
+        ],
+    },
+    {
+        "id": 7,
+        "code": "F07-BIZENG",
+        "name": "ط¸â€¦ط¸ث†ط·ع¾ط¸ث†ط·آ± ط¹آ©ط·آ³ط·آ¨أ¢â‚¬إ’ط¸ث†ط¹آ©ط·آ§ط·آ± ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€،",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 13,
+        "summary": "ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط·آ§ط·آ±ط¹آ©ط·آ³ط·ع¾ط·آ±ط·آ§ط·آ³ط؛إ’ط¸ث†ط¸â€ ط·إ’ ط¸â€ڑط¸ث†ط·آ§ط¸â€ ط؛إ’ط¸â€  ط¸ث† API ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¸آ¾ط؛إ’ط¸ث†ط¸â€ ط·آ¯ ط¸â€،ط¸ث†ط؛إ’ط·ع¾ط·إ’ CRM ط¸ث† ط·آ§ط¸â€ڑط·ع¾ط·آµط·آ§ط·آ¯.",
+        "dependencies": ["F04-CRM", "F05-ECON", "F06-AIOBS"],
+        "outcomes": [
+            "ط¸â€¦ط¸ث†ط·ع¾ط¸ث†ط·آ± ط¸â€ڑط¸ث†ط·آ§ط¸â€ ط؛إ’ط¸â€  ط·آ±ط¸ث†ط؛إ’ ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط¸â€،ط¸ث†ط؛إ’ط·ع¾/CRM/ط·آ§ط¸â€ڑط·ع¾ط·آµط·آ§ط·آ¯ط؛إ’",
+            "ط·آ§ط·آ±ط¹آ©ط·آ³ط·ع¾ط·آ±ط؛إ’ط·ع¾ط¸ث†ط·آ± ط¹آ¯ط·آ±ط·آ¯ط·آ´أ¢â‚¬إ’ط¹آ©ط·آ§ط·آ± ط·آ¨ط·آ§ ط·آ²ط¸â€¦ط·آ§ط¸â€ أ¢â‚¬إ’ط·آ¨ط¸â€ ط·آ¯ط؛إ’ ط¸ث† ط·ع¾ط¹آ©ط·آ±ط·آ§ط·آ±",
+            "ط·آ§ط¸â€‍ط¹آ¯ط¸ث†ط¸â€،ط·آ§ط؛إ’ ط·آ¯ط·آ±ط¹آ¯ط·آ§ط¸â€، API ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ´ط·آ±ط¹آ©ط·آ§",
+        ],
+        "milestones": [
+            {"id": "F7-M1", "task": "ط¸â€¦ط¸ث†ط·ع¾ط¸ث†ط·آ± ط¸â€ڑط¸ث†ط·آ§ط¸â€ ط؛إ’ط¸â€  ط¸â€ ط·آ³ط·آ®ط¸â€، ط؛آ± ط·آ±ط¸ث†ط؛إ’ ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط¸â€،ط¸ث†ط؛إ’ط·ع¾/CRM/ط·آ§ط¸â€ڑط·ع¾ط·آµط·آ§ط·آ¯ط؛إ’", "done": False},
+            {"id": "F7-M2", "task": "ط·آ§ط·آ±ط¹آ©ط·آ³ط·ع¾ط·آ±ط؛إ’ط·ع¾ط¸ث†ط·آ± ط¹آ¯ط·آ±ط·آ¯ط·آ´أ¢â‚¬إ’ط¹آ©ط·آ§ط·آ± ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ±ط¸ث†ط؛إ’ط·آ¯ط·آ§ط·آ¯ط¸â€،ط·آ§/ط¹آ©ط·آ§ط·آ±ط¸â€،ط·آ§ ط·آ¨ط·آ§ ط·ع¾ط¹آ©ط·آ±ط·آ§ط·آ±ط¸آ¾ط·آ°ط؛إ’ط·آ±ط؛إ’", "done": False},
+            {"id": "F7-M3", "task": "ط·آ§ط¸â€‍ط¹آ¯ط¸ث†ط¸â€،ط·آ§ط؛إ’ ط·آ¯ط·آ±ط¹آ¯ط·آ§ط¸â€، API ط·ع¾ط·آ±ط¹آ©ط؛إ’ط·آ¨ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ´ط·آ±ط¹آ©ط·آ§", "done": False},
+            {"id": "F7-M4", "task": "ط¹آ©ط·ع¾ط·آ§ط·آ¨ط·آ®ط·آ§ط¸â€ ط¸â€، ط·ع¾ط¸â€¦ط¸آ¾ط¸â€‍ط؛إ’ط·ع¾ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¹آ¯ط·آ±ط·آ¯ط·آ´أ¢â‚¬إ’ط¹آ©ط·آ§ط·آ±ط¸â€،ط·آ§ط؛إ’ ط·آ¹ط¸â€¦ط¸ث†ط·آ¯ط؛إ’", "done": False},
+            {"id": "F7-M5", "task": "ط·آ¨ط¸â€ ط¹â€ ط¸â€¦ط·آ§ط·آ±ط¹آ© ط¹آ©ط·آ§ط·آ±ط·آ§ط؛إ’ط؛إ’ ط¸ث† ط¸â€¦ط¸â€ڑط؛إ’ط·آ§ط·آ³أ¢â‚¬إ’ط¸آ¾ط·آ°ط؛إ’ط·آ±ط؛إ’ ط·آ¨ط·آ§ SLI", "done": False},
+        ],
+    },
+    {
+        "id": 8,
+        "code": "F08-MKT-INTEROP",
+        "name": "ط·آ¨ط·آ§ط·آ²ط·آ§ط·آ± ط¸ث† ط·آ¨ط؛إ’ط¸â€ أ¢â‚¬إ’ط·آ¹ط¸â€¦ط¸â€‍ط؛إ’ط·آ§ط·ع¾ط؛إ’",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 21,
+        "summary": "ط·آ¨ط·آ§ط·آ² ط¹آ©ط·آ±ط·آ¯ط¸â€  ط¸آ¾ط¸â€‍ط·ع¾ط¸ظ¾ط·آ±ط¸â€¦ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ´ط·آ±ط¹آ©ط·آ§ ط·آ¨ط·آ§ ط·آ§ط·ع¾ط·آµط·آ§ط¸â€‍أ¢â‚¬إ’ط¸آ¾ط·آ°ط؛إ’ط·آ±ط؛إ’ ط¸ث† ط¸â€¦ط·آ¯ط¸â€‍ ط·آ¯ط·آ±ط·آ¢ط¸â€¦ط·آ¯ط؛إ’.",
+        "dependencies": ["F07-BIZENG"],
+        "outcomes": [
+            "SDK ط·آ§ط·ع¾ط·آµط·آ§ط¸â€‍ ط¸ث† ط¸â€¦ط·آ³ط؛إ’ط·آ± ط¹آ¯ط¸ث†ط·آ§ط¸â€،ط؛إ’",
+            "ط¹â€ ط·آ±ط·آ®ط¸â€، ط·آ¹ط¸â€¦ط·آ± ط¸â€‍ط؛إ’ط·آ³ط·ع¾ط؛إ’ط¸â€ ط¹آ¯ ط¸â€¦ط·آ§ط·آ±ط¹آ©ط·ع¾أ¢â‚¬إ’ط¸آ¾ط¸â€‍ط؛إ’ط·آ³ ط¸ث† ط¸â€¦ط·آ¯ط¸â€‍ ط·ع¾ط¸â€ڑط·آ³ط؛إ’ط¸â€¦ ط·آ¯ط·آ±ط·آ¢ط¸â€¦ط·آ¯",
+            "ط·آ¨ط·آ§ط·آ²ط·آ¨ط؛إ’ط¸â€ ط؛إ’ ط·آ§ط¸â€¦ط¸â€ ط؛إ’ط·ع¾ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’أ¢â‚¬إ’ط¸â€،ط·آ§",
+        ],
+        "milestones": [
+            {"id": "F8-M1", "task": "ط¹â€ ط¹آ©أ¢â‚¬إ’ط¸â€‍ط؛إ’ط·آ³ط·ع¾ ط·آ¬ط·آ°ط·آ¨ ط·آ´ط·آ±ط؛إ’ط¹آ© ط¸ث† ط·آ±ط·آ§ط¸â€،ط¸â€ ط¸â€¦ط·آ§ط؛إ’ ط·آ¯ط¸â€ڑط·ع¾ ط¸â€‍ط·آ§ط·آ²ط¸â€¦", "done": False},
+            {"id": "F8-M2", "task": "SDK ط·آ§ط·ع¾ط·آµط·آ§ط¸â€‍ ط·آ¨ط·آ§ ط¸â€ ط¸â€¦ط¸ث†ط¸â€ ط¸â€، ط¹آ©ط·آ§ط¸â€ ط¹آ©ط·ع¾ط¸ث†ط·آ± (ERP/CRM/ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾)", "done": False},
+            {"id": "F8-M3", "task": "ط·آ´ط¸ع¯ط¸â€¦ط·آ§ ط¸ث† ط¹â€ ط·آ±ط·آ®ط¸â€، ط·آ¹ط¸â€¦ط·آ± ط¸â€‍ط؛إ’ط·آ³ط·ع¾ط؛إ’ط¸â€ ط¹آ¯ ط¸â€¦ط·آ§ط·آ±ط¹آ©ط·ع¾أ¢â‚¬إ’ط¸آ¾ط¸â€‍ط؛إ’ط·آ³", "done": False},
+            {"id": "F8-M4", "task": "ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ³ط·آ§ط·آ²ط؛إ’ ط¸â€¦ط·آ¯ط¸â€‍ ط·ع¾ط¸â€ڑط·آ³ط؛إ’ط¸â€¦ ط·آ¯ط·آ±ط·آ¢ط¸â€¦ط·آ¯ ط¸ث† ط·ع¾ط·آ³ط¸ث†ط؛إ’ط¸â€،", "done": False},
+            {"id": "F8-M5", "task": "ط·ع¾ط·آ³ط·ع¾ ط·آ§ط¸â€ ط·آ·ط·آ¨ط·آ§ط¸â€ڑ ط·آ¨ط؛إ’ط¸â€ أ¢â‚¬إ’ط·آ¹ط¸â€¦ط¸â€‍ط؛إ’ط·آ§ط·ع¾ط؛إ’ ط¸ث† ط¸â€¦ط·آ³ط؛إ’ط·آ± ط¹آ¯ط¸ث†ط·آ§ط¸â€،ط؛إ’", "done": False},
+            {"id": "F8-M6", "task": "ط·آ¨ط·آ§ط·آ²ط·آ¨ط؛إ’ط¸â€ ط؛إ’ ط·آ§ط¸â€¦ط¸â€ ط؛إ’ط·ع¾ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط¹آ©ط·آ§ط¸â€ ط¹آ©ط·ع¾ط¸ث†ط·آ±ط¸â€،ط·آ§ ط¸ث† ط·آ³ط¸â€ ط·آ§ط·آ±ط؛إ’ط¸ث†ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط¸â€،ط·آ¯ط؛إ’ط·آ¯", "done": False},
+        ],
+    },
+    {
+        "id": 9,
+        "code": "F09-GOV-DAO",
+        "name": "ط·آ­ط·آ§ط¹آ©ط¸â€¦ط؛إ’ط·ع¾ DAO",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 34,
+        "summary": "ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط·آ³ط·آ§ط·آ²ط¸ث†ط¹آ©ط·آ§ط·آ± ط·ع¾ط·آµط¸â€¦ط؛إ’ط¸â€¦أ¢â‚¬إ’ط¹آ¯ط؛إ’ط·آ±ط؛إ’ط·إ’ ط¹آ©ط¸â€ ط·ع¾ط·آ±ط¸â€‍ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€، ط¸ث† ط¸â€¦ط·آ´ط·آ§ط·آ±ط¹آ©ط·ع¾.",
+        "dependencies": ["F08-MKT-INTEROP", "F05-ECON"],
+        "outcomes": [
+            "ط¸â€¦ط¸â€ ط·آ´ط¸ث†ط·آ± ط·آ­ط·آ§ط¹آ©ط¸â€¦ط؛إ’ط·ع¾ ط¸ث† ط·آ¯ط·آ§ط¸â€¦ط¸â€ ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط·آµط¸â€¦ط؛إ’ط¸â€¦أ¢â‚¬إ’ط¹آ¯ط؛إ’ط·آ±ط؛إ’",
+            "ط·آ±ط·آ£ط؛إ’أ¢â‚¬إ’ط·آ¯ط¸â€،ط؛إ’ط·إ’ ط·ع¾ط¸ظ¾ط¸ث†ط؛إ’ط·آ¶ ط¸ث† ط·آ³ط·آ§ط·آ²ط¸ث†ط¹آ©ط·آ§ط·آ± ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±",
+            "ط¹آ©ط¸â€ ط·ع¾ط·آ±ط¸â€‍ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€، ط·آ¨ط·آ§ ط·آ³ط؛إ’ط·آ§ط·آ³ط·ع¾أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€ڑط·آ§ط·آ¨ط¸â€‍ ط¸â€¦ط¸â€¦ط؛إ’ط·آ²ط؛إ’",
+        ],
+        "milestones": [
+            {"id": "F9-M1", "task": "ط·ع¾ط·آ¹ط·آ±ط؛إ’ط¸ظ¾ ط¸â€¦ط¸â€ ط·آ´ط¸ث†ط·آ± ط·آ­ط·آ§ط¹آ©ط¸â€¦ط؛إ’ط·ع¾ ط¸ث† ط¸ظ¾ط·آ¶ط·آ§ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط·آµط¸â€¦ط؛إ’ط¸â€¦", "done": False},
+            {"id": "F9-M2", "task": "ط¸â€ڑط¸ث†ط·آ§ط¸â€ ط؛إ’ط¸â€  ط·آ±ط·آ£ط؛إ’أ¢â‚¬إ’ط·آ¯ط¸â€،ط؛إ’ط·إ’ ط¸â€ ط·آµط·آ§ط·آ¨ ط¸ث† ط·ع¾ط¸ظ¾ط¸ث†ط؛إ’ط·آ¶", "done": False},
+            {"id": "F9-M3", "task": "ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦ ط¸â€ ط¸â€¦ط·آ§ط؛إ’ط¸â€ ط·آ¯ط¸â€، ط¸ث† ط·آ³ط؛إ’ط¹آ¯ط¸â€ ط·آ§ط¸â€‍أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ§ط·آ¹ط·ع¾ط·آ¨ط·آ§ط·آ±", "done": False},
+            {"id": "F9-M4", "task": "ط¹آ©ط¸â€ ط·ع¾ط·آ±ط¸â€‍ ط·آ®ط·آ²ط·آ§ط¸â€ ط¸â€،ط·إ’ ط·آ³ط؛إ’ط·آ§ط·آ³ط·ع¾ ط¸â€،ط·آ²ط؛إ’ط¸â€ ط¸â€، ط¸ث† ط¸â€¦ط¸â€¦ط؛إ’ط·آ²ط؛إ’", "done": False},
+            {"id": "F9-M5", "task": "ط·آ·ط·آ±ط·آ­ ط¸آ¾ط¸â€‍ ط·آ±ط¸ث†ط؛إ’أ¢â‚¬إ’ط·آ²ط¸â€ ط·آ¬ط؛إ’ط·آ±ط¸â€،/ط·آ®ط·آ§ط·آ±ط·آ¬أ¢â‚¬إ’ط·آ²ط¸â€ ط·آ¬ط؛إ’ط·آ±ط¸â€، ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ¯ط·آ§ط·آ¯ط¸â€، ط·آ­ط·آ§ط¹آ©ط¸â€¦ط؛إ’ط·ع¾", "done": False},
+        ],
+    },
+    {
+        "id": 10,
+        "code": "F10-AUTO-ECO",
+        "name": "ط·آ§ط¹آ©ط¸ث†ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦ ط·آ®ط¸ث†ط·آ¯ط·ع¾ط¹آ©ط·آ§ط¸â€¦ط¸â€‍ط؛إ’",
+        "status": "pending",
+        "percent": 0,
+        "fibonacci_weight": 55,
+        "summary": "ط·آ³ط·آ§ط·آ®ط·ع¾ ط·آ­ط¸â€‍ط¸â€ڑط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ®ط¸ث†ط·آ¯ط¹آ©ط·آ§ط·آ±ط·إ’ ط¸â€ ط¸ث†ط·آ³ط·آ§ط·آ²ط؛إ’ ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ§ط·ع¾ ط¸ث† ط·آ±ط؛إ’ط¸â€‍أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ§ط؛إ’ط¸â€¦ط¸â€ ط؛إ’ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·ع¾ط¹آ©ط·آ§ط¸â€¦ط¸â€‍ ط¸â€¦ط·آ¯ط·آ§ط¸ث†ط¸â€¦.",
+        "dependencies": ["F09-GOV-DAO", "F07-BIZENG"],
+        "outcomes": [
+            "ط·آ¹ط·آ§ط¸â€¦ط¸â€‍ ط¸â€ ط¸â€ڑط·آ´ط¸â€،أ¢â‚¬إ’ط·آ±ط·آ§ط¸â€، ط·آ¨ط·آ§ ط¹آ¯ط·آ§ط·آ±ط·آ¯ط·آ±ط؛إ’ط¸â€‍ ط¸ث† observability",
+            "ط·آ®ط·آ· ط¸â€ ط¸ث†ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ®ط¸ث†ط·آ¯ط¹آ©ط·آ§ط·آ± ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ§ط·ع¾ ط¸ث† ط·آ§ط¸â€ ط·ع¾ط·آ´ط·آ§ط·آ±",
+            "ط·آ³ط¸â€ ط·آ¬ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ³ط¸â€‍ط·آ§ط¸â€¦ط·ع¾ ط·آ§ط¹آ©ط¸ث†ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦ ط¸ث† ط·آ¢ط·آ²ط¸â€¦ط·آ§ط؛إ’ط·آ´أ¢â‚¬إ’ط¸آ¾ط·آ°ط؛إ’ط·آ±ط؛إ’",
+        ],
+        "milestones": [
+            {"id": "F10-M1", "task": "ط·آ¹ط·آ§ط¸â€¦ط¸â€‍ ط¸â€ ط¸â€ڑط·آ´ط¸â€،أ¢â‚¬إ’ط·آ±ط·آ§ط¸â€، ط¸â€ ط·آ³ط·آ®ط¸â€، ط؛آ± ط·آ¨ط·آ§ ط¹آ¯ط·آ§ط·آ±ط·آ¯ط·آ±ط؛إ’ط¸â€‍ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ®ط¸ث†ط·آ¯ط¹آ©ط·آ§ط·آ±ط·آ³ط·آ§ط·آ²ط؛إ’", "done": False},
+            {"id": "F10-M2", "task": "ط·آ®ط·آ· ط·آ®ط¸ث†ط·آ¯ط·آ¨ط¸â€،أ¢â‚¬إ’ط·آ±ط¸ث†ط·آ²ط·آ±ط·آ³ط·آ§ط¸â€ ط؛إ’ ط¸â€¦ط·آ³ط·ع¾ط¸â€ ط·آ¯ط·آ§ط·ع¾ ط¸ث† ط·آ§ط¸â€ ط·ع¾ط·آ´ط·آ§ط·آ±", "done": False},
+            {"id": "F10-M3", "task": "ط·آ³ط¸â€ ط·آ¯ط·آ¨ط·آ§ط¹آ©ط·آ³ ط·آ¢ط·آ²ط¸â€¦ط·آ§ط؛إ’ط·آ´ ط·آ¨ط·آ§ ط·آ¯ط·آ±ط¸ث†ط·آ§ط·آ²ط¸â€، ط·آ§ط¸â€ ط·ع¾ط·آ´ط·آ§ط·آ± ط·ع¾ط·آ¯ط·آ±ط؛إ’ط·آ¬ط؛إ’", "done": False},
+            {"id": "F10-M4", "task": "ط·آ³ط¸â€ ط·آ¬ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·ع¾ط¹آ©ط·آ§ط¸â€¦ط¸â€‍ (ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’/ط¸â€ ط¹آ¯ط¸â€،ط·آ¯ط·آ§ط·آ´ط·ع¾/ط·آ³ط¸â€‍ط·آ§ط¸â€¦ط·ع¾ ط·آ´ط·آ±ط؛إ’ط¹آ©)", "done": False},
+            {"id": "F10-M5", "task": "ط¸â€،ط¸â€¦ط¹آ©ط·آ§ط·آ± AI ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ³ط·آ§ط·آ²ط¸â€ ط·آ¯ط¹آ¯ط·آ§ط¸â€  ط¸ث† ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’ ط·آ´ط·آ±ط¹آ©ط·آ§", "done": False},
+        ],
+    },
+]
+
+
+def clone_default_phases() -> List[Dict]:
+    return json.loads(json.dumps(DEFAULT_PHASES))
+
+
+def ensure_dirs() -> None:
+    ROADMAP_DIR.mkdir(parents=True, exist_ok=True)
+    GENERATED_PAGE_DIR.mkdir(parents=True, exist_ok=True)
+    PHASE_DOCS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def slugify(value: str) -> str:
+    cleaned = re.sub(r"[^\w-]+", "-", value, flags=re.UNICODE)
+    cleaned = re.sub(r"-+", "-", cleaned).strip("-")
+    return cleaned or "phase"
+
+
+def parse_markers_from_text(text: str) -> Set[str]:
+    pattern = re.compile(r"DONE:([A-Za-z0-9._-]+)", re.IGNORECASE)
+    return {m.group(1).upper() for m in pattern.finditer(text or "")}
+
+
+def extract_done_markers_from_commits(limit: int = 50) -> Set[str]:
+    try:
+        proc = subprocess.run(
+            ["git", "log", f"-{limit}", "--pretty=%B"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except Exception:
+        return set()
+    return parse_markers_from_text(proc.stdout)
+
+
+def load_roadmap() -> Dict:
+    if ROADMAP_JSON.exists():
+        try:
+            data = json.loads(ROADMAP_JSON.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+    else:
+        data = {}
+    if "phases" not in data:
+        data["phases"] = clone_default_phases()
+    data.setdefault("project", "NeuroChainX")
+    data.setdefault("version", "v1")
+    data.setdefault("notes", "Auto-generated by roadmap_sync")
+    return data
+
+
+def normalize_roadmap(roadmap: Dict) -> None:
+    for phase in roadmap.get("phases", []):
+        phase.setdefault("status", "pending")
+        phase.setdefault("percent", 0)
+        phase.setdefault("fibonacci_weight", 1)
+        phase.setdefault("dependencies", [])
+        phase.setdefault("milestones", [])
+        for m in phase["milestones"]:
+            m["done"] = bool(m.get("done", False))
+            m["task"] = m.get("task", "").strip()
+    roadmap["phases"] = sorted(roadmap.get("phases", []), key=lambda p: p.get("id", 0))
+
+
+def apply_done_markers(roadmap: Dict, markers: Set[str]) -> List[str]:
+    applied: List[str] = []
+    normalized = {m.upper().strip() for m in markers if m}
+    if not normalized:
+        return applied
+    for phase in roadmap.get("phases", []):
+        for m in phase.get("milestones", []):
+            mid = str(m.get("id") or "").upper()
+            if mid in normalized and not m.get("done"):
+                m["done"] = True
+                applied.append(mid)
+    return applied
+
+
+def recalc_progress(roadmap: Dict) -> Dict:
+    phases = roadmap.get("phases", [])
+    total_weights = sum(p.get("fibonacci_weight", 1) for p in phases) or 1
+    total_milestones = 0
+    completed_milestones = 0
+    for phase in phases:
+        milestones = phase.get("milestones", [])
+        total_milestones += len(milestones)
+        done_count = sum(1 for m in milestones if m.get("done"))
+        completed_milestones += done_count
+        percent = round((done_count / len(milestones)) * 100, 2) if milestones else 0
+        phase["percent"] = percent
+        phase["milestones_total"] = len(milestones)
+        phase["milestones_done"] = done_count
+        if done_count == 0:
+            phase["status"] = "pending"
+        elif done_count == len(milestones):
+            phase["status"] = "completed"
+        else:
+            phase["status"] = "in_progress"
+    weighted = (
+        sum((p.get("percent", 0) * p.get("fibonacci_weight", 1)) for p in phases) / total_weights
+        if phases
+        else 0
+    )
+    milestone_progress = (completed_milestones / total_milestones * 100) if total_milestones else 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    roadmap["overall_progress"] = round(weighted, 2)
+    roadmap["overall_weighted_progress"] = roadmap["overall_progress"]
+    roadmap["overall_milestone_progress"] = round(milestone_progress, 2)
+    roadmap["phases_completed"] = sum(1 for p in phases if p.get("status") == "completed")
+    roadmap["phases_in_progress"] = sum(1 for p in phases if p.get("status") == "in_progress")
+    roadmap["phases_pending"] = sum(1 for p in phases if p.get("status") == "pending")
+    roadmap["total_milestones"] = total_milestones
+    roadmap["completed_milestones"] = completed_milestones
+    roadmap["updated_at"] = now_iso
+    return roadmap
+
+
+def build_status_payload(roadmap: Dict, applied_markers: Set[str], sources: List[str]) -> Dict:
+    source_list = sources or ["auto"]
+    return {
+        "project": roadmap.get("project", "NeuroChainX"),
+        "overall_progress": roadmap.get("overall_progress", 0),
+        "overall_weighted_progress": roadmap.get("overall_weighted_progress", roadmap.get("overall_progress", 0)),
+        "overall_milestone_progress": roadmap.get("overall_milestone_progress", 0),
+        "phases_completed": roadmap.get("phases_completed", 0),
+        "phases_in_progress": roadmap.get("phases_in_progress", 0),
+        "phases_pending": roadmap.get("phases_pending", 0),
+        "total_milestones": roadmap.get("total_milestones", 0),
+        "completed_milestones": roadmap.get("completed_milestones", 0),
+        "updated_at": roadmap.get("updated_at"),
+        "applied_markers": sorted(applied_markers),
+        "sources": source_list,
+        "phases": [
+            {
+                "id": p.get("id"),
+                "code": p.get("code"),
+                "name": p.get("name"),
+                "status": p.get("status"),
+                "percent": p.get("percent"),
+                "fibonacci_weight": p.get("fibonacci_weight"),
+                "milestones_total": p.get("milestones_total", len(p.get("milestones", []))),
+                "milestones_done": p.get("milestones_done", 0),
+            }
+            for p in roadmap.get("phases", [])
+        ],
+    }
+
+
+def write_json(path: Path, payload: Dict) -> None:
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def write_roadmap_md(roadmap: Dict, status_payload: Dict) -> None:
+    status_map = {"pending": "ط·آ¯ط·آ± ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±", "in_progress": "ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ§ط¸â€ ط·آ¬ط·آ§ط¸â€¦", "completed": "ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍\u200cط·آ´ط·آ¯ط¸â€،"}
+    lines: List[str] = []
+    lines.append("# ط¸â€ ط¸â€ڑط·آ´ط¸â€، ط·آ±ط·آ§ط¸â€، NeuroChainX")
+    lines.append("")
+    lines.append(f"ط·آ¢ط·آ®ط·آ±ط؛إ’ط¸â€  ط·آ¨ط¸â€،\u200cط·آ±ط¸ث†ط·آ²ط·آ±ط·آ³ط·آ§ط¸â€ ط؛إ’: {status_payload.get('updated_at')}")
+    lines.append(
+        f"ط¸آ¾ط؛إ’ط·آ´ط·آ±ط¸ظ¾ط·ع¾ ط¸ث†ط·آ²ط¸â€ ط؛إ’ ط¹آ©ط¸â€‍ط؛إ’: {status_payload.get('overall_progress', 0)}%"
+    )
+    lines.append(
+        f"ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍ ط¸â€¦ط·آ§ط؛إ’ط¸â€‍ط·آ³ط·ع¾ط¸ث†ط¸â€ : {status_payload.get('completed_milestones', 0)}/{status_payload.get('total_milestones', 0)} "
+        f"({status_payload.get('overall_milestone_progress', 0)}%)"
+    )
+    lines.append("")
+    lines.append("| ط¸ظ¾ط·آ§ط·آ² | ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾ | ط¸ع¾ | ط·آ§ط¸â€ ط·آ¬ط·آ§ط¸â€¦/ط¹آ©ط¸â€‍ | ط¸ث†ط·آ²ط¸â€  |")
+    lines.append("| --- | --- | --- | --- | --- |")
+    for p in roadmap.get("phases", []):
+        st = status_map.get(str(p.get("status") or "").lower(), p.get("status"))
+        lines.append(
+            f"| {p.get('id')} - {p.get('name')} | {st} | {p.get('percent')}% | "
+            f"{p.get('milestones_done')}/{p.get('milestones_total')} | {p.get('fibonacci_weight')} |"
+        )
+    lines.append("")
+    lines.append("## ط·آ¬ط·آ²ط·آ¦ط؛إ’ط·آ§ط·ع¾ ط¸ظ¾ط·آ§ط·آ²ط¸â€،ط·آ§")
+    for p in roadmap.get("phases", []):
+        lines.append(f"### {p.get('id'):02d} - {p.get('name')}")
+        lines.append(
+            f"ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾: {status_map.get(str(p.get('status') or '').lower(), p.get('status'))} ({p.get('percent')}%)ط·إ’ ط¸ث†ط·آ²ط¸â€ : {p.get('fibonacci_weight')}ط·إ’ "
+            f"ط¸ث†ط·آ§ط·آ¨ط·آ³ط·ع¾ط¹آ¯ط؛إ’\u200cط¸â€،ط·آ§: {', '.join(p.get('dependencies', []) or ['ط·آ¨ط·آ¯ط¸ث†ط¸â€  ط¸ث†ط·آ§ط·آ¨ط·آ³ط·ع¾ط¹آ¯ط؛إ’'])}"
+        )
+        if p.get("summary"):
+            lines.append("")
+            lines.append(p.get("summary"))
+        lines.append("")
+        lines.append("ط¸â€¦ط·آ§ط؛إ’ط¸â€‍ط·آ³ط·ع¾ط¸ث†ط¸â€ \u200cط¸â€،ط·آ§:")
+        for m in p.get("milestones", []):
+            prefix = "[x]" if m.get("done") else "[ ]"
+            lines.append(f"- {prefix} {m.get('id')}: {m.get('task')}")
+        if p.get("outcomes"):
+            lines.append("")
+            lines.append("ط·آ®ط·آ±ط¸ث†ط·آ¬ط؛إ’\u200cط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط¸ث†ط·آ±ط·آ¯ ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±:")
+            for o in p.get("outcomes", []):
+                lines.append(f"- {o}")
+        lines.append("")
+    ROADMAP_MD.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_phase_docs(roadmap: Dict) -> None:
+    status_map = {"pending": "ط·آ¯ط·آ± ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±", "in_progress": "ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ§ط¸â€ ط·آ¬ط·آ§ط¸â€¦", "completed": "ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍\u200cط·آ´ط·آ¯ط¸â€،"}
+    for phase in roadmap.get("phases", []):
+        slug = slugify(phase.get("name", f"phase-{phase.get('id', '')}"))
+        path = PHASE_DOCS_DIR / f"{phase.get('id'):02d}-{slug}.md"
+        lines = [
+            f"# ط¸ظ¾ط·آ§ط·آ² {phase.get('id'):02d} - {phase.get('name')}",
+            "",
+            f"ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾: {status_map.get(str(phase.get('status') or '').lower(), phase.get('status'))} ({phase.get('percent')}%)ط·إ’ ط¸ث†ط·آ²ط¸â€ : {phase.get('fibonacci_weight')}",
+            f"ط¸ث†ط·آ§ط·آ¨ط·آ³ط·ع¾ط¹آ¯ط؛إ’\u200cط¸â€،ط·آ§: {', '.join(phase.get('dependencies', []) or ['ط·آ¨ط·آ¯ط¸ث†ط¸â€  ط¸ث†ط·آ§ط·آ¨ط·آ³ط·ع¾ط¹آ¯ط؛إ’'])}",
+            "",
+            "## ط·آ®ط¸â€‍ط·آ§ط·آµط¸â€،",
+            phase.get("summary", "أ¢â‚¬â€‌"),
+            "",
+            "## ط¸â€¦ط·آ§ط؛إ’ط¸â€‍ط·آ³ط·ع¾ط¸ث†ط¸â€ \u200cط¸â€،ط·آ§",
+        ]
+        for m in phase.get("milestones", []):
+            prefix = "[x]" if m.get("done") else "[ ]"
+            lines.append(f"- {prefix} {m.get('id')}: {m.get('task')}")
+        lines.append("")
+        lines.append("## ط·آ®ط·آ±ط¸ث†ط·آ¬ط؛إ’\u200cط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط¸ث†ط·آ±ط·آ¯ ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±")
+        for o in phase.get("outcomes", []) or ["(ط¸آ¾ط·آ³ ط·آ§ط·آ² ط¸â€¦ط·آ´ط·آ®ط·آµ ط·آ´ط·آ¯ط¸â€  ط·آ®ط·آ±ط¸ث†ط·آ¬ط؛إ’\u200cط¸â€،ط·آ§ ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍ ط·آ´ط¸ث†ط·آ¯)"]:
+            lines.append(f"- {o}")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def generate_live_html(roadmap: Dict, status_payload: Dict) -> None:
+    payload = {"roadmap": roadmap, "status": status_payload}
+    payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+    html_template = """<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ط¸â€ ط¸â€ڑط·آ´ط¸â€، ط·آ±ط·آ§ط¸â€، NeuroChainX - ط·آ²ط¸â€ ط·آ¯ط¸â€،</title>
+  <style>
+    :root {
+      --bg: #0b111a;
+      --panel: #0f1724;
+      --panel-2: #0b1220;
+      --accent: #7c3aed;
+      --accent-2: #22d3ee;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --border: #1f2937;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Vazirmatn', 'IRANSans', 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 20% 20%, rgba(124,58,237,0.12), transparent 30%), radial-gradient(circle at 80% 0%, rgba(34,211,238,0.1), transparent 25%), var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      direction: rtl;
+      text-align: right;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(124,58,237,0.25), rgba(34,211,238,0.2));
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35), 0 0 30px rgba(124,58,237,0.2);
+    }
+    .hero h1 { margin: 0 0 8px; letter-spacing: 0.5px; }
+    .meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 14px; }
+    .progress {
+      position: relative;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 20px 0 8px;
+      height: 14px;
+      overflow: hidden;
+    }
+    .progress span {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      box-shadow: 0 0 24px rgba(124,58,237,0.3);
+      transition: width 0.6s ease;
+    }
+    .cards { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+    .card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.25);
+    }
+    .card header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .pill {
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+    }
+    .pill.pending { color: #fbbf24; border-color: #f59e0b33; }
+    .pill.in_progress { color: #60a5fa; border-color: #3b82f633; }
+    .pill.completed { color: #34d399; border-color: #10b98133; }
+    .milestones { margin-top: 8px; padding-left: 0; list-style: none; display: grid; gap: 6px; }
+    .milestones li { display: flex; gap: 8px; align-items: flex-start; color: var(--muted); }
+    .tick {
+      width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--border); display: grid; place-items: center; font-size: 11px;
+      background: rgba(124,58,237,0.12);
+    }
+    .tick.done { background: linear-gradient(135deg, #34d399, #22c55e); color: #0b111a; border-color: #34d399; }
+    .footer { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .last-updated { color: var(--muted); font-size: 13px; }
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <h1>ط¸â€ ط¸â€ڑط·آ´ط¸â€، ط·آ±ط·آ§ط¸â€، NeuroChainX</h1>
+      <div class="meta">
+        <div id="overall-percent">--%</div>
+        <div id="milestone-progress">--</div>
+        <div id="phase-counts">--</div>
+      </div>
+      <div class="progress"><span id="overall-bar" style="width: 0%"></span></div>
+      <div class="last-updated" id="last-updated">Last sync: --</div>
+    </div>
+    <div class="cards" id="phase-list"></div>
+  </div>
+
+<script>
+const initialPayload = __PAYLOAD__;
+
+function statusLabel(status) {
+  const map = {
+    pending: 'ط·آ¯ط·آ± ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±',
+    in_progress: 'ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ§ط¸â€ ط·آ¬ط·آ§ط¸â€¦',
+    completed: 'ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍\u200cط·آ´ط·آ¯ط¸â€،'
+  };
+  const key = (status || '').toLowerCase();
+  return map[key] || status || 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ';
+}
+
+function percent(val) {
+  const n = Number(val || 0);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0;
+}
+
+function render(roadmap, status) {
+  const phases = (roadmap && roadmap.phases) || [];
+  const list = document.getElementById('phase-list');
+  list.innerHTML = '';
+  phases.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const done = p.milestones_done || 0;
+    const total = p.milestones_total || (p.milestones ? p.milestones.length : 0) || 0;
+    const pct = percent(p.percent);
+    card.innerHTML = `
+      <header>
+        <div>
+          <div style="font-weight: 600">${String(p.id).padStart(2, '0')} - ${p.name || ''}</div>
+          <div style="color: var(--muted); font-size: 12px;">${p.code || ''} - ط¸ث†ط·آ²ط¸â€  ${p.fibonacci_weight || 0} - ${done}/${total} ط¸â€¦ط·آ§ط؛إ’ط¸â€‍ط·آ³ط·ع¾ط¸ث†ط¸â€ </div>
+        </div>
+        <span class="pill ${p.status || 'pending'}">${statusLabel(p.status)}</span>
+      </header>
+      <div class="progress" style="margin: 10px 0 8px; height: 8px;"><span style="width:${pct}%"></span></div>
+      <ul class="milestones">
+        ${((p.milestones || []).map(m => {
+          const flag = m.done ? 'done' : '';
+          const tick = m.done ? '&#10003;' : '';
+          return `<li><span class="tick ${flag}">${tick}</span><div><strong>${m.id}</strong> - ${m.task}</div></li>`;
+        }).join(''))}
+      </ul>
+      <div class="footer">${p.summary || ''}</div>
+    `;
+    list.appendChild(card);
+  });
+
+  const overall = percent(status && status.overall_progress);
+  document.getElementById('overall-bar').style.width = overall + '%';
+  document.getElementById('overall-percent').textContent = `ط¸آ¾ط؛إ’ط·آ´ط·آ±ط¸ظ¾ط·ع¾ ط¸ث†ط·آ²ط¸â€ ط؛إ’: ${overall.toFixed(1)}%`;
+  document.getElementById('milestone-progress').textContent = `ط¸â€¦ط·آ§ط؛إ’ط¸â€‍ط·آ³ط·ع¾ط¸ث†ط¸â€ : ${(status && status.completed_milestones) || 0}/${(status && status.total_milestones) || 0}`;
+  document.getElementById('phase-counts').textContent = `ط¸ظ¾ط·آ§ط·آ²ط¸â€،ط·آ§ ط·آ¯ط·آ± ط·آ§ط¸â€ ط·ع¾ط·آ¸ط·آ§ط·آ±/ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ§ط¸â€ ط·آ¬ط·آ§ط¸â€¦/ط·ع¾ط¹آ©ط¸â€¦ط؛إ’ط¸â€‍: ${(status && status.phases_pending) || 0} / ${(status && status.phases_in_progress) || 0} / ${(status && status.phases_completed) || 0}`;
+  document.getElementById('last-updated').textContent = 'ط·آ¢ط·آ®ط·آ±ط؛إ’ط¸â€  ط¸â€،ط¸â€¦ط¹آ¯ط·آ§ط¸â€¦\u200cط·آ³ط·آ§ط·آ²ط؛إ’: ' + (status && status.updated_at ? status.updated_at : 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ');
+}
+
+async function refresh() {
+  try {
+    const [roadmapRes, statusRes] = await Promise.all([
+      fetch('/roadmap/json'),
+      fetch('/roadmap/status')
+    ]);
+    if (!roadmapRes.ok || !statusRes.ok) return;
+    const roadmap = await roadmapRes.json();
+    const status = await statusRes.json();
+    render(roadmap, status);
+  } catch (err) {
+    console.warn('Roadmap live refresh failed', err);
+  }
+}
+
+render(initialPayload.roadmap || {}, initialPayload.status || {});
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
+"""
+    LIVE_HTML.write_text(html_template.replace("__PAYLOAD__", payload_json), encoding="utf-8")
+
+
+def append_progress_log(status_payload: Dict, applied_markers: Set[str], sources: List[str]) -> None:
+    ts = status_payload.get("updated_at") or datetime.now(timezone.utc).isoformat()
+    markers = ", ".join(sorted(applied_markers)) if applied_markers else "none"
+    src = ";".join(sources or ["auto"])
+    line = (
+        f"{ts}\toverall={status_payload.get('overall_progress', 0)}%"
+        f"\tmilestones={status_payload.get('completed_milestones', 0)}/{status_payload.get('total_milestones', 0)}"
+        f"\tsources={src}\tapplied={markers}\n"
+    )
+    with PROGRESS_LOG.open("a", encoding="utf-8") as fh:
+        fh.write(line)
+
+
+def run_sync(args: argparse.Namespace) -> Dict:
+    ensure_dirs()
+    roadmap = load_roadmap()
+    if args.reset_defaults or not roadmap.get("phases"):
+        roadmap["phases"] = clone_default_phases()
+    normalize_roadmap(roadmap)
+    markers: Set[str] = set()
+    sources: List[str] = []
+
+    if not args.no_commit_scan:
+        commit_markers = extract_done_markers_from_commits(args.commit_limit)
+        if commit_markers:
+            markers.update(commit_markers)
+            sources.append(f"git:{args.commit_limit}")
+
+    if args.text:
+        text_markers = parse_markers_from_text(args.text)
+        if text_markers:
+            markers.update(text_markers)
+            sources.append("text")
+
+    if args.markers:
+        manual = set()
+        for m in args.markers:
+            m = m.strip()
+            if not m:
+                continue
+            if m.upper().startswith("DONE:"):
+                manual.add(m.split("DONE:", 1)[1].strip().upper())
+            else:
+                manual.add(m.upper())
+        if manual:
+            markers.update(manual)
+            sources.append("manual")
+
+    applied = apply_done_markers(roadmap, markers)
+    recalc_progress(roadmap)
+    status_payload = build_status_payload(roadmap, markers, sources)
+
+    if args.dry_run:
+        return {"roadmap": roadmap, "status": status_payload, "applied": applied}
+
+    write_json(ROADMAP_JSON, roadmap)
+    write_json(STATUS_JSON, status_payload)
+    write_roadmap_md(roadmap, status_payload)
+    write_phase_docs(roadmap)
+    generate_live_html(roadmap, status_payload)
+    append_progress_log(status_payload, markers, sources)
+
+    return {"roadmap": roadmap, "status": status_payload, "applied": applied}
+
+
+def main(argv: List[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description="Sync NeuroChainX roadmap artifacts from milestone markers."
+    )
+    parser.add_argument(
+        "--markers", nargs="*", default=[], help="Explicit DONE:<milestone_id> markers."
+    )
+    parser.add_argument(
+        "--text", default="", help="Parse DONE markers from a text blob or commit message."
+    )
+    parser.add_argument(
+        "--commit-limit",
+        type=int,
+        default=50,
+        help="Number of commits to scan for DONE markers.",
+    )
+    parser.add_argument("--no-commit-scan", action="store_true", help="Skip git commit scanning.")
+    parser.add_argument("--dry-run", action="store_true", help="Compute without writing files.")
+    parser.add_argument(
+        "--reset-defaults",
+        action="store_true",
+        help="ط·آ¬ط·آ§ط؛إ’ط¹آ¯ط·آ²ط؛إ’ط¸â€ ط؛إ’ ط¸ظ¾ط·آ§ط·آ²ط¸â€،ط·آ§ ط·آ¨ط·آ§ ط¸â€¦ط¸â€ڑط·آ§ط·آ¯ط؛إ’ط·آ± ط¸آ¾ط؛إ’ط·آ´أ¢â‚¬إ’ط¸ظ¾ط·آ±ط·آ¶ (ط¸â€¦ط¸ظ¾ط؛إ’ط·آ¯ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ¨ط·آ§ط·آ²ط·ع¾ط¸ث†ط¸â€‍ط؛إ’ط·آ¯ ط·آ§ط·آ² ط·آµط¸ظ¾ط·آ±).",
+    )
+    args = parser.parse_args(argv)
+
+    result = run_sync(args)
+    status = result["status"]
+    applied = result["applied"]
+    print(
+        f"[roadmap_sync] overall={status.get('overall_progress')}% "
+        f"milestones={status.get('completed_milestones')}/{status.get('total_milestones')} "
+        f"applied={len(applied)} markers"
+    )
+
+
+if __name__ == "__main__":
+    main()

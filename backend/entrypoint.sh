@@ -41,6 +41,8 @@ alembic upgrade 0030 || echo "System settings migration applied or skipped"
 alembic upgrade 0031 || echo "Dashboard widgets migration applied or skipped"
 alembic upgrade 0032 || echo "Dashboard and reports modules migration applied or skipped"
 set -e
+# Always move database to the latest available head so newer features work out of the box
+alembic upgrade head
 
 # optional demo seeding
 if [ "${DEMO_SEED:-}" = "true" ]; then

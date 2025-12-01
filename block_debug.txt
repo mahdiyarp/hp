@@ -1,0 +1,7 @@
+                  ))}
+                </select>
+              </div>
+                  <option value="other">سایر</option>
+                </select>
+              </div>
+'                  ))}\n                </select>\n              </div>\n                  <option value="other">سایر</option>\n                </select>\n              </div>'

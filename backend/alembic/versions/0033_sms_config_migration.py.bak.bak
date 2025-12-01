@@ -1,0 +1,38 @@
+"""SMS API ط¹آ©ط¸â€ ط¸ظ¾ط؛إ’ط¹آ¯ط·آ±ط؛إ’ط·آ´ط¸â€  - iPanel ط¹آ©ط؛â€™ ط·آ³ط·آ§ط·ع¾ط¹آ¾
+
+Revision ID: 0033
+Revises: 0032
+Create Date: 2025-11-15
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '0033'
+down_revision = '0032'
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    """SMS ط¹آ©ط¸â€ ط¸ظ¾ط؛إ’ط¹آ¯ط·آ±ط؛إ’ط·آ´ط¸â€  ط·آ´ط·آ§ط¸â€¦ط¸â€‍ ط¹آ©ط·آ±ط؛إ’ط¹ط›"""
+    
+    # SMS API key ط·آ§ط¸ث†ط·آ± settings ط·آ´ط·آ§ط¸â€¦ط¸â€‍ ط¹آ©ط·آ±ط؛إ’ط¹ط›
+    op.execute("""
+        INSERT INTO system_settings (key, value, setting_type, category, description, is_secret, created_at)
+        VALUES 
+            ('sms_provider', 'ippanel', 'string', 'sms', 'SMS ط¸ظ¾ط·آ±ط·آ§ط؛ظ¾ط¸â€¦ ط¹آ©ط¸â€ ط¸â€ ط·آ¯ط؛ظ¾ (ippanel)', false, now()),
+            ('sms_api_key', 'YTA1YmE4NDAtOTc4Ny00YTUzLTlhZmQtMmM0Mzg3ODFhNzZkZDRkNDEwNTRkNjY2MzY1MDU3OTg4YmZhNWI3MjkzN2Y=', 'string', 'sms', 'iPanel API ط¹آ©ط¸â€‍ط؛إ’ط·آ¯', true, now()),
+            ('sms_sender', '', 'string', 'sms', 'SMS ط·آ¨ط¹آ¾ط؛إ’ط·آ¬ط¸â€ ط؛â€™ ط¸ث†ط·آ§ط¸â€‍ط·آ§ ط¸â€ ط¸â€¦ط·آ¨ط·آ± (ط·آ§ط·آ®ط·ع¾ط؛إ’ط·آ§ط·آ±ط؛إ’)', false, now())
+        ON CONFLICT (key) DO NOTHING;
+    """)
+
+
+def downgrade() -> None:
+    """SMS ط¹آ©ط¸â€ ط¸ظ¾ط؛إ’ط¹آ¯ط·آ±ط؛إ’ط·آ´ط¸â€  ط؛ظ¾ط¸آ¹ط·آ§ط·آ¦ط؛إ’ط¹ط›"""
+    op.execute("""
+        DELETE FROM system_settings 
+        WHERE category = 'sms';
+    """)

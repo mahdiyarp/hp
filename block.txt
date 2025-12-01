@@ -1,0 +1,24 @@
+0485:                 />
+0486:               </div>
+0487:             </div>
+0488: 
+0489:               <div className="space-y-2">
+0490:                 <label className={retroHeading}>روش پرداخت</label>
+0491:                 <select
+0492:                   value={paymentForm.method}
+0493:                   onChange={e => handleFormChange('method', e.target.value)}
+0494:                   className={`${retroInput} w-full`}
+0495:                 >
+0496:                   <option value="" disabled={!hasAccounts}>
+0497:                     {hasAccounts ? 'یک صندوق را انتخاب کنید' : 'ابتدا صندوق/حساب اضافه کنید'}
+0498:                   </option>
+0499:                   {methodOptions.map(opt => (
+0500:                     <option key={opt.value} value={opt.value}>
+0501:                       {opt.label}
+0502:                     </option>
+0503:                   ))}
+0504:                 </select>
+0505:               </div>
+0506:                   <option value="other">سایر</option>
+0507:                 </select>
+0508:               </div>

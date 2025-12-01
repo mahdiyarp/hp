@@ -1,0 +1,109 @@
+import React, { useState } from 'react'
+import { apiPost } from '../services/api'
+import { retroBadge, retroButton, retroHeading, retroInput, retroPanel } from './retroTheme'
+
+type AnalysisResult = {
+  doc_type?: string
+  party?: { name?: string; role?: string }
+  totals?: { grand_total?: number; tax?: number; subtotal?: number }
+  suggested_journal?: { account_code: string; debit: number; credit: number; reason: string }[]
+}
+
+export default function SmartAssistantWidget() {
+  const [message, setMessage] = useState('')
+  const [reply, setReply] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const sendChat = async () => {
+    if (!message) return
+    setBusy(true)
+    try {
+      const res = await apiPost<{ reply: string }>('/api/assistant/chat', { message, mode: 'general' })
+      setReply(res?.reply || '')
+    } catch (err: any) {
+      setReply(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط¸آ¾ط·آ§ط·آ³ط·آ®')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const uploadDoc = async () => {
+    if (!file) return
+    setBusy(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await apiPost<AnalysisResult>('/api/assistant/document/analyze', form, {
+        headers: {},
+      } as any)
+      setAnalysis(res || null)
+    } catch (err: any) {
+      setReply(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ ط·آ³ط¸â€ ط·آ¯')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className={`${retroPanel} bg-[#f7f2e7] border border-[#e0d4b8] shadow-[6px_6px_0_rgba(0,0,0,0.08)]`} dir="rtl">
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <p className={retroHeading}>ط·آ¯ط·آ³ط·ع¾ط؛إ’ط·آ§ط·آ± ط¸â€،ط¸ث†ط·آ´ط¸â€¦ط¸â€ ط·آ¯ ط·آ­ط·آ³ط·آ§ط·آ¨ط·آ¯ط·آ§ط·آ±ط؛إ’</p>
+        {reply && <span className={retroBadge}>ط¸آ¾ط·آ§ط·آ³ط·آ® ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط·آ´ط·آ¯</span>}
+      </div>
+      <div className="space-y-2">
+        <div className="flex gap-2 flex-wrap">
+          <input
+            className={retroInput}
+            placeholder="ط·آ³ط¸ث†ط·آ§ط¸â€‍ ط·آ®ط¸ث†ط·آ¯ ط·آ±ط·آ§ ط·آ¨ط¸آ¾ط·آ±ط·آ³ط؛إ’ط·آ¯أ¢â‚¬آ¦"
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendChat()}
+          />
+          <button className={retroButton} onClick={sendChat} disabled={busy}>
+            ط·آ§ط·آ±ط·آ³ط·آ§ط¸â€‍
+          </button>
+        </div>
+        {reply && <div className={`${retroBadge} bg-white text-[#2f281f] border-[#e0d4b8]`}>{reply}</div>}
+        <div className="flex gap-2 flex-wrap items-center">
+          <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
+          <button className={retroButton} onClick={uploadDoc} disabled={busy || !file}>
+            ط·آ¢ط¸آ¾ط¸â€‍ط¸ث†ط·آ¯ ط¸ث† ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ ط·آ³ط¸â€ ط·آ¯
+          </button>
+        </div>
+        {analysis && (
+          <div className="bg-white border border-[#e0d4b8] p-3 rounded-lg space-y-2 text-sm text-[#2f281f]">
+            <div className="flex gap-2 flex-wrap">
+              <span className={retroBadge}>ط¸â€ ط¸ث†ط·آ¹ ط·آ³ط¸â€ ط·آ¯: {analysis.doc_type || '-'}</span>
+              <span className={retroBadge}>ط·آ´ط·آ®ط·آµ ط¸â€¦ط¸â€ڑط·آ§ط·آ¨ط¸â€‍: {analysis.party?.name || '-'}</span>
+              <span className={retroBadge}>ط¸â€¦ط·آ¨ط¸â€‍ط·ط› ط¹آ©ط¸â€‍: {analysis.totals?.grand_total ?? 0}</span>
+            </div>
+            {analysis.suggested_journal && analysis.suggested_journal.length > 0 && (
+              <table className="w-full text-xs border border-[#e0d4b8]">
+                <thead className="bg-[#efe8d8]">
+                  <tr>
+                    <th className="px-2 py-1 text-right">ط·آ­ط·آ³ط·آ§ط·آ¨</th>
+                    <th className="px-2 py-1 text-right">ط·آ¨ط·آ¯ط¸â€،ط¹آ©ط·آ§ط·آ±</th>
+                    <th className="px-2 py-1 text-right">ط·آ¨ط·آ³ط·ع¾ط·آ§ط¸â€ ط¹آ©ط·آ§ط·آ±</th>
+                    <th className="px-2 py-1 text-right">ط·ع¾ط¸ث†ط·آ¶ط؛إ’ط·آ­</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analysis.suggested_journal.map((row, idx) => (
+                    <tr key={idx} className="border-t border-[#e0d4b8]">
+                      <td className="px-2 py-1">{row.account_code}</td>
+                      <td className="px-2 py-1">{row.debit}</td>
+                      <td className="px-2 py-1">{row.credit}</td>
+                      <td className="px-2 py-1">{row.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}

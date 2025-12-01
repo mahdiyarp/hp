@@ -1,0 +1,189 @@
+// Language: Persian (Farsi)
+export const fa = {
+  // General
+  app_name: 'ط·آ­ط·آ³ط·آ§ط·آ¨أ¢â‚¬إ’ط¸آ¾ط·آ§ط¹آ©',
+  loading: 'ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ¨ط·آ§ط·آ±ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’...',
+  error: 'ط·آ®ط·آ·ط·آ§',
+  success: 'ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑ',
+  warning: 'ط¸â€،ط·آ´ط·آ¯ط·آ§ط·آ±',
+  cancel: 'ط·آ§ط¸â€ ط·آµط·آ±ط·آ§ط¸ظ¾',
+  save: 'ط·آ°ط·آ®ط؛إ’ط·آ±ط¸â€،',
+  edit: 'ط¸ث†ط؛إ’ط·آ±ط·آ§ط؛إ’ط·آ´',
+  delete: 'ط·آ­ط·آ°ط¸ظ¾',
+  close: 'ط·آ¨ط·آ³ط·ع¾ط¸â€ ',
+  back: 'ط·آ¨ط·آ§ط·آ²ط¹آ¯ط·آ´ط·ع¾',
+  remove: 'ط·آ­ط·آ°ط¸ظ¾',
+  are_you_sure: 'ط¸â€¦ط·آ·ط¸â€¦ط·آ¦ط¸â€  ط¸â€،ط·آ³ط·ع¾ط؛إ’ط·آ¯ط·ع؛',
+  please_fill_required_fields: 'ط¸â€‍ط·آ·ط¸ظ¾ط·آ§ط¸â€¹ ط¸ظ¾ط؛إ’ط¸â€‍ط·آ¯ط¸â€،ط·آ§ط؛إ’ ط·آ¶ط·آ±ط¸ث†ط·آ±ط؛إ’ ط·آ±ط·آ§ ط¸آ¾ط·آ± ط¹آ©ط¸â€ ط؛إ’ط·آ¯',
+
+  // Dashboard
+  dashboard: 'ط·آ¯ط·آ§ط·آ´ط·آ¨ط¸ث†ط·آ±ط·آ¯',
+  dashboard_desc: 'ط¸â€ ط¸â€¦ط·آ§ط؛إ’ ط¹آ©ط¸â€‍ط؛إ’ ط¸ث† ط·ع¾ط·آ­ط¸â€‍ط؛إ’ط¸â€‍ ط·آ³ط·آ±ط؛إ’ط·آ¹ ط·ع¾ط·آ±ط·آ§ط¹آ©ط¸â€ ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§',
+  smart_date: 'ط·ع¾ط·آ§ط·آ±ط؛إ’ط·آ® ط¸â€،ط¸ث†ط·آ´ط¸â€¦ط¸â€ ط·آ¯',
+  fiscal_year: 'ط·آ³ط·آ§ط¸â€‍ ط¸â€¦ط·آ§ط¸â€‍ط؛إ’',
+  today: 'ط·آ§ط¸â€¦ط·آ±ط¸ث†ط·آ²',
+  this_month: 'ط·آ§ط؛إ’ط¸â€  ط¸â€¦ط·آ§ط¸â€،',
+  last_seven_days: 'ط؛آ· ط·آ±ط¸ث†ط·آ² ط¹آ¯ط·آ°ط·آ´ط·ع¾ط¸â€،',
+  
+  // Navigation
+  invoices: 'ط¸ظ¾ط·آ§ط¹آ©ط·ع¾ط¸ث†ط·آ±ط¸â€،ط·آ§',
+  payments: 'ط¸آ¾ط·آ±ط·آ¯ط·آ§ط·آ®ط·ع¾أ¢â‚¬إ’ط¸â€،ط·آ§',
+  receipts: 'ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾أ¢â‚¬إ’ط¸â€،ط·آ§',
+  inventory: 'ط·آ§ط¸â€ ط·آ¨ط·آ§ط·آ±',
+  people: 'ط·آ§ط·آ´ط·آ®ط·آ§ط·آµ',
+  reports: 'ط¹آ¯ط·آ²ط·آ§ط·آ±ط·آ´أ¢â‚¬إ’ط¸â€،ط·آ§',
+  settings: 'ط·ع¾ط¸â€ ط·آ¸ط؛إ’ط¸â€¦ط·آ§ط·ع¾',
+
+  // Auth
+  login: 'ط¸ث†ط·آ±ط¸ث†ط·آ¯',
+  logout: 'ط·آ®ط·آ±ط¸ث†ط·آ¬',
+  username: 'ط¸â€ ط·آ§ط¸â€¦ ط¹آ©ط·آ§ط·آ±ط·آ¨ط·آ±ط؛إ’',
+  password: 'ط·آ±ط¸â€¦ط·آ² ط·آ¹ط·آ¨ط¸ث†ط·آ±',
+  remember_me: 'ط¸â€¦ط·آ±ط·آ§ ط·آ¨ط¸â€، ط·آ®ط·آ§ط·آ·ط·آ± ط·آ¨ط·آ³ط¸آ¾ط·آ§ط·آ±',
+  otp_code: 'ط¹آ©ط·آ¯ ط؛إ’ط¹آ©أ¢â‚¬إ’ط·آ¨ط·آ§ط·آ± ط¸â€¦ط·آµط·آ±ط¸ظ¾',
+  phone_login: 'ط¸ث†ط·آ±ط¸ث†ط·آ¯ ط·آ¨ط·آ§ ط·ع¾ط¸â€‍ط¸ظ¾ط¸â€ ',
+  mobile_number: 'ط·آ´ط¸â€¦ط·آ§ط·آ±ط¸â€، ط¸â€¦ط¸ث†ط·آ¨ط·آ§ط؛إ’ط¸â€‍',
+  invalid_credentials: 'ط¸â€ ط·آ§ط¸â€¦ ط¹آ©ط·آ§ط·آ±ط·آ¨ط·آ±ط؛إ’ ط؛إ’ط·آ§ ط·آ±ط¸â€¦ط·آ² ط·آ¹ط·آ¨ط¸ث†ط·آ± ط¸â€ ط·آ§ط·آ¯ط·آ±ط·آ³ط·ع¾ ط·آ§ط·آ³ط·ع¾',
+
+  // Currency
+  currency: 'ط·آ§ط·آ±ط·آ²',
+  irr: 'ط·آ±ط؛إ’ط·آ§ط¸â€‍ ط·آ§ط؛إ’ط·آ±ط·آ§ط¸â€ ',
+  usd: 'ط·آ¯ط¸â€‍ط·آ§ط·آ± ط·آ¢ط¸â€¦ط·آ±ط؛إ’ط¹آ©ط·آ§',
+  aed: 'ط·آ¯ط·آ±ط¸â€،ط¸â€¦ ط·آ§ط¸â€¦ط·آ§ط·آ±ط·آ§ط·ع¾',
+  auto_convert: 'ط·ع¾ط·آ¨ط·آ¯ط؛إ’ط¸â€‍ ط·آ®ط¸ث†ط·آ¯ط¹آ©ط·آ§ط·آ±',
+
+  // Language
+  language: 'ط·آ²ط·آ¨ط·آ§ط¸â€ ',
+  persian: 'ط¸ظ¾ط·آ§ط·آ±ط·آ³ط؛إ’',
+  english: 'ط·آ§ط¸â€ ط¹آ¯ط¸â€‍ط؛إ’ط·آ³ط؛إ’',
+  arabic: 'ط·آ¹ط·آ±ط·آ¨ط؛إ’',
+  kurdish: 'ط¹آ©ط·آ±ط·آ¯ط؛إ’',
+
+  // Customer Groups
+  customer_groups: 'ط¹آ¯ط·آ±ط¸ث†ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط·آ´ط·ع¾ط·آ±ط؛إ’',
+  manage_customer_groups_description: 'ط¹آ¯ط·آ±ط¸ث†ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط¸â€¦ط·آ´ط·ع¾ط·آ±ط؛إ’ ط·آ±ط·آ§ ط·آ¨ط·آ±ط·آ§ط؛إ’ ط·آ³ط·آ§ط·آ²ط¸â€¦ط·آ§ط¸â€ أ¢â‚¬إ’ط·آ¯ط¸â€،ط؛إ’ ط·آ¨ط¸â€،ط·ع¾ط·آ± ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط¸ث† ط¸â€¦ط·آ¯ط؛إ’ط·آ±ط؛إ’ط·ع¾ ط¹آ©ط¸â€ ط؛إ’ط·آ¯',
+  create_group: 'ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط¹آ¯ط·آ±ط¸ث†ط¸â€،',
+  edit_group: 'ط¸ث†ط؛إ’ط·آ±ط·آ§ط؛إ’ط·آ´ ط¹آ¯ط·آ±ط¸ث†ط¸â€،',
+  group_name: 'ط¸â€ ط·آ§ط¸â€¦ ط¹آ¯ط·آ±ط¸ث†ط¸â€،',
+  group_description: 'ط·ع¾ط¸ث†ط·آ¶ط؛إ’ط·آ­ ط¹آ¯ط·آ±ط¸ث†ط¸â€،',
+  is_shared: 'ط·آ§ط·آ´ط·ع¾ط·آ±ط·آ§ط¹آ©ط؛إ’',
+  no_groups_yet: 'ط¸â€،ط¸â€ ط¸ث†ط·آ² ط¹آ¯ط·آ±ط¸ث†ط¸â€،ط؛إ’ ط·آ³ط·آ§ط·آ®ط·ع¾ط¸â€، ط¸â€ ط·آ´ط·آ¯ط¸â€، ط·آ§ط·آ³ط·ع¾',
+  no_members_yet: 'ط¸â€،ط¸â€ ط¸ث†ط·آ² ط·آ¹ط·آ¶ط¸ث†ط؛إ’ ط·آ§ط¸ظ¾ط·آ²ط¸ث†ط·آ¯ط¸â€، ط¸â€ ط·آ´ط·آ¯ط¸â€، ط·آ§ط·آ³ط·ع¾',
+  add_member: 'ط·آ§ط¸ظ¾ط·آ²ط¸ث†ط·آ¯ط¸â€  ط·آ¹ط·آ¶ط¸ث†',
+  select_person: 'ط·آ§ط¸â€ ط·ع¾ط·آ®ط·آ§ط·آ¨ ط·آ´ط·آ®ط·آµ',
+  members: 'ط·آ§ط·آ¹ط·آ¶ط·آ§',
+  shared: 'ط·آ§ط·آ´ط·ع¾ط·آ±ط·آ§ط¹آ©ط؛إ’',
+  private: 'ط·آ®ط·آµط¸ث†ط·آµط؛إ’',
+  please_select_group_and_member: 'ط¸â€‍ط·آ·ط¸ظ¾ط·آ§ط¸â€¹ ط¹آ¯ط·آ±ط¸ث†ط¸â€، ط¸ث† ط·آ¹ط·آ¶ط¸ث† ط·آ±ط·آ§ ط·آ§ط¸â€ ط·ع¾ط·آ®ط·آ§ط·آ¨ ط¹آ©ط¸â€ ط؛إ’ط·آ¯',
+  name: 'ط¸â€ ط·آ§ط¸â€¦',
+  
+  // ICC Shop
+  integration: 'ط؛إ’ط¹آ©ط¸آ¾ط·آ§ط·آ±ط¹â€ ط¸â€،أ¢â‚¬إ’ط·آ³ط·آ§ط·آ²ط؛إ’',
+  icc_shop: 'ط¸ظ¾ط·آ±ط¸ث†ط·آ´ط¹آ¯ط·آ§ط¸â€، ICC',
+  registration: 'ط·آ«ط·آ¨ط·ع¾أ¢â‚¬إ’ط¸â€ ط·آ§ط¸â€¦',
+  active_module: 'ط¸â€¦ط·آ§ط¹ع©ط¸ث†ط¸â€‍ ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍',
+  module_not_found: 'ط¸â€¦ط·آ§ط¹ع©ط¸ث†ط¸â€‍ ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط¸â€ ط·آ´ط·آ¯',
+  loading_system: 'ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ¨ط·آ§ط·آ±ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’ ط·آ³ط؛إ’ط·آ³ط·ع¾ط¸â€¦...',
+  command_pad: 'ط¸آ¾ط¸â€ ط¸â€‍ ط¸ظ¾ط·آ±ط¸â€¦ط·آ§ط¸â€ ',
+  activity_counter: 'ط·آ´ط¸â€¦ط·آ§ط·آ±ط¸â€ ط·آ¯ط¸â€، ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍ط؛إ’ط·ع¾',
+  sales_trend: 'ط·آ±ط¸ث†ط¸â€ ط·آ¯ ط¸ظ¾ط·آ±ط¸ث†ط·آ´',
+  latest_invoices: 'ط·آ¢ط·آ®ط·آ±ط؛إ’ط¸â€  ط¸ظ¾ط·آ§ط¹آ©ط·ع¾ط¸ث†ط·آ±ط¸â€،ط·آ§',
+  inventory_snapshot: 'ط¸â€ ط¸â€¦ط·آ§ط؛إ’ ط¸â€‍ط·آ­ط·آ¸ط¸â€،أ¢â‚¬إ’ط·آ§ط؛إ’ ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’',
+  aging_inventory: 'ط¸â€¦ط¸ث†ط·آ¬ط¸ث†ط·آ¯ط؛إ’ ط·آ±ط·آ§ط¹آ©ط·آ¯',
+  checks_due: 'ط¹â€ ط¹آ©أ¢â‚¬إ’ط¸â€،ط·آ§ط؛إ’ ط·آ³ط·آ±ط·آ±ط·آ³ط؛إ’ط·آ¯',
+  fx_rates: 'ط¸â€ ط·آ±ط·آ® ط·آ§ط·آ±ط·آ²',
+  crypto: 'ط·آ±ط¸â€¦ط·آ²ط·آ§ط·آ±ط·آ²',
+  categories: 'ط·آ¯ط·آ³ط·ع¾ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§',
+  centers: 'ط¸â€¦ط·آ±ط·آ§ط¹آ©ط·آ²',
+  units: 'ط¸ث†ط·آ§ط·آ­ط·آ¯ط¸â€،ط·آ§',
+  extensions: 'ط·آ§ط¸ظ¾ط·آ²ط¸ث†ط¸â€ ط¸â€،أ¢â‚¬إ’ط¸â€،ط·آ§',
+
+  // Messages
+  save_success: 'ط·ع¾ط·ط›ط؛إ’ط؛إ’ط·آ±ط·آ§ط·ع¾ ط·آ¨ط·آ§ ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑط؛إ’ط·ع¾ ط·آ°ط·آ®ط؛إ’ط·آ±ط¸â€، ط·آ´ط·آ¯',
+  delete_confirm: 'ط·آ§ط·آ² ط·آ­ط·آ°ط¸ظ¾ ط·آ§ط؛إ’ط¸â€  ط¸â€¦ط¸ث†ط·آ±ط·آ¯ ط¸â€¦ط·آ·ط¸â€¦ط·آ¦ط¸â€  ط¸â€،ط·آ³ط·ع¾ط؛إ’ط·آ¯ط·ع؛',
+  operation_failed: 'ط·آ¹ط¸â€¦ط¸â€‍ط؛إ’ط·آ§ط·ع¾ ط¸â€ ط·آ§ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑ ط·آ¨ط¸ث†ط·آ¯',
+  session_expired: 'ط¸â€ ط·آ´ط·آ³ط·ع¾ ط·آ´ط¸â€¦ط·آ§ ط¸â€¦ط¸â€ ط¸â€ڑط·آ¶ط؛إ’ ط·آ´ط·آ¯ط¸â€، ط·آ§ط·آ³ط·ع¾',
+}
+
+// Language: English
+export const en = {
+  // General
+  app_name: 'HesabPak',
+  loading: 'Loading...',
+  error: 'Error',
+  success: 'Success',
+  warning: 'Warning',
+  cancel: 'Cancel',
+  save: 'Save',
+  edit: 'Edit',
+  delete: 'Delete',
+  close: 'Close',
+  back: 'Back',
+  remove: 'Remove',
+  are_you_sure: 'Are you sure?',
+  please_fill_required_fields: 'Please fill required fields',
+
+  // Dashboard
+  dashboard: 'Dashboard',
+  dashboard_desc: 'Overview and quick analysis of transactions',
+  smart_date: 'Smart Date',
+  fiscal_year: 'Fiscal Year',
+  today: 'Today',
+  this_month: 'This Month',
+  last_seven_days: 'Last 7 Days',
+
+  // Navigation
+  invoices: 'Invoices',
+  payments: 'Payments',
+  receipts: 'Receipts',
+  inventory: 'Inventory',
+  people: 'Parties',
+  reports: 'Reports',
+  settings: 'Settings',
+
+  // Auth
+  login: 'Login',
+  logout: 'Logout',
+  username: 'Username',
+  password: 'Password',
+  remember_me: 'Remember me',
+  otp_code: 'One-time code',
+  phone_login: 'Login with phone',
+  mobile_number: 'Mobile number',
+  invalid_credentials: 'Invalid username or password',
+
+  // Currency
+  currency: 'Currency',
+  irr: 'Iranian Rial',
+  usd: 'US Dollar',
+  aed: 'UAE Dirham',
+  auto_convert: 'Auto convert',
+
+  // Language
+  language: 'Language',
+  persian: 'Persian',
+  english: 'English',
+  arabic: 'Arabic',
+  kurdish: 'Kurdish',
+}
+
+// Language: Arabic (placeholder uses English to avoid encoding issues)
+export const ar = {
+  ...en,
+}
+
+// Language: Kurdish (placeholder uses English to avoid encoding issues)
+export const ku = {
+  ...en,
+}
+
+export type TranslationKey = keyof typeof fa
+
+export const translations = {
+  fa,
+  en,
+  ar,
+  ku,
+} as const
+
+export type LanguageCode = keyof typeof translations

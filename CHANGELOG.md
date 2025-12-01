@@ -4,6 +4,7 @@ All notable changes to this project should be documented in this file.
 
 ## Unreleased
 
+- 2025-11-23: Overhauled the invoice module (new CRUD/status endpoints, exports, printable template, attachments, settings defaults, and UI) and added automated API/calculation/UI tests.
 - 2025-11-14: Fixed DB/session naming mismatch across `main.py` and `crud.py`. Unified parameter name to `session` and updated call sites. Added many bug fixes to restore data endpoints.
 - 2025-11-14: Added program `VERSION` and backend `/api/version` endpoint, and frontend display of version in app header/footer.
 

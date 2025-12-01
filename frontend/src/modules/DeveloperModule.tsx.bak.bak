@@ -1,0 +1,167 @@
+import React, { useEffect, useState } from 'react'
+import { apiGet, apiPost, apiPut, apiDelete } from '../services/api'
+import { retroHeading, retroPanel, retroPanelPadded, retroButton, retroInput, retroLabel, retroTableHeader } from '../components/retroTheme'
+
+interface ApiKey {
+  id: number
+  name: string
+  description?: string
+  enabled: boolean
+  rate_limit_per_minute: number
+  endpoints?: string | null
+  last_used_at?: string | null
+  created_at: string
+  expires_at?: string | null
+  revoked_at?: string | null
+}
+
+export default function DeveloperModule() {
+  const [keys, setKeys] = useState<ApiKey[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [newKey, setNewKey] = useState({ name: '', description: '', rate_limit_per_minute: 60 })
+  const [createdKey, setCreatedKey] = useState<{ api_key?: string; name?: string } | null>(null)
+  const [rotatedKey, setRotatedKey] = useState<{ new_api_key?: string; old_key_id?: number } | null>(null)
+
+  useEffect(() => {
+    loadKeys()
+  }, [])
+
+  async function loadKeys() {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await apiGet<ApiKey[]>('/api/developer/keys')
+      setKeys(Array.isArray(data) ? data : [])
+    } catch (err: any) {
+      setError(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط·آ¯ط·آ±ط؛إ’ط·آ§ط¸ظ¾ط·ع¾ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ط¸â€،ط·آ§')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function createKey() {
+    setError(null)
+    setCreatedKey(null)
+    try {
+      const payload = { ...newKey, rate_limit_per_minute: Number(newKey.rate_limit_per_minute || 60) }
+      const data = await apiPost('/api/developer/keys', payload)
+      setCreatedKey({ api_key: data.api_key, name: data.name })
+      await loadKeys()
+      setNewKey({ name: '', description: '', rate_limit_per_minute: 60 })
+    } catch (err: any) {
+      setError(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯')
+    }
+  }
+
+  async function toggleKey(key: ApiKey) {
+    try {
+      await apiPut(`/api/developer/keys/${key.id}`, { enabled: !key.enabled })
+      await loadKeys()
+    } catch (err: any) {
+      setError(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط·ع¾ط·ط›ط؛إ’ط؛إ’ط·آ± ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯')
+    }
+  }
+
+  async function rotate(keyId: number) {
+    setRotatedKey(null)
+    try {
+      const data = await apiPost(`/api/developer/keys/${keyId}/rotate`, {})
+      setRotatedKey({ new_api_key: data.new_api_key, old_key_id: keyId })
+      await loadKeys()
+    } catch (err: any) {
+      setError(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط¹â€ ط·آ±ط·آ®ط·آ´ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯')
+    }
+  }
+
+  async function revoke(keyId: number) {
+    if (!window.confirm('ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط¸â€‍ط·ط›ط¸ث† ط·آ´ط¸ث†ط·آ¯ط·ع؛')) return
+    try {
+      await apiDelete(`/api/developer/keys/${keyId}`)
+      await loadKeys()
+    } catch (err: any) {
+      setError(err?.message || 'ط·آ®ط·آ·ط·آ§ ط·آ¯ط·آ± ط¸â€‍ط·ط›ط¸ث† ط¹آ©ط¸â€‍ط؛إ’ط·آ¯')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && <div className="border border-red-400 bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>}
+
+      <section className={`${retroPanelPadded} space-y-3`}>
+        <p className={retroHeading}>ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ط¸â€،ط·آ§ط؛إ’ API</p>
+        {loading ? (
+          <p className="text-sm">ط·آ¯ط·آ± ط·آ­ط·آ§ط¸â€‍ ط·آ¨ط·آ§ط·آ±ط¹آ¯ط·آ°ط·آ§ط·آ±ط؛إ’...</p>
+        ) : keys.length > 0 ? (
+          <div className="overflow-x-auto text-sm">
+            <table className="w-full border border-[#c5bca5] bg-[#faf4de]">
+              <thead>
+                <tr>
+                  <th className={retroTableHeader}>ط¸â€ ط·آ§ط¸â€¦</th>
+                  <th className={retroTableHeader}>ط¸ث†ط·آ¶ط·آ¹ط؛إ’ط·ع¾</th>
+                  <th className={retroTableHeader}>RPS</th>
+                  <th className={retroTableHeader}>ط·آ¢ط·آ®ط·آ±ط؛إ’ط¸â€  ط·آ§ط·آ³ط·ع¾ط¸ظ¾ط·آ§ط·آ¯ط¸â€،</th>
+                  <th className={retroTableHeader}>ط·آ¹ط¸â€¦ط¸â€‍ط؛إ’ط·آ§ط·ع¾</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keys.map(k => (
+                  <tr key={k.id} className="border-b border-[#d9cfb6]">
+                    <td className="px-2 py-1">{k.name}</td>
+                    <td className="px-2 py-1">{k.enabled ? 'ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍' : 'ط·ط›ط؛إ’ط·آ±ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍'}</td>
+                    <td className="px-2 py-1">{k.rate_limit_per_minute}/min</td>
+                    <td className="px-2 py-1 text-xs">{k.last_used_at || '---'}</td>
+                    <td className="px-2 py-1 flex flex-wrap gap-2">
+                      <button className={retroButton} type="button" onClick={() => toggleKey(k)}>
+                        {k.enabled ? 'ط·ط›ط؛إ’ط·آ±ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍' : 'ط¸ظ¾ط·آ¹ط·آ§ط¸â€‍'}
+                      </button>
+                      <button className={retroButton} type="button" onClick={() => rotate(k.id)}>
+                        ط¹â€ ط·آ±ط·آ®ط·آ´ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯
+                      </button>
+                      <button className={`${retroButton} !bg-[#b94c4c]`} type="button" onClick={() => revoke(k.id)}>
+                        ط¸â€‍ط·ط›ط¸ث†
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-[#7a6b4f]">ط¸â€،ط؛إ’ط¹â€  ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ط؛إ’ ط·آ«ط·آ¨ط·ع¾ ط¸â€ ط·آ´ط·آ¯ط¸â€، ط·آ§ط·آ³ط·ع¾.</p>
+        )}
+        {rotatedKey?.new_api_key && (
+          <div className={`${retroPanel} p-3 text-sm`}>
+            <p className={retroHeading}>ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط·آ¬ط·آ¯ط؛إ’ط·آ¯ (ط·آ°ط·آ®ط؛إ’ط·آ±ط¸â€، ط¹آ©ط¸â€ )</p>
+            <p className="font-mono break-all text-xs">{rotatedKey.new_api_key}</p>
+          </div>
+        )}
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-3`}>
+        <p className={retroHeading}>ط·آ§ط؛إ’ط·آ¬ط·آ§ط·آ¯ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط·آ¬ط·آ¯ط؛إ’ط·آ¯</p>
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label className={retroLabel}>ط¸â€ ط·آ§ط¸â€¦</label>
+            <input className={`${retroInput} w-full`} value={newKey.name} onChange={e => setNewKey({ ...newKey, name: e.target.value })} />
+          </div>
+          <div>
+            <label className={retroLabel}>ط·ع¾ط¸ث†ط·آ¶ط؛إ’ط·آ­</label>
+            <input className={`${retroInput} w-full`} value={newKey.description} onChange={e => setNewKey({ ...newKey, description: e.target.value })} />
+          </div>
+          <div>
+            <label className={retroLabel}>Rate limit (req/min)</label>
+            <input type="number" className={`${retroInput} w-full`} value={newKey.rate_limit_per_minute} onChange={e => setNewKey({ ...newKey, rate_limit_per_minute: Number(e.target.value) })} />
+          </div>
+        </div>
+        <button className={retroButton} type="button" onClick={createKey}>ط·آ³ط·آ§ط·آ®ط·ع¾ ط¹آ©ط¸â€‍ط؛إ’ط·آ¯</button>
+        {createdKey?.api_key && (
+          <div className={`${retroPanel} p-3 text-sm`}>
+            <p className={retroHeading}>ط¹آ©ط¸â€‍ط؛إ’ط·آ¯ ط·ع¾ط·آ§ط·آ²ط¸â€، (ط¸ظ¾ط¸â€ڑط·آ· ط؛إ’ط¹آ©أ¢â‚¬إ’ط·آ¨ط·آ§ط·آ± ط¸â€ ط¸â€¦ط·آ§ط؛إ’ط·آ´)</p>
+            <p className="font-mono break-all text-xs">{createdKey.api_key}</p>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}

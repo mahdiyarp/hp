@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { retroHeading } from '../retroTheme'
 import { apiGet, apiPost } from '../../services/api'
 
-const STORAGE_KEY = 'hesabpak_sidebar_order_v1'
+const STORAGE_KEY = 'hesabpak_sidebar_order_v2'
 
 type ModuleDef = {
   id: string
@@ -15,6 +15,7 @@ export default function SidebarMenu({
   modules,
   activeModuleId,
   onNavigate,
+  collapsed = false,
 }: {
   modules: ModuleDef[]
   activeModuleId: string
@@ -22,55 +23,6 @@ export default function SidebarMenu({
   collapsed?: boolean
 }) {
   const [order, setOrder] = useState<string[]>([])
-  const [expandedSettings, setExpandedSettings] = useState(false)
-  const collapsed = (arguments[0] && (arguments[0] as any).collapsed) || false
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadOrder() {
-      // Try server-side first (authenticated)
-      try {
-        const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
-        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
-          const ids = modules.map(m => m.id)
-          const merged = [...serverOrder.filter((id: string) => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
-          if (!cancelled) setOrder(merged)
-          return
-        }
-      } catch (e) {
-        // ignore - fallback to localStorage
-      }
-
-      const raw = localStorage.getItem(STORAGE_KEY)
-      let stored: string[] = []
-      try {
-        if (raw) stored = JSON.parse(raw)
-      } catch (e) {
-        stored = []
-      }
-
-      const ids = modules.map(m => m.id)
-      // Start with stored order, append any new modules
-      const merged = [...stored.filter(id => ids.includes(id)), ...ids.filter(id => !stored.includes(id))]
-      if (!cancelled) setOrder(merged)
-    }
-
-    loadOrder()
-    return () => { cancelled = true }
-  }, [modules])
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(order))
-    // also try to persist server-side (best-effort)
-    ;(async () => {
-      try {
-        await apiPost('/api/users/preferences/sidebar-order', { order })
-      } catch (e) {
-        // ignore server-side persist errors
-      }
-    })()
-  }, [order])
 
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDef>()
@@ -78,13 +30,57 @@ export default function SidebarMenu({
     return map
   }, [modules])
 
-  const settingsChildren = useMemo(() => {
-    return modules.filter(m => /system|settings|user|security|integration|auth/i.test(m.id))
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadOrder() {
+      try {
+        const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
+        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
+          const ids = modules.map(m => m.id)
+          const merged = [...serverOrder.filter(id => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
+          if (!cancelled) setOrder(merged)
+          return
+        }
+      } catch {
+        // ignore
+      }
+
+      const raw = localStorage.getItem(STORAGE_KEY)
+      let stored: string[] = []
+      try {
+        if (raw) stored = JSON.parse(raw)
+      } catch {
+        stored = []
+      }
+      const ids = modules.map(m => m.id)
+      const merged = [...stored.filter(id => ids.includes(id)), ...ids.filter(id => !stored.includes(id))]
+      if (!cancelled) setOrder(merged)
+    }
+
+    loadOrder()
+    return () => {
+      cancelled = true
+    }
   }, [modules])
 
-  const nonSettings = useMemo(() => {
-    return order.filter(id => !settingsChildren.some(s => s.id === id)).map(id => moduleMap.get(id)).filter(Boolean) as ModuleDef[]
-  }, [order, moduleMap, settingsChildren])
+  useEffect(() => {
+    if (order.length === 0 && modules.length > 0) {
+      setOrder(modules.map(m => m.id))
+    }
+  }, [modules, order.length])
+
+  useEffect(() => {
+    if (order.length === 0) return
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(order))
+    ;(async () => {
+      try {
+        await apiPost('/api/users/preferences/sidebar-order', { order })
+      } catch {
+        // ignore
+      }
+    })()
+  }, [order])
 
   function onDragStart(e: React.DragEvent, id: string) {
     e.dataTransfer.setData('text/plain', id)
@@ -109,27 +105,33 @@ export default function SidebarMenu({
     setOrder(next)
   }
 
+  const orderedModules = order
+    .map(id => moduleMap.get(id))
+    .filter(Boolean) as ModuleDef[]
+
   return (
     <nav className={`flex-1 overflow-y-auto px-2 py-4 ${collapsed ? 'space-y-1' : 'space-y-2'}`}>
-      {nonSettings.map(mod => {
+      {orderedModules.map(mod => {
         const isActive = mod.id === activeModuleId
+        const activeColors = 'bg-[#d7caa4] text-[#1f2e3b] border-[#b7a77a]'
+        const idleColors = 'bg-transparent text-[#d4d8dc] hover:bg-[#1c2833] border-[#2d3b45] hover:border-[#d7caa4]'
+
         if (collapsed) {
           return (
             <div key={mod.id} className="p-1">
               <button
                 title={mod.label}
-                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[#1f2e3b]' : ''} transition-colors duration-150`}
+                className={`w-full text-center block rounded px-2 py-2 text-sm border ${isActive ? activeColors : idleColors} transition-colors duration-150`}
                 onClick={() => onNavigate(mod.id)}
               >
-                <span className={`${retroHeading} block text-[11px] transition-opacity duration-200`}>{(mod.badge ?? mod.label[0] ?? '•').slice(0,3)}</span>
+                <span className={`${retroHeading} block text-[11px] normal-case tracking-[0.05em]`}>
+                  {(mod.badge ?? mod.label[0] ?? '•').slice(0, 3)}
+                </span>
               </button>
             </div>
           )
         }
 
-        const base = 'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
-        const activeClass = 'bg-[#d7caa4] text-[#1f2e3b] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
-        const idleClass = 'border-[#2d3b45] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]'
         return (
           <div
             key={mod.id}
@@ -139,58 +141,20 @@ export default function SidebarMenu({
             onDrop={e => onDrop(e, mod.id)}
           >
             <button
-              className={`${base} ${isActive ? activeClass : idleClass}`}
+              className={`w-full text-right border-2 rounded px-4 py-3 transition-colors duration-150 text-sm ${
+                isActive ? activeColors + ' shadow-[3px_3px_0_#b7a77a]' : idleColors
+              }`}
               onClick={() => onNavigate(mod.id)}
             >
-              <span className={`${retroHeading} block text-[11px] transition-opacity duration-200`}>{mod.badge ?? 'MODULE'}</span>
-              <span className="text-lg font-semibold transition-opacity duration-200">{mod.label}</span>
-              <span className="block text-[11px] mt-1 text-[#aeb4b9] transition-opacity duration-200">{mod.description}</span>
+              <span className={`${retroHeading} block text-[11px] normal-case tracking-[0.05em]`}>
+                {mod.badge ?? 'MODULE'}
+              </span>
+              <span className="text-lg font-semibold">{mod.label}</span>
+              <span className="block text-[11px] mt-1 text-[#aeb4b9]">{mod.description}</span>
             </button>
           </div>
         )
       })}
-
-      {settingsChildren.length > 0 && (
-        <div className="pt-3 border-t border-[#2d3b45]">
-          {!collapsed && (
-            <button
-              className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
-              onClick={() => setExpandedSettings(s => !s)}
-            >
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className={`${retroHeading} text-[11px]`}>تنظیمات</p>
-                  <div className="text-lg font-semibold">پنل تنظیمات</div>
-                </div>
-                <div className="text-sm text-[#aeb4b9]">{expandedSettings ? '–' : '+'}</div>
-              </div>
-            </button>
-          )}
-
-          {expandedSettings && !collapsed && (
-            <div className="mt-3 space-y-2">
-              {settingsChildren.map(s => (
-                <div
-                  key={s.id}
-                  draggable
-                  onDragStart={e => onDragStart(e, s.id)}
-                  onDragOver={onDragOver}
-                  onDrop={e => onDrop(e, s.id)}
-                >
-                  <button
-                    className={`w-full text-right border-2 rounded-sm px-4 py-2 text-sm border-[#28333a] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]`}
-                    onClick={() => onNavigate(s.id)}
-                  >
-                    <span className={`${retroHeading} block text-[11px]`}>{s.badge ?? 'SET'}</span>
-                    <span className="text-sm font-semibold">{s.label}</span>
-                    <span className="block text-[11px] mt-1 text-[#aeb4b9]">{s.description}</span>
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </nav>
   )
 }

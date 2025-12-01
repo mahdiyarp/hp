@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
-from . import models, crud
+from . import models
+from app.accounting import fiscal_service
+from app.accounting import fiscal_service
 import jdatetime
 
 
@@ -31,31 +33,37 @@ def get_or_create_current_financial_year(db: Session) -> models.FinancialYear:
     Persian financial year typically runs from 1 Farvardin to 30 Esfand.
     """
     current_jalali_year = get_current_jalali_year()
-    
-    # Check if current year already exists
-    existing = db.query(models.FinancialYear).filter(
-        models.FinancialYear.name == f"سال مالی {current_jalali_year}"
-    ).first()
-    
+
+    current = fiscal_service.get_current_year(db)
+    if current:
+        return current
+    existing = fiscal_service.list_fiscal_years(db)
     if existing:
-        return existing
-    
-    # Create new financial year
-    start_jalali = jdatetime.date(current_jalali_year, 1, 1)  # 1 Farvardin
-    end_jalali = jdatetime.date(current_jalali_year, 12, 29)  # 29 Esfand (accounting for leap years)
-    
-    # Convert to Gregorian ISO dates
+        return existing[0]
+
+    start_jalali = jdatetime.date(current_jalali_year, 1, 1)
+    end_jalali = jdatetime.date(current_jalali_year, 12, 29)
+
     start_gregorian = start_jalali.togregorian()
     end_gregorian = end_jalali.togregorian()
-    
-    fy = crud.create_financial_year(
-        session=db,
-        name=f"سال مالی {current_jalali_year}",
-        start_date=start_gregorian.isoformat(),
-        end_date=end_gregorian.isoformat()
-    )
-    
-    return fy
+
+    try:
+        fy = fiscal_service.create_fiscal_year(
+            session=db,
+            title=f"??? ???? {current_jalali_year}",
+            start_date=start_gregorian,
+            end_date=end_gregorian,
+            is_current=True,
+        )
+        return fy
+    except Exception:
+        fallback = fiscal_service.get_current_year(db)
+        if fallback:
+            return fallback
+        existing_any = fiscal_service.list_fiscal_years(db)
+        if existing_any:
+            return existing_any[0]
+        raise
 
 
 def auto_determine_financial_context(db: Session) -> dict:
@@ -65,36 +73,35 @@ def auto_determine_financial_context(db: Session) -> dict:
     - Auto-create if needed
     - Return context for UI
     """
-    # Check if current year already exists
     current_jalali_year = get_current_jalali_year()
     existing = db.query(models.FinancialYear).filter(
-        models.FinancialYear.name == f"سال مالی {current_jalali_year}"
+        models.FinancialYear.title == f"??? ???? {current_jalali_year}"
     ).first()
-    
+
     current_fy = get_or_create_current_financial_year(db)
-    
-    # Get current Jalali date info
+
     now_jalali = jdatetime.datetime.now()
-    
+
     context = {
         "current_financial_year": {
             "id": current_fy.id,
-            "name": current_fy.name,
+            "title": current_fy.title,
             "start_date": current_fy.start_date.isoformat() if current_fy.start_date else None,
             "end_date": current_fy.end_date.isoformat() if current_fy.end_date else None,
             "start_date_jalali": _to_jalali_str(current_fy.start_date),
             "end_date_jalali": _to_jalali_str(current_fy.end_date),
-            "is_closed": current_fy.is_closed
+            "status": current_fy.status,
+            "is_current": current_fy.is_current,
         },
         "current_jalali": {
             "year": now_jalali.year,
             "month": now_jalali.month,
             "day": now_jalali.day,
-            "formatted": now_jalali.strftime("%Y/%m/%d")
+            "formatted": now_jalali.strftime("%Y/%m/%d"),
         },
-        "auto_created": existing is None  # Will be True if we just created it
+        "auto_created": existing is None,
     }
-    
+
     return context
 
 

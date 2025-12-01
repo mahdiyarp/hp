@@ -1,0 +1,121 @@
+{
+  "project": "NeuroChainX",
+  "overall_progress": 0.35,
+  "overall_weighted_progress": 0.35,
+  "overall_milestone_progress": 4.17,
+  "phases_completed": 0,
+  "phases_in_progress": 1,
+  "phases_pending": 9,
+  "total_milestones": 48,
+  "completed_milestones": 2,
+  "updated_at": "2025-11-23T19:54:38.692105+00:00",
+  "applied_markers": [
+    "F1-M1",
+    "F1-M2"
+  ],
+  "sources": [
+    "manual"
+  ],
+  "phases": [
+    {
+      "id": 1,
+      "code": "F01-ID",
+      "name": "هویت بذر",
+      "status": "in_progress",
+      "percent": 50.0,
+      "fibonacci_weight": 1,
+      "milestones_total": 4,
+      "milestones_done": 2
+    },
+    {
+      "id": 2,
+      "code": "F02-LEDGER",
+      "name": "دفترکل هسته",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 1,
+      "milestones_total": 4,
+      "milestones_done": 0
+    },
+    {
+      "id": 3,
+      "code": "F03-P2P",
+      "name": "همگام‌سازی همتا‌به‌همتا",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 2,
+      "milestones_total": 4,
+      "milestones_done": 0
+    },
+    {
+      "id": 4,
+      "code": "F04-CRM",
+      "name": "آغاز CRM هوشمند",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 3,
+      "milestones_total": 5,
+      "milestones_done": 0
+    },
+    {
+      "id": 5,
+      "code": "F05-ECON",
+      "name": "لایه اقتصادی",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 5,
+      "milestones_total": 5,
+      "milestones_done": 0
+    },
+    {
+      "id": 6,
+      "code": "F06-AIOBS",
+      "name": "رصد هوش مصنوعی",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 8,
+      "milestones_total": 5,
+      "milestones_done": 0
+    },
+    {
+      "id": 7,
+      "code": "F07-BIZENG",
+      "name": "موتور کسب‌وکار یکپارچه",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 13,
+      "milestones_total": 5,
+      "milestones_done": 0
+    },
+    {
+      "id": 8,
+      "code": "F08-MKT-INTEROP",
+      "name": "بازار و بین‌عملیاتی",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 21,
+      "milestones_total": 6,
+      "milestones_done": 0
+    },
+    {
+      "id": 9,
+      "code": "F09-GOV-DAO",
+      "name": "حاکمیت DAO",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 34,
+      "milestones_total": 5,
+      "milestones_done": 0
+    },
+    {
+      "id": 10,
+      "code": "F10-AUTO-ECO",
+      "name": "اکوسیستم خودتکاملی",
+      "status": "pending",
+      "percent": 0.0,
+      "fibonacci_weight": 55,
+      "milestones_total": 5,
+      "milestones_done": 0
+    }
+  ]
+}
