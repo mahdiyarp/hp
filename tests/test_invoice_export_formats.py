@@ -64,7 +64,8 @@ def test_invoice_pdf_export(session):
         pytest.skip('reportlab not installed')
     inv = _create_invoice(session)
     path = export_invoice_pdf(session, inv.id)
-    assert os.path.exists(path)
+    assert path is not None, "export_invoice_pdf should return a file path"
+    assert os.path.exists(path), f"Expected file to exist at {path}"
     assert path.endswith('.pdf')
 
 
@@ -73,7 +74,36 @@ def test_invoice_excel_export(session):
         import openpyxl  # noqa: F401
     except ImportError:
         pytest.skip('openpyxl not installed')
-    inv = _create_invoice(session)
-    path = export_invoice_excel(session, inv.id)
-    assert os.path.exists(path)
+    # Use unique invoice number to avoid UNIQUE constraint violation
+    inv2 = models.Invoice(
+        invoice_number='FMT-INV-XLS',
+        invoice_type='sale',
+        mode='manual',
+        party_name='Excel Export Customer',
+        status='draft',
+        subtotal=0,
+        total=0,
+    )
+    session.add(inv2)
+    session.commit()
+    session.refresh(inv2)
+    item2 = models.InvoiceItem(
+        invoice_id=inv2.id,
+        description='Excel Export Item',
+        quantity=2,
+        unit='pcs',
+        unit_price=777,
+        total=1554,
+    )
+    session.add(item2)
+    session.commit()
+    inv2.subtotal = 1554
+    inv2.total = 1554
+    session.add(inv2)
+    session.commit()
+    session.refresh(inv2)
+    
+    path = export_invoice_excel(session, inv2.id)
+    assert path is not None, "export_invoice_excel should return a file path"
+    assert os.path.exists(path), f"Expected file to exist at {path}"
     assert path.endswith('.xlsx')

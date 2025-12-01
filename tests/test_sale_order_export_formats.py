@@ -62,7 +62,8 @@ def test_sale_order_pdf_export(session):
         pytest.skip('reportlab not installed')
     so = _create_order(session)
     path = export_sale_order_pdf(session, so.id)
-    assert os.path.exists(path)
+    assert path is not None, "export_sale_order_pdf should return a file path"
+    assert os.path.exists(path), f"Expected file to exist at {path}"
     assert path.endswith('.pdf')
 
 
@@ -72,7 +73,33 @@ def test_sale_order_excel_export(session):
         import openpyxl  # noqa: F401
     except ImportError:
         pytest.skip('openpyxl not installed')
-    so = _create_order(session)
-    path = export_sale_order_excel(session, so.id)
-    assert os.path.exists(path)
+    # Create a separate order to avoid any potential ID conflicts
+    so2 = models.SaleOrder(
+        party_name='Excel Export Customer',
+        status='draft',
+        subtotal=0,
+        total=0,
+    )
+    session.add(so2)
+    session.commit()
+    session.refresh(so2)
+    item2 = models.SaleOrderItem(
+        order_id=so2.id,
+        description='Excel Export Item',
+        quantity=3,
+        unit='pcs',
+        unit_price=888,
+        total=2664,
+    )
+    session.add(item2)
+    session.commit()
+    so2.subtotal = 2664
+    so2.total = 2664
+    session.add(so2)
+    session.commit()
+    session.refresh(so2)
+    
+    path = export_sale_order_excel(session, so2.id)
+    assert path is not None, "export_sale_order_excel should return a file path"
+    assert os.path.exists(path), f"Expected file to exist at {path}"
     assert path.endswith('.xlsx')
