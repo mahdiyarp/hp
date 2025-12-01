@@ -1080,7 +1080,7 @@ from .auth import get_current_user, require_permissions, require_roles
 
 
 
-from app.reports import router as reports_router
+from app.api.routers.reports import router as reports_router
 
 
 
