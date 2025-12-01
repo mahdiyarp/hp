@@ -37,6 +37,10 @@ from app.models_smart import SmartAssistantSettings, SmartAssistantSession, Smar
 from app.services import ai_client
 from sqlalchemy.exc import OperationalError
 
+_LAST_MODEL_NAME: Optional[str] = None
+_LAST_API_KEY_MASKED: Optional[str] = None
+_SETTINGS_CACHE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'logs', 'smart_settings_cache.json'))
+
 
 
 
@@ -105,6 +109,14 @@ def get_settings(session: Session) -> SmartAssistantSettings:
         session.refresh(st)
 
 
+
+    try:
+        if _LAST_MODEL_NAME:
+            st.model_name = _LAST_MODEL_NAME
+        if _LAST_API_KEY_MASKED:
+            st.api_key_masked = _LAST_API_KEY_MASKED
+    except Exception:
+        pass
 
     return st
 
@@ -211,6 +223,17 @@ def save_settings(session: Session, data: Dict[str, Any]) -> SmartAssistantSetti
 
 
     session.refresh(st)
+
+    # keep last values in-memory for environments where DB state may not persist
+    try:
+        if data.get("model_name"):
+            global _LAST_MODEL_NAME
+            _LAST_MODEL_NAME = data["model_name"]
+        if st.api_key_masked:
+            global _LAST_API_KEY_MASKED
+            _LAST_API_KEY_MASKED = st.api_key_masked
+    except Exception:
+        pass
 
 
 
