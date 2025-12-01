@@ -8,6 +8,10 @@ on:
 
 jobs:
   tests:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,3 +68,10 @@ jobs:
           name: coverage-report
           path: backend/coverage/
           if-no-files-found: warn
+
+      - name: Publish unit test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: |
+            backend/test-results/pytest.xml
