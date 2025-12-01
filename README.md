@@ -59,6 +59,30 @@ docker compose logs -f
 docker exec -it hesabpak_backend bash
 ```
 
+## ✅ اجرای تست‌های Backend
+
+برای اجرای تست‌ها در محیط محلی (بدون Docker):
+
+```powershell
+# ایجاد/فعال‌سازی محیط مجازی (Windows PowerShell)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# نصب وابستگی‌ها
+python -m pip install -r backend\requirements-dev.txt
+
+# اجرای تست‌ها
+pushd backend
+python -m pytest
+popd
+```
+
+یا درون کانتینر (در صورت نصب بودن pytest):
+
+```powershell
+docker compose exec backend sh -lc "pip install -q pytest && pytest -q backend/tests"
+```
+
 ---
 
 **نسخه:** 1.0.0

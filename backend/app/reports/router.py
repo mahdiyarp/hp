@@ -54,9 +54,9 @@ def payments_report(
     e = _parse_iso_dt(end)
     q = db.query(models.Payment).filter(models.Payment.status != 'void')
     if s:
-        q = q.filter(models.Payment.created_at >= s)
+        q = q.filter(models.Payment.server_time >= s)
     if e:
-        q = q.filter(models.Payment.created_at <= e)
+        q = q.filter(models.Payment.server_time <= e)
     if method:
         q = q.filter(models.Payment.method == method)
     if direction:
@@ -65,9 +65,9 @@ def payments_report(
     total_amount = db.query(func.coalesce(func.sum(models.Payment.amount), 0))
     total_amount = total_amount.filter(models.Payment.status != 'void')
     if s:
-        total_amount = total_amount.filter(models.Payment.created_at >= s)
+        total_amount = total_amount.filter(models.Payment.server_time >= s)
     if e:
-        total_amount = total_amount.filter(models.Payment.created_at <= e)
+        total_amount = total_amount.filter(models.Payment.server_time <= e)
     if method:
         total_amount = total_amount.filter(models.Payment.method == method)
     if direction:
@@ -80,9 +80,9 @@ def payments_report(
         .group_by(models.Payment.method)
     )
     if s:
-        by_method = by_method.filter(models.Payment.created_at >= s)
+        by_method = by_method.filter(models.Payment.server_time >= s)
     if e:
-        by_method = by_method.filter(models.Payment.created_at <= e)
+        by_method = by_method.filter(models.Payment.server_time <= e)
     if direction:
         by_method = by_method.filter(models.Payment.direction == direction)
     by_method_rows = by_method.all()
@@ -93,9 +93,9 @@ def payments_report(
         .group_by(models.Payment.direction)
     )
     if s:
-        by_direction = by_direction.filter(models.Payment.created_at >= s)
+        by_direction = by_direction.filter(models.Payment.server_time >= s)
     if e:
-        by_direction = by_direction.filter(models.Payment.created_at <= e)
+        by_direction = by_direction.filter(models.Payment.server_time <= e)
     if method:
         by_direction = by_direction.filter(models.Payment.method == method)
     by_direction_rows = by_direction.all()
