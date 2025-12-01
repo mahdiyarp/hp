@@ -1,36 +1,24 @@
-import os
+from pathlib import Path
+
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
-from sqlalchemy.orm import sessionmaker, declarative_base
-from dotenv import load_dotenv
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Try to load .env placed in the backend directory (package-relative) first so
-# imports succeed when tests run from the repo root. Fall back to default load.
-base_dir = os.path.abspath(os.path.dirname(__file__))
-env_path = os.path.abspath(os.path.join(base_dir, '..', '.env'))
-if os.path.exists(env_path):
-    load_dotenv(dotenv_path=env_path)
-else:
-    # fall back to default behaviour (load from CWD or environment)
-    load_dotenv()
+from .core import get_settings
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL not set in .env or environment")
+settings = get_settings()
+DATABASE_URL = settings.database_url
 
 # create engine from DATABASE_URL
 try:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 except ModuleNotFoundError as e:
-    # In some dev containers an external DATABASE_URL (Postgres) may be present
-    # but the driver (psycopg2) is not installed in this environment. Fall back
-    # to a local sqlite file to allow tests and import-time operations to work.
     import warnings
 
     warnings.warn(f"Could not create engine for DATABASE_URL; falling back to sqlite: {e}")
-    fallback_path = os.path.abspath(os.path.join(base_dir, '..', 'hp_fallback.db'))
+    fallback_path = Path(__file__).resolve().parents[1] / 'hp_fallback.db'
     DATABASE_URL = f"sqlite:///{fallback_path}"
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -44,10 +32,11 @@ def get_db():
 
 
 def create_test_engine():
-    """Helper for tests: return an isolated in-memory sqlite engine per call.
-    Uses StaticPool to share connections within the same engine, but does not
-    cache globally to avoid cross-test module state leakage.
-    """
+    """Helper for tests: create an in-memory sqlite engine and return it."""
+    from sqlalchemy import create_engine
+    # Use StaticPool to ensure a single in-memory database across connections
+    # and check_same_thread=False for TestClient worker threads.
+    from sqlalchemy.pool import StaticPool
     e = create_engine(
         'sqlite://',
         connect_args={"check_same_thread": False},

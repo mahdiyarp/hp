@@ -40,9 +40,12 @@ alembic upgrade 0029 || echo "ICC Shop integration migration applied or skipped"
 alembic upgrade 0030 || echo "System settings migration applied or skipped"
 alembic upgrade 0031 || echo "Dashboard widgets migration applied or skipped"
 alembic upgrade 0032 || echo "Dashboard and reports modules migration applied or skipped"
+alembic upgrade 0033 || echo "SMS config migration applied or skipped"
+alembic upgrade 0034 || echo "Payment methods migration applied or skipped"
+alembic upgrade 0035 || echo "Person activities migration applied or skipped"
+alembic upgrade 0036 || echo "Core CRM/inventory/cheques migration applied or skipped"
+alembic upgrade 0037 || echo "Sales orders migration applied or skipped"
 set -e
-# Always move database to the latest available head so newer features work out of the box
-alembic upgrade head
 
 # optional demo seeding
 if [ "${DEMO_SEED:-}" = "true" ]; then
