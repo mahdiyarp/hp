@@ -24,7 +24,13 @@ def test_session():
     engine = app_db.create_test_engine()
     session = app_db.create_test_session(engine)
     # Seed admin user and a person
-    admin = models.User(id=1, username='admin', hashed_password='x', role_id=1, role='Admin', is_active=True)
+    role = models.Role(id=1, name='Admin')
+    perm = models.Permission(id=1, name='finance_report', module='reports')
+    session.add_all([role, perm])
+    session.commit()
+    role.permissions = [perm]
+    session.add(role)
+    admin = models.User(id=1, username='admin', hashed_password='x', role_id=role.id, role='Admin', is_active=True)
     session.add(admin)
     person = models.Person(id='c1', name='Customer1', name_norm='customer1')
     session.add(person)

@@ -23,8 +23,16 @@ except Exception:
 def test_session():
     engine = app_db.create_test_engine()
     session = app_db.create_test_session(engine)
-    # Seed minimal admin user
-    admin = models.User(id=1, username='admin', hashed_password='x', role_id=1, role='Admin', is_active=True)
+    # Seed role + permission and admin user
+    role = models.Role(id=1, name='Admin')
+    perm = models.Permission(id=1, name='finance_report', module='reports')
+    session.add_all([role, perm])
+    session.commit()
+    # attach permission to role
+    role.permissions = [perm]
+    session.add(role)
+    # Seed minimal admin user with role
+    admin = models.User(id=1, username='admin', hashed_password='x', role_id=role.id, role='Admin', is_active=True)
     session.add(admin)
     session.commit()
     yield session
@@ -53,7 +61,7 @@ def client(test_session):
 
 def test_pricing_effective_endpoint(client, test_session):
     # Create product and prices
-    p = models.Product(id='p1', name='Prod1', name_norm='prod1', unit='pcs', group='g')
+    p = models.Product(id='p1', name='Prod1', name_norm='prod1', code='PRD-1', unit='pcs', group='g')
     test_session.add(p)
     test_session.commit()
 

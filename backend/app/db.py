@@ -34,7 +34,14 @@ def get_db():
 def create_test_engine():
     """Helper for tests: create an in-memory sqlite engine and return it."""
     from sqlalchemy import create_engine
-    e = create_engine('sqlite:///:memory:', connect_args={})
+    # Use StaticPool to ensure a single in-memory database across connections
+    # and check_same_thread=False for TestClient worker threads.
+    from sqlalchemy.pool import StaticPool
+    e = create_engine(
+        'sqlite://',
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     return e
 
 
