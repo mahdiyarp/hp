@@ -35,6 +35,7 @@ from app.models_smart import SmartAssistantSettings, SmartAssistantSession, Smar
 
 
 from app.services import ai_client
+from sqlalchemy.exc import OperationalError
 
 
 
@@ -74,7 +75,14 @@ def get_settings(session: Session) -> SmartAssistantSettings:
 
 
 
-    st = session.query(SmartAssistantSettings).first()
+    try:
+        st = session.query(SmartAssistantSettings).first()
+    except OperationalError:
+        try:
+            SmartAssistantSettings.__table__.create(bind=session.get_bind(), checkfirst=True)
+        except Exception:
+            pass
+        st = session.query(SmartAssistantSettings).first()
 
 
 
