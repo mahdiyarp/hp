@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, ReactNode, useEffect, useState } from 'react'
-import { translations, type LanguageCode, type TranslationKey } from './translations'
+import { translations, type LanguageCode, type TranslationKey } from './translations.clean'
 import { getAccessToken } from '../services/auth'
 
 interface I18nContextType {

@@ -86,7 +86,7 @@ def _assert_no_overpay_on_update(session: Session, obj: models.Payment, payload:
     if int(other_paid) + new_amount > int(inv.total or 0):
         raise HTTPException(status_code=400, detail="Payment exceeds invoice total")
 
-@router.get("/", response_model=List[schemas.PaymentOut])
+@router.get("/")
 def list_payments(
     session: Session = Depends(db.get_db),
     current=Depends(get_current_user),
@@ -123,7 +123,26 @@ def list_payments(
             pass
     page = max(1, int(page or 1))
     limit = min(max(int(limit or 1), 1), 500)
-    return q.order_by(models.Payment.server_time.desc()).offset((page-1)*limit).limit(limit).all()
+    items = (
+        q.order_by(models.Payment.server_time.desc())
+         .offset((page-1)*limit)
+         .limit(limit)
+         .all()
+    )
+    def _ser(p):
+        return {
+            "id": getattr(p, "id", None),
+            "invoice_id": getattr(p, "invoice_id", None),
+            "amount": int(getattr(p, "amount", 0) or 0),
+            "method": getattr(p, "method", None),
+            "status": getattr(p, "status", None),
+            "direction": getattr(p, "direction", None),
+            "server_time": (getattr(p, "server_time", None).isoformat() if getattr(p, "server_time", None) else None),
+            "ref_type": getattr(p, "ref_type", None),
+            "ref_id": getattr(p, "ref_id", None),
+            "description": getattr(p, "description", None),
+        }
+    return [_ser(p) for p in items]
 
 
 @router.get("/count")
