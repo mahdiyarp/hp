@@ -33,6 +33,25 @@
 	ruff check backend
 	```
 
+## Developer Workflow (pre-commit)
+
+- Install pre-commit once:
+	```powershell
+	python -m pip install pre-commit
+	pre-commit install
+	```
+
+- Run hooks on all files:
+	```powershell
+	pre-commit run --all-files
+	```
+
+- Included hooks:
+	- `black`, `isort`, `flake8`
+	- `ruff` (lint, autofix for E/F)
+	- YAML/JSON checks, whitespace/EOF fixers
+	- Optional security: `bandit` on `backend/`
+
 - Enforcing required checks (maintainers):
 	1. Settings → Branches → Add rule for `main`.
 	2. Enable "Require status checks to pass" and select the workflow checks named like `Backend Tests / tests (3.10|3.11|3.12)`.
