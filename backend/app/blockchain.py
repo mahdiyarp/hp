@@ -52,12 +52,19 @@ def hash_event(session: Session, entity: str, entity_id: int | str, payload: dic
     Maps to create_blockchain_entry with action inferred from payload.
     """
     action = (payload or {}).get("action", "update")
+    # Ensure uniqueness of data hash across repeated identical actions by injecting nonce
+    enriched = dict(payload or {})
+    try:
+        from datetime import datetime
+        enriched.setdefault("_nonce", datetime.utcnow().isoformat())
+    except Exception:
+        pass
     return create_blockchain_entry(
         session=session,
         entity_type=str(entity),
         entity_id=str(entity_id),
         action=str(action),
-        data=dict(payload or {}),
+        data=enriched,
         user_id=user_id,
     )
 

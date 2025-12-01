@@ -31,44 +31,54 @@ client = TestClient(app)
 
 
 def test_overpay_prevent_and_status_update():
-    # Create invoice with items that totals 1000
-    payload = {
-        "customer_name": "Test",
-        "status": "draft",
-        "items": [
-            {"description": "x", "qty": 1, "unit_price": 1000, "discount_rate": 0, "tax_rate": 0}
-        ]
-    }
-    r = client.post("/api/invoices/", json=payload)
-    assert r.status_code == 200
-    inv = r.json()
-    inv_id = inv["id"]
-    assert inv["total"] == 1000
+    # Scope engine caching to this test only to avoid side effects on other tests.
+    prev = os.environ.get('CACHE_TEST_ENGINE')
+    os.environ['CACHE_TEST_ENGINE'] = '1'
+    try:
+        # Create invoice with items that totals 1000
+        payload = {
+            "customer_name": "Test",
+            "status": "draft",
+            "items": [
+                {"description": "x", "qty": 1, "unit_price": 1000, "discount_rate": 0, "tax_rate": 0}
+            ]
+        }
+        r = client.post("/api/invoices/", json=payload)
+        assert r.status_code == 200
+        inv = r.json()
+        inv_id = inv["id"]
+        assert inv["total"] == 1000
 
-    # Create a partial payment 500
-    p1 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 500}
-    r = client.post("/api/payments/", json=p1)
-    assert r.status_code == 200
+        # Create a partial payment 500
+        p1 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 500}
+        r = client.post("/api/payments/", json=p1)
+        assert r.status_code == 200
 
-    # Overpay by adding 600 -> should be 400 allowed max
-    p2 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 600}
-    r = client.post("/api/payments/", json=p2)
-    assert r.status_code == 400
+        # Overpay by adding 600 -> should be 400 allowed max
+        p2 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 600}
+        r = client.post("/api/payments/", json=p2)
+        assert r.status_code == 400
 
-    # Pay remaining 500 -> invoice becomes paid
-    p3 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 500}
-    r = client.post("/api/payments/", json=p3)
-    assert r.status_code == 200
+        # Pay remaining 500 -> invoice becomes paid
+        p3 = {"invoice_id": inv_id, "direction": "in", "method": "cash", "amount": 500}
+        r = client.post("/api/payments/", json=p3)
+        assert r.status_code == 200
 
-    # Check summary
-    r = client.get(f"/api/invoices/{inv_id}/payments/summary")
-    assert r.status_code == 200
-    s = r.json()
-    assert s["paid"] == 1000
-    assert s["remaining"] == 0
+        # Check summary
+        r = client.get(f"/api/invoices/{inv_id}/payments/summary")
+        assert r.status_code == 200
+        s = r.json()
+        assert s["paid"] == 1000
+        assert s["remaining"] == 0
 
-    # Check invoice status now
-    r = client.get(f"/api/invoices/{inv_id}")
-    assert r.status_code == 200
-    inv2 = r.json()
-    assert inv2["status"] == "paid"
+        # Check invoice status now
+        r = client.get(f"/api/invoices/{inv_id}")
+        assert r.status_code == 200
+        inv2 = r.json()
+        assert inv2["status"] == "paid"
+    finally:
+        # Restore previous env state
+        if prev is None:
+            os.environ.pop('CACHE_TEST_ENGINE', None)
+        else:
+            os.environ['CACHE_TEST_ENGINE'] = prev

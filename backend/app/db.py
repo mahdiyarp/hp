@@ -43,17 +43,30 @@ def get_db():
         db.close()
 
 
+_TEST_ENGINE = None
+
 def create_test_engine():
-    """Helper for tests: return an isolated in-memory sqlite engine per call.
-    Uses StaticPool to share connections within the same engine, but does not
-    cache globally to avoid cross-test module state leakage.
-    """
-    e = create_engine(
+    """Create an in-memory sqlite engine for tests.
+    If environment variable CACHE_TEST_ENGINE=1 is set, a single cached engine
+    is reused (needed for tests that perform multi-request flows sharing state,
+    e.g. invoice + payment sequence). Otherwise a fresh engine is returned to
+    guarantee isolation (required for fiscal year tests which expect a clean
+    slate each time)."""
+    if os.getenv('CACHE_TEST_ENGINE') == '1':
+        global _TEST_ENGINE
+        if _TEST_ENGINE is None:
+            _TEST_ENGINE = create_engine(
+                'sqlite://',
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+        return _TEST_ENGINE
+    # Fresh, isolated engine
+    return create_engine(
         'sqlite://',
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    return e
 
 
 def create_test_session(engine):

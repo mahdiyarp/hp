@@ -1063,6 +1063,8 @@ from app.api.routers import activity as activity_router
 app.include_router(activity_router.router)
 from app.api.routers import tasks as tasks_router
 app.include_router(tasks_router.router)
+from app.api.routers import external_ai as external_ai_router
+app.include_router(external_ai_router.router)
 
 
 
