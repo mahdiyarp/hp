@@ -93,7 +93,7 @@ def export_invoice_pdf(db_session, invoice_id: int, filename: Optional[str] = No
     c.setFont('Helvetica-Bold', 12)
     c.drawString(margin, y, f"مبلغ کل: {total}")
     c.save()
-
+    return path
 
 
 def export_invoice_csv(db_session, invoice_id: int, filename: Optional[str] = None) -> str:
