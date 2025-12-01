@@ -6,6 +6,7 @@ from datetime import datetime
 from app import db, models, schemas
 from app.activity_logger import log_activity
 from app.blockchain import hash_event as bc_hash_event
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -87,6 +88,7 @@ def _assert_no_overpay_on_update(session: Session, obj: models.Payment, payload:
 @router.get("/", response_model=List[schemas.PaymentOut])
 def list_payments(
     session: Session = Depends(db.get_db),
+    current=Depends(get_current_user),
     invoice_id: Optional[int] = None,
     direction: Optional[str] = None,
     method: Optional[str] = None,
@@ -126,6 +128,7 @@ def list_payments(
 @router.get("/count")
 def count_payments(
     session: Session = Depends(db.get_db),
+    current=Depends(get_current_user),
     invoice_id: Optional[int] = None,
     direction: Optional[str] = None,
     method: Optional[str] = None,
@@ -158,7 +161,7 @@ def count_payments(
 
 
 @router.get("/{payment_id}", response_model=schemas.PaymentOut)
-def get_payment(payment_id: int, session: Session = Depends(db.get_db)):
+def get_payment(payment_id: int, session: Session = Depends(db.get_db), current=Depends(get_current_user)):
     obj = session.get(models.Payment, payment_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -166,7 +169,7 @@ def get_payment(payment_id: int, session: Session = Depends(db.get_db)):
 
 
 @router.post("/", response_model=schemas.PaymentOut)
-def create_payment(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db)):
+def create_payment(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current=Depends(get_current_user)):
     _assert_no_overpay_on_create(session, payload)
     data = payload.dict(exclude_unset=True)
     obj = models.Payment(**data)
@@ -180,7 +183,7 @@ def create_payment(payload: schemas.PaymentCreate, session: Session = Depends(db
 
 
 @router.put("/{payment_id}", response_model=schemas.PaymentOut)
-def update_payment(payment_id: int, payload: schemas.PaymentCreate, session: Session = Depends(db.get_db)):
+def update_payment(payment_id: int, payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current=Depends(get_current_user)):
     obj = session.get(models.Payment, payment_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -197,7 +200,7 @@ def update_payment(payment_id: int, payload: schemas.PaymentCreate, session: Ses
 
 
 @router.post("/{payment_id}/status/{new_status}", response_model=schemas.PaymentOut)
-def change_status(payment_id: int, new_status: str, session: Session = Depends(db.get_db)):
+def change_status(payment_id: int, new_status: str, session: Session = Depends(db.get_db), current=Depends(get_current_user)):
     obj = session.get(models.Payment, payment_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -215,7 +218,7 @@ def change_status(payment_id: int, new_status: str, session: Session = Depends(d
 
 
 @router.delete("/{payment_id}")
-def delete_payment(payment_id: int, session: Session = Depends(db.get_db)):
+def delete_payment(payment_id: int, session: Session = Depends(db.get_db), current=Depends(get_current_user)):
     obj = session.get(models.Payment, payment_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -230,6 +233,7 @@ def delete_payment(payment_id: int, session: Session = Depends(db.get_db)):
 @router.get("/export")
 def export_payments(
     session: Session = Depends(db.get_db),
+    current=Depends(get_current_user),
     format: str = "csv",
     limit: int = 1000,
     invoice_id: Optional[int] = None,
