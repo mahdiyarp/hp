@@ -118,7 +118,7 @@ export default function SidebarMenu({
             <div key={mod.id} className="p-1">
               <button
                 title={mod.label}
-                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[#1f2e3b]' : ''} transition-colors duration-150`}
+                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[var(--retro-table-header-text)]' : ''} transition-colors duration-150`}
                 onClick={() => onNavigate(mod.id)}
               >
                 <span className={`${retroHeading} block text-[11px] transition-opacity duration-200`}>{(mod.badge ?? mod.label[0] ?? '•').slice(0,3)}</span>
@@ -128,7 +128,7 @@ export default function SidebarMenu({
         }
 
         const base = 'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
-        const activeClass = 'bg-[#d7caa4] text-[#1f2e3b] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
+        const activeClass = 'bg-[#d7caa4] text-[var(--retro-table-header-text)] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
         const idleClass = 'border-[#2d3b45] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]'
         return (
           <div

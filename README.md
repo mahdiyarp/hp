@@ -42,6 +42,26 @@ npm run prepare   # installs husky hooks
 
 See `docs/architecture.md` for module breakdown and roadmap.
 
+ 
+## Theme and Forms
+
+- The app uses a unified Finance (Receipts & Payments) palette.
+- Theme variables are defined in `frontend/src/index.css` under `:root` (e.g., `--retro-border`, `--retro-panel-bg`, `--retro-button-bg`).
+- Shared UI utilities live in `frontend/src/components/retroTheme.ts` and read from those variables.
+- When building new components, import from `retroTheme` and avoid hardcoded colors.
+
+### Frontend Dev
+
+Run the frontend locally:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+To adjust colors app-wide, update the CSS variables in `frontend/src/index.css`.
+
 ## 📚 Documentation
 
 The project includes comprehensive documentation:

@@ -105,6 +105,25 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
 
+  // Payment Methods state
+  interface PaymentMethod {
+    id: number
+    key: string
+    name: string
+    parent_id?: number | null
+    enabled: boolean
+    order: number
+    account?: string | null
+    is_cheque?: boolean
+    created_at?: string | null
+    updated_at?: string | null
+  }
+  const [methods, setMethods] = useState<PaymentMethod[]>([])
+  const [pmLoading, setPmLoading] = useState<boolean>(false)
+  const [pmError, setPmError] = useState<string | null>(null)
+  const [editingPmId, setEditingPmId] = useState<number | null>(null)
+  const [draftPm, setDraftPm] = useState<Partial<PaymentMethod>>({ enabled: true, order: 100 })
+
   useEffect(() => {
     loadData()
   }, [])
@@ -171,6 +190,13 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         console.error(err)
         warn.push('تنظیمات سیستم قابل دریافت نیست.')
       }
+      // Payment methods
+      try {
+        await loadPaymentMethods()
+      } catch (err) {
+        console.error(err)
+        warn.push('روش‌های پرداخت قابل دریافت نیست.')
+      }
       // load sidebar side preference for this user (if any)
       try {
         const side = await apiGet<string>('/api/users/preferences/sidebar-side')
@@ -187,6 +213,82 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       setWarnings(warn)
       setLoading(false)
     }
+  }
+
+  async function loadPaymentMethods() {
+    setPmLoading(true)
+    setPmError(null)
+    try {
+      const list = await apiGet<PaymentMethod[]>('/api/payment-methods')
+      const ordered = (list || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      setMethods(ordered)
+    } catch (err: any) {
+      setPmError(err?.message || 'خطا در دریافت روش‌های پرداخت')
+    } finally {
+      setPmLoading(false)
+    }
+  }
+
+  async function createPaymentMethod() {
+    try {
+      const payload = {
+        key: draftPm.key?.trim() || '',
+        name: draftPm.name?.trim() || '',
+        parent_id: draftPm.parent_id ?? null,
+        enabled: draftPm.enabled ?? true,
+        order: typeof draftPm.order === 'number' ? draftPm.order : 100,
+        account: draftPm.account ?? null,
+        is_cheque: !!draftPm.is_cheque,
+      }
+      if (!payload.key || !payload.name) {
+        alert('کلید و نام لازم است')
+        return
+      }
+      await apiPost<PaymentMethod>('/api/payment-methods', payload)
+      setDraftPm({ enabled: true, order: 100 })
+      await loadPaymentMethods()
+    } catch (err: any) {
+      setPmError(err?.message || 'ایجاد روش پرداخت موفق نبود')
+    }
+  }
+
+  async function patchPaymentMethod(id: number, changes: Partial<PaymentMethod>) {
+    try {
+      const payload: any = {}
+      if (changes.key !== undefined) payload.key = changes.key
+      if (changes.name !== undefined) payload.name = changes.name
+      if (changes.parent_id !== undefined) payload.parent_id = changes.parent_id
+      if (changes.enabled !== undefined) payload.enabled = changes.enabled
+      if (changes.order !== undefined) payload.order = changes.order
+      if (changes.account !== undefined) payload.account = changes.account
+      if (changes.is_cheque !== undefined) payload.is_cheque = changes.is_cheque
+      await apiPatch<PaymentMethod>(`/api/payment-methods/${id}`, payload)
+      await loadPaymentMethods()
+    } catch (err: any) {
+      setPmError(err?.message || 'به‌روز رسانی روش پرداخت موفق نبود')
+    }
+  }
+
+  async function deletePaymentMethod(id: number) {
+    if (!window.confirm('این روش پرداخت حذف شود؟')) return
+    try {
+      await apiDelete(`/api/payment-methods/${id}`)
+      await loadPaymentMethods()
+    } catch (err: any) {
+      setPmError(err?.message || 'حذف روش پرداخت موفق نبود')
+    }
+  }
+
+  async function movePaymentMethod(id: number, direction: 'up' | 'down') {
+    const idx = methods.findIndex(m => m.id === id)
+    if (idx < 0) return
+    const swapWith = direction === 'up' ? idx - 1 : idx + 1
+    if (swapWith < 0 || swapWith >= methods.length) return
+    const a = methods[idx]
+    const b = methods[swapWith]
+    // swap order values
+    await patchPaymentMethod(a.id, { order: b.order })
+    await patchPaymentMethod(b.id, { order: a.order })
   }
 
   async function saveSidebarSide() {
@@ -535,6 +637,135 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         ) : (
           <p className="text-xs text-[#7a6b4f]">هیچ یکپارچه‌سازی ثبت نشده است.</p>
         )}
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p className={retroHeading}>Payment Methods</p>
+            <h3 className="text-lg font-semibold mt-2">روش‌های پرداخت</h3>
+            <p className={`text-xs ${retroMuted} mt-2`}>مدیریت کلید، نام، حساب معادل و ترتیب نمایش</p>
+          </div>
+          <div className="flex gap-2">
+            <button className={`${retroButton}`} onClick={loadPaymentMethods}>
+              بروزرسانی لیست
+            </button>
+          </div>
+        </header>
+        {pmError && (
+          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-2">{pmError}</div>
+        )}
+        <div className={`${retroPanel} p-4 space-y-3`}>
+          <p className={retroHeading}>ایجاد روش جدید</p>
+          <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 items-center">
+            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="کلید (مثلاً cash)" value={draftPm.key || ''} onChange={e=>setDraftPm({...draftPm, key: e.target.value})} />
+            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام نمایشی" value={draftPm.name || ''} onChange={e=>setDraftPm({...draftPm, name: e.target.value})} />
+            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="حساب معادل دفتر" value={draftPm.account || ''} onChange={e=>setDraftPm({...draftPm, account: e.target.value})} />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!draftPm.is_cheque} onChange={e=>setDraftPm({...draftPm, is_cheque: e.target.checked})} />
+              <span>چک</span>
+            </label>
+            <input type="number" className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="ترتیب" value={draftPm.order ?? 100} onChange={e=>setDraftPm({...draftPm, order: parseInt(e.target.value || '0')})} />
+            <button className={retroButton} onClick={createPaymentMethod}>ایجاد</button>
+          </div>
+        </div>
+        <div className={`${retroPanel} p-0 overflow-x-auto`}>
+          {pmLoading ? (
+            <div className="p-4 text-sm text-[#7a6b4f]">در حال بارگذاری...</div>
+          ) : methods.length > 0 ? (
+            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+              <thead>
+                <tr>
+                  <th className={retroTableHeader}>#</th>
+                  <th className={retroTableHeader}>کلید</th>
+                  <th className={retroTableHeader}>نام</th>
+                  <th className={retroTableHeader}>حساب</th>
+                  <th className={retroTableHeader}>چک</th>
+                  <th className={retroTableHeader}>فعال</th>
+                  <th className={retroTableHeader}>ترتیب</th>
+                  <th className={retroTableHeader}>عملیات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {methods.map((m, idx) => (
+                  <tr key={m.id} className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2 text-center">{idx + 1}</td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {editingPmId === m.id ? (
+                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.key ?? m.key} onChange={e=>setDraftPm({...draftPm, key: e.target.value})} />
+                      ) : (
+                        m.key
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {editingPmId === m.id ? (
+                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.name ?? m.name} onChange={e=>setDraftPm({...draftPm, name: e.target.value})} />
+                      ) : (
+                        m.name
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {editingPmId === m.id ? (
+                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.account ?? (m.account || '')} onChange={e=>setDraftPm({...draftPm, account: e.target.value})} />
+                      ) : (
+                        m.account || '—'
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {editingPmId === m.id ? (
+                        <input type="checkbox" checked={draftPm.is_cheque ?? !!m.is_cheque} onChange={e=>setDraftPm({...draftPm, is_cheque: e.target.checked})} />
+                      ) : (
+                        m.is_cheque ? '✓' : '✗'
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {editingPmId === m.id ? (
+                        <input type="checkbox" checked={draftPm.enabled ?? !!m.enabled} onChange={e=>setDraftPm({...draftPm, enabled: e.target.checked})} />
+                      ) : (
+                        <button className="text-xs" onClick={()=>patchPaymentMethod(m.id, { enabled: !m.enabled })}>
+                          <span className={`${retroBadge} ${m.enabled ? '' : 'opacity-50'}`}>{m.enabled ? 'فعال' : 'غیرفعال'}</span>
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {editingPmId === m.id ? (
+                        <input type="number" className="border border-[#c5bca5] px-2 py-1 bg-white text-xs w-20" value={draftPm.order ?? m.order} onChange={e=>setDraftPm({...draftPm, order: parseInt(e.target.value || '0')})} />
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <button title="بالا" onClick={()=>movePaymentMethod(m.id, 'up')} className="text-xs">↑</button>
+                          <span>{m.order}</span>
+                          <button title="پایین" onClick={()=>movePaymentMethod(m.id, 'down')} className="text-xs">↓</button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center space-x-2">
+                      {editingPmId === m.id ? (
+                        <>
+                          <button className="text-green-600 hover:text-green-800 text-xs" onClick={()=>{ patchPaymentMethod(m.id, {
+                            key: draftPm.key ?? m.key,
+                            name: draftPm.name ?? m.name,
+                            account: draftPm.account ?? m.account,
+                            enabled: draftPm.enabled ?? m.enabled,
+                            is_cheque: draftPm.is_cheque ?? m.is_cheque,
+                            order: draftPm.order ?? m.order,
+                          }); setEditingPmId(null); setDraftPm({ enabled: true, order: 100 }) }}>✓</button>
+                          <button className="text-red-600 hover:text-red-800 text-xs" onClick={()=>{ setEditingPmId(null); setDraftPm({ enabled: true, order: 100 }) }}>✗</button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="text-blue-600 hover:text-blue-800 text-xs" onClick={()=>{ setEditingPmId(m.id); setDraftPm({ key: m.key, name: m.name, account: m.account ?? '', enabled: m.enabled, is_cheque: !!m.is_cheque, order: m.order }) }}>ویرایش</button>
+                          <button className="text-red-600 hover:text-red-800 text-xs" onClick={()=>deletePaymentMethod(m.id)}>حذف</button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="p-4 text-xs text-[#7a6b4f]">روشی ثبت نشده است.</p>
+          )}
+        </div>
       </section>
 
       <section className={`${retroPanelPadded} space-y-4`}>

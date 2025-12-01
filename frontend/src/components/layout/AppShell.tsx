@@ -217,12 +217,12 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
   return (
     <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex">
       {sidebarSide === 'left' && asideElement}
-      <div className="flex-1 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
-        <header className="border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a]">
+      <div className="flex-1 flex flex-col bg-[var(--retro-surface-bg)] text-[var(--retro-table-header-text)]">
+        <header className="border-b-4 border-[#d7caa4] bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] shadow-[0_6px_0_#b7a77a]">
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className={`${retroHeading} text-[#d7caa4]`}>{t('active_module')}</p>
+                <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>{t('active_module')}</p>
                 <h2 className="text-3xl font-semibold mt-2">
                   {activeModule?.label ?? '—'}
                 </h2>
@@ -278,7 +278,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
                 </button>
                 <button
                   className={`${retroButton} !bg-[#2d3b45] !border-[#1f2e3b] !tracking-[0.3em]`}
-                  onClick={() => navigate('system')}
+                  onClick={() => navigate('settings')}
                 >
                   پنل تنظیمات
                 </button>

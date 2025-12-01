@@ -9,6 +9,7 @@ import {
   retroPanelPadded,
   retroMuted,
 } from './retroTheme'
+import Alert from './Alert'
 
 export default function LoginForm() {
   const { login } = useAuth()
@@ -61,6 +62,7 @@ export default function LoginForm() {
             <header className="space-y-2 text-right">
               <p className={retroHeading}>hesabpak access terminal</p>
               <h2 className="text-2xl font-semibold text-[#1f2e3b]">ورود به سامانه</h2>
+              <h2 className="text-2xl font-semibold text-[var(--retro-table-header-text)]">ورود به سامانه</h2>
               <p className={`text-xs ${retroMuted}`}>
                 برای ادامه، نام کاربری و رمز عبور خود را وارد کنید. در صورت فعال بودن ورود دو مرحله‌ای،
                 کد تایید نیز لازم است.
@@ -106,11 +108,7 @@ export default function LoginForm() {
               )}
             </div>
 
-            {error && (
-              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
-                {error}
-              </div>
-            )}
+            {error && <Alert variant="error">{error}</Alert>}
 
             <div className="space-y-3">
               <button className={`${retroButton} w-full`} type="submit">
@@ -124,7 +122,7 @@ export default function LoginForm() {
               صارف نہیں ہیں؟
             </p>
             <button
-              className={`${retroButton} !bg-[#2d5b2d] w-full`}
+              className={`${retroButton} w-full`}
               onClick={() => setShowRegister(true)}
               type="button"
             >

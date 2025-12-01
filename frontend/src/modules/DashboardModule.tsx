@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { apiGet } from '../services/api'
+import { apiGet, apiPost, apiPatch } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
 import {
@@ -110,6 +110,8 @@ export default function DashboardModule({
   onNavigate,
 }: ModuleComponentProps) {
   const { t } = useI18n()
+  const [viewMode, setViewMode] = useState<'summary' | 'widgets'>('summary')
+  const [itemLimit, setItemLimit] = useState<number>(10)
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -121,6 +123,21 @@ export default function DashboardModule({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
+  const [persons, setPersons] = useState<Array<{ id: string; name: string; mobile: string | null }>>([])
+  type DashboardWidget = {
+    id: number
+    widget_type: string
+    title?: string | null
+    position_x: number
+    position_y: number
+    width: number
+    height: number
+    enabled: boolean
+    order: number
+  }
+  const [widgets, setWidgets] = useState<DashboardWidget[]>([])
+  const [widgetsLoading, setWidgetsLoading] = useState(false)
+  const [newWidget, setNewWidget] = useState<{ type: string; title: string }>({ type: 'payments', title: '' })
 
   useEffect(() => {
     loadDashboardData()
@@ -140,6 +157,8 @@ export default function DashboardModule({
         apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=50`),
         apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=50`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
+        apiGet<Array<{ id: string; name: string; mobile: string | null }>>('/api/persons'),
+        apiGet<DashboardWidget[]>('/api/dashboard/widgets'),
       ])
 
       const [
@@ -201,6 +220,20 @@ export default function DashboardModule({
         newWarnings.push('نمایش نرخ ارز/رمز ارز ممکن نیست.')
       }
 
+      const personsRes = results[8]
+      if (personsRes.status === 'fulfilled') {
+        setPersons(personsRes.value)
+      } else {
+        newWarnings.push('فهرست طرف‌های حساب برای یادآور چک در دسترس نیست.')
+      }
+
+      const widgetsRes = results[9]
+      if (widgetsRes.status === 'fulfilled') {
+        setWidgets(widgetsRes.value)
+      } else {
+        newWarnings.push('Widgets داشبورد بارگذاری نشد.')
+      }
+
       if (
         financialRes.status === 'rejected' &&
         summaryRes.status === 'rejected' &&
@@ -235,6 +268,116 @@ export default function DashboardModule({
         isoDate: parsed.iso.slice(0, 10),
         jalali: parsed.jalali,
       })
+    }
+  }
+
+  const quickAddPayment = (direction: 'in' | 'out') => {
+    // Prefill a minimal payment form in Finance and navigate there
+    window.dispatchEvent(new CustomEvent('finance-prefill', {
+      detail: { direction, party_name: '', amount: '', reference: '', note: '' },
+    }))
+    window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
+  }
+
+  const findMobileByName = (name: string | null) => {
+    if (!name) return null
+    const p = persons.find(pr => pr.name === name)
+    return p?.mobile || null
+  }
+
+  const sendCheckReminder = async (check: CheckDue) => {
+    const mobile = findMobileByName(check.party_name)
+    if (!mobile) {
+      alert('شماره موبایل برای این طرف حساب یافت نشد.')
+      return
+    }
+    const msg = `یادآوری سررسید چک:\nشماره: ${check.payment_number || check.id}\nمبلغ: ${formatNumberFa(check.amount)} ریال\nسررسید: ${check.due_date ? isoToJalali(check.due_date) : ''}`
+    try {
+      await apiPost('/api/sms/send', { to: mobile, message: msg })
+      alert('یادآور پیامک ارسال شد')
+    } catch (e: any) {
+      alert(`ارسال پیامک ناموفق بود: ${e?.message || ''}`)
+    }
+  }
+
+  const approveCheque = async (check: CheckDue) => {
+    try {
+      await apiPatch(`/api/payments/${check.id}`, { status: 'approved' })
+      // refresh checks list
+      await loadDashboardData()
+      alert('چک تایید شد')
+    } catch (e: any) {
+      alert(`تایید چک ناموفق بود: ${e?.message || ''}`)
+    }
+  }
+
+  const reloadWidgets = async () => {
+    try {
+      setWidgetsLoading(true)
+      const list = await apiGet<DashboardWidget[]>('/api/dashboard/widgets')
+      setWidgets(list)
+    } finally {
+      setWidgetsLoading(false)
+    }
+  }
+
+  const createWidget = async () => {
+    try {
+      const payload = {
+        widget_type: newWidget.type,
+        title: newWidget.title || undefined,
+        position_x: 0,
+        position_y: (widgets[widgets.length - 1]?.position_y ?? -1) + 1,
+        width: 3,
+        height: 3,
+        enabled: true,
+        order: widgets.length,
+      }
+      await apiPost('/api/dashboard/widgets', payload)
+      setNewWidget({ type: 'payments', title: '' })
+      await reloadWidgets()
+    } catch (e: any) {
+      alert(`ایجاد ویجت ناموفق بود: ${e?.message || ''}`)
+    }
+  }
+
+  const toggleWidget = async (w: DashboardWidget) => {
+    try {
+      await apiPatch(`/api/dashboard/widgets/${w.id}`, { enabled: !w.enabled })
+      await reloadWidgets()
+    } catch (e: any) {
+      alert(`به‌روزرسانی ویجت ناموفق بود: ${e?.message || ''}`)
+    }
+  }
+
+  const removeWidget = async (w: DashboardWidget) => {
+    if (!confirm('این ویجت حذف شود؟')) return
+    try {
+      await apiPost(`/api/dashboard/widgets/${w.id}`, undefined, { method: 'DELETE' } as any)
+      await reloadWidgets()
+    } catch (e: any) {
+      alert(`حذف ویجت ناموفق بود: ${e?.message || ''}`)
+    }
+  }
+
+  const moveWidget = async (w: DashboardWidget, dir: 'up' | 'down') => {
+    const idx = widgets.findIndex(x => x.id === w.id)
+    const swapWith = dir === 'up' ? idx - 1 : idx + 1
+    if (idx < 0 || swapWith < 0 || swapWith >= widgets.length) return
+    const a = widgets[idx]
+    const b = widgets[swapWith]
+    // swap position_y as a simple order
+    const payload = {
+      widgets: [
+        { widget_id: a.id, position_x: a.position_x, position_y: b.position_y, width: a.width, height: a.height },
+        { widget_id: b.id, position_x: b.position_x, position_y: a.position_y, width: b.width, height: b.height },
+      ],
+    }
+    try {
+      await apiPost('/api/dashboard/widgets/reorder', payload)
+      await reloadWidgets()
+    } catch (e: any) {
+      alert(`تغییر ترتیب ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -280,6 +423,53 @@ export default function DashboardModule({
   return (
     <div className="space-y-4">
       <ViewToggle />
+      {viewMode === 'widgets' ? (
+        <section className={retroPanelPadded}>
+          <header className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className={retroHeading}>Dashboard Widgets</p>
+              <h3 className="text-lg font-semibold mt-2">چیدمان ساده ویجت‌ها</h3>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <select className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1" value={newWidget.type} onChange={e=>setNewWidget(prev=>({...prev, type: e.target.value}))}>
+                <option value="payments">پرداخت‌ها</option>
+                <option value="invoices">فاکتورها</option>
+                <option value="checks">چک‌ها</option>
+                <option value="stock">موجودی</option>
+              </select>
+              <input className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1" placeholder="عنوان (اختیاری)" value={newWidget.title} onChange={e=>setNewWidget(prev=>({...prev, title: e.target.value}))} />
+              <button className={`${retroButton} text-[11px]`} onClick={createWidget}>افزودن ویجت</button>
+              <button className={`${retroButton} text-[11px]`} onClick={reloadWidgets} disabled={widgetsLoading}>بروزرسانی</button>
+            </div>
+          </header>
+          {widgets.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {widgets.slice(0, itemLimit).map(w => (
+                <div key={w.id} className="border border-[#c5bca5] bg-[#faf4de] shadow-[3px_3px_0_#c5bca5] p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className={retroHeading}>{w.title || w.widget_type}</p>
+                      <p className={`text-[10px] ${retroMuted}`}>موقعیت: {w.position_x},{w.position_y} • اندازه: {w.width}×{w.height}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button className={`${retroButton} text-[11px]`} onClick={()=>moveWidget(w,'up')}>↑</button>
+                      <button className={`${retroButton} text-[11px]`} onClick={()=>moveWidget(w,'down')}>↓</button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <button className={`${retroButton} text-[11px]`} onClick={()=>toggleWidget(w)}>
+                      {w.enabled ? 'غیرفعال' : 'فعال'}
+                    </button>
+                    <button className={`${retroButton} text-[11px]`} onClick={()=>removeWidget(w)}>حذف</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[#7a6b4f]">ویجتی تعریف نشده است. با دکمه بالا یک ویجت اضافه کنید.</p>
+          )}
+        </section>
+      ) : (
       <div className="space-y-8">
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
@@ -468,7 +658,7 @@ export default function DashboardModule({
                   <div key={point.date} className="flex-1 flex flex-col items-center gap-2">
                     <div
                       className="w-full bg-[#154b5f] transition-all duration-300"
-                      style={{ height: `${barHeight}%` }}
+                      style={{ height: (barHeight as number) + '%' }}
                       title={`${point.date} : ${formatNumberFa(point.total)} ریال`}
                     ></div>
                     <span className="text-[10px] text-[#7a6b4f]">
@@ -482,6 +672,62 @@ export default function DashboardModule({
             </div>
           ) : (
             <p className="text-xs text-[#7a6b4f]">داده‌ای برای نمایش روند فروش وجود ندارد.</p>
+          )}
+        </div>
+      </section>
+
+      
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={retroPanelPadded}>
+          <header className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className={retroHeading}>Payments</p>
+              <h3 className="text-lg font-semibold mt-2">پرداخت‌ها و دریافت‌ها</h3>
+            </div>
+            <div className="flex gap-2">
+              <button className={`${retroButton} text-[11px]`} onClick={() => quickAddPayment('in')}>
+                دریافت سریع
+              </button>
+              <button className={`${retroButton} text-[11px]`} onClick={() => quickAddPayment('out')}>
+                پرداخت سریع
+              </button>
+            </div>
+          </header>
+          {summary ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                <p className={retroHeading}>دریافتی امروز</p>
+                <p className="text-lg font-semibold">{formatNumberFa(summary.receipts_today)} ریال</p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                <p className={retroHeading}>پرداخت امروز</p>
+                <p className="text-lg font-semibold">{formatNumberFa(summary.payments_today)} ریال</p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                <p className={retroHeading}>خالص</p>
+                <p className="text-lg font-semibold">{formatNumberFa(summary.net_today)} ریال</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-[#7a6b4f]">اطلاعات پرداخت در دسترس نیست.</p>
+          )}
+        </div>
+        <div className={retroPanelPadded}>
+          <header className="mb-3">
+            <p className={retroHeading}>Balances</p>
+            <h3 className="text-lg font-semibold mt-2">تراز نقدی به تفکیک روش</h3>
+          </header>
+          {summary ? (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {Object.entries(summary.cash_balances).map(([method, value]) => (
+                <div key={method} className="border border-[#bfb69f] bg-[#f6f1df] px-3 py-2 shadow-inner">
+                  <p className={`${retroHeading} text-[10px]`}>{method}</p>
+                  <p className="text-sm font-semibold">{formatNumberFa(value)} ریال</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-[#7a6b4f]">داده‌ای برای تراز نقدی یافت نشد.</p>
           )}
         </div>
       </section>
@@ -621,6 +867,8 @@ export default function DashboardModule({
                   <th className={retroTableHeader}>طرف حساب</th>
                   <th className={retroTableHeader}>مبلغ</th>
                   <th className={retroTableHeader}>سررسید</th>
+                  <th className={retroTableHeader}>یادآور</th>
+                  <th className={retroTableHeader}>تایید</th>
                 </tr>
               </thead>
               <tbody>
@@ -631,6 +879,17 @@ export default function DashboardModule({
                     <td className="px-3 py-2 text-left">{formatNumberFa(item.amount)}</td>
                     <td className="px-3 py-2 text-left">
                       {item.due_date ? isoToJalali(item.due_date) : '-'}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      <button
+                        className={`${retroButton} text-[11px]`}
+                        onClick={() => sendCheckReminder(item)}
+                        disabled={!findMobileByName(item.party_name)}
+                        title={findMobileByName(item.party_name) ? 'ارسال پیامک' : 'موبایل یافت نشد'}
+                      >SMS</button>
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      <button className={`${retroButton} text-[11px]`} onClick={() => approveCheque(item)}>تایید</button>
                     </td>
                   </tr>
                 ))}
@@ -708,6 +967,7 @@ export default function DashboardModule({
         </section>
       )}
       </div>
+      )}
     </div>
   )
 }

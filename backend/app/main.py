@@ -18,6 +18,7 @@ from .schemas import InvoiceCreate, InvoiceOut
 from .schemas import PaymentCreate, PaymentOut
 from .search import search_multi, suggest_live
 from .schemas import ProductCreate, ProductOut, PersonCreate, PersonOut
+from .schemas import PersonActivityCreate, PersonActivityOut
 from . import external_search
 from .schemas import ExternalSearchRequest, ExternalProduct, SaveExternalProductRequest
 from .schemas import AssistantRequest, AssistantResponse, AssistantToggle, OTPVerifyRequest, OTPSetupResponse, OTPDisableRequest
@@ -527,7 +528,7 @@ def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Ses
     hashed_password = security.get_password_hash(password)
     new_user = models.User(
         username=username,
-        password_hash=hashed_password,
+        hashed_password=hashed_password,
         email=None,
         mobile=phone,
         full_name=full_name or username,
@@ -564,19 +565,6 @@ def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Ses
         ),
         access_token=access_token,
         refresh_token=refresh_token
-    )
-
-    
-    # ایجاد access token
-    access_token = security.create_access_token(str(user.username), expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = security.create_refresh_token(str(user.username))
-    crud.set_refresh_token(session, user, refresh_token)
-    
-    return schemas.PhoneOtpVerifyResponse(
-        success=True,
-        access_token=access_token,
-        token_type='bearer',
-        message='ورود موفق'
     )
 
 
@@ -1030,13 +1018,59 @@ def get_payment(payment_id: int, session: Session = Depends(db.get_db), current:
     return p
 
 
+# ==================== Payment Methods API ====================
+
+@app.get('/api/payment-methods', response_model=List[schemas.PaymentMethodOut])
+def list_payment_methods(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    # Any authenticated user with at least Viewer can read methods for UI
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    return crud.get_payment_methods(session)
+
+
+@app.post('/api/payment-methods', response_model=schemas.PaymentMethodOut)
+def create_payment_method(payload: schemas.PaymentMethodCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    # Admin only for now
+    require_roles(role_names=['Admin'])(current)
+    try:
+        pm = crud.create_payment_method(session, payload)
+        return pm
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch('/api/payment-methods/{pm_id}', response_model=schemas.PaymentMethodOut)
+def update_payment_method(pm_id: int, payload: schemas.PaymentMethodUpdate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    pm = crud.update_payment_method(session, pm_id, payload)
+    if not pm:
+        raise HTTPException(status_code=404, detail='Payment method not found')
+    return pm
+
+
+@app.delete('/api/payment-methods/{pm_id}')
+def delete_payment_method(pm_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    ok = crud.delete_payment_method(session, pm_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Payment method not found')
+    return {'ok': True}
+
+
 @app.patch('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
 def patch_payment(payment_id: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_edit'])(current)
-    p = crud.update_invoice(session, payment_id, payload)  # reuse generic update helper
-    if not p:
+    # Update Payment fields directly
+    payment = session.query(models.Payment).filter(models.Payment.id == payment_id).first()
+    if not payment:
         raise HTTPException(status_code=404, detail='Payment not found')
-    return p
+    if isinstance(payload, dict):
+        for k, v in payload.items():
+            if hasattr(payment, k):
+                setattr(payment, k, v)
+    session.add(payment)
+    session.commit()
+    session.refresh(payment)
+    return payment
 
 
 @app.post('/api/payments/{payment_id}/finalize', response_model=schemas.PaymentOut)
@@ -1709,6 +1743,36 @@ def api_create_person(p: PersonCreate, session: Session = Depends(db.get_db), cu
 def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
     return crud.get_persons(session, q=q)
+
+
+# ==================== Person Activities (CRM Notes) ====================
+
+@app.get('/api/persons/{person_id}/activities', response_model=List[PersonActivityOut])
+def list_person_activities_endpoint(person_id: str, limit: Optional[int] = 100, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    # Viewers and above can see notes
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
+    return crud.list_person_activities(session, person_id=person_id, limit=int(limit or 100))
+
+
+@app.post('/api/persons/{person_id}/activities', response_model=PersonActivityOut)
+def create_person_activity_endpoint(person_id: str, payload: PersonActivityCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    # Allow creating notes for Admin/Accountant/Manager/Salesman
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman'])(current)
+    try:
+        act = crud.create_person_activity(session, person_id=person_id, payload=payload, created_by_user_id=getattr(current, 'id', None))
+        return act
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete('/api/persons/{person_id}/activities/{activity_id}')
+def delete_person_activity_endpoint(person_id: str, activity_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    # Restrict deletes to Admin/Manager for now
+    require_roles(role_names=['Admin', 'Manager'])(current)
+    ok = crud.delete_person_activity(session, person_id=person_id, activity_id=activity_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Activity not found')
+    return {"ok": True}
 
 
 @app.get('/api/financial/auto-context')

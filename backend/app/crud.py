@@ -709,32 +709,43 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     session.commit()
     session.refresh(pay)
     
-    # Create ledger entry depending on direction/method
+    # Create ledger entry depending on direction/method (table-driven when available)
     try:
+        # Try to use dynamic payment method mapping
+        acct_name = None
+        if getattr(models, 'PaymentMethod', None) is not None and pay.method:
+            try:
+                m = session.query(models.PaymentMethod).filter(models.PaymentMethod.key == pay.method).first()
+                if m and m.account:
+                    acct_name = m.account
+            except Exception:
+                acct_name = None
+        if not acct_name:
+            # Fallback heuristic based on legacy method strings
+            acct_name = 'Cash' if (not pay.method or (pay.method or '').lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else ('POS' if 'pos' in (pay.method or '').lower() else 'Cash'))
+
         if pay.direction == 'in':
-            # receipt: debit Cash/Bank, credit AccountsReceivable
-            acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
-            create_ledger_entry(session, 
-                                ref_type='payment', 
-                                ref_id=str(pay.id), 
-                                debit_account=acct, 
-                                credit_account='AccountsReceivable', 
-                                amount=int(pay.amount or 0), 
-                                party_id=pay.party_id, 
-                                party_name=pay.party_name, 
+            # receipt: debit MethodAccount, credit AccountsReceivable
+            create_ledger_entry(session,
+                                ref_type='payment',
+                                ref_id=str(pay.id),
+                                debit_account=acct_name,
+                                credit_account='AccountsReceivable',
+                                amount=int(pay.amount or 0),
+                                party_id=pay.party_id,
+                                party_name=pay.party_name,
                                 description=f'Receipt {pay.payment_number}',
                                 tracking_code=pay.tracking_code)
         else:
-            # payment out: debit AccountsPayable/Expense, credit Cash/Bank
-            acct = 'Cash' if (not pay.method or pay.method.lower()=='cash') else ('Bank' if 'bank' in (pay.method or '').lower() else 'POS')
-            create_ledger_entry(session, 
-                                ref_type='payment', 
-                                ref_id=str(pay.id), 
-                                debit_account='Expenses', 
-                                credit_account=acct, 
-                                amount=int(pay.amount or 0), 
-                                party_id=pay.party_id, 
-                                party_name=pay.party_name, 
+            # payment out: debit Expenses (simple), credit MethodAccount
+            create_ledger_entry(session,
+                                ref_type='payment',
+                                ref_id=str(pay.id),
+                                debit_account='Expenses',
+                                credit_account=acct_name,
+                                amount=int(pay.amount or 0),
+                                party_id=pay.party_id,
+                                party_name=pay.party_name,
                                 description=f'Payment {pay.payment_number}',
                                 tracking_code=pay.tracking_code)
     except Exception as e:
@@ -748,6 +759,63 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
         pass
     
     return pay
+
+
+# ==================== Payment Methods CRUD ====================
+
+def get_payment_methods(session: Session) -> List[models.PaymentMethod]:
+    return session.query(models.PaymentMethod).order_by(models.PaymentMethod.order.asc(), models.PaymentMethod.id.asc()).all()
+
+
+def get_payment_method(session: Session, pm_id: int) -> Optional[models.PaymentMethod]:
+    return session.query(models.PaymentMethod).filter(models.PaymentMethod.id == pm_id).first()
+
+
+def get_payment_method_by_key(session: Session, key: str) -> Optional[models.PaymentMethod]:
+    return session.query(models.PaymentMethod).filter(models.PaymentMethod.key == key).first()
+
+
+def create_payment_method(session: Session, payload: 'schemas.PaymentMethodCreate') -> models.PaymentMethod:
+    existing = get_payment_method_by_key(session, payload.key)
+    if existing:
+        raise ValueError('payment method key already exists')
+    pm = models.PaymentMethod(
+        key=payload.key,
+        name=payload.name,
+        parent_id=payload.parent_id,
+        enabled=bool(payload.enabled) if payload.enabled is not None else True,
+        order=int(payload.order or 0),
+        account=payload.account,
+        is_cheque=bool(payload.is_cheque) if payload.is_cheque is not None else False,
+        config=payload.config,
+    )
+    session.add(pm)
+    session.commit()
+    session.refresh(pm)
+    return pm
+
+
+def update_payment_method(session: Session, pm_id: int, payload: 'schemas.PaymentMethodUpdate') -> Optional[models.PaymentMethod]:
+    pm = get_payment_method(session, pm_id)
+    if not pm:
+        return None
+    data = payload.dict(exclude_unset=True)
+    for k, v in data.items():
+        if hasattr(pm, k):
+            setattr(pm, k, v)
+    session.add(pm)
+    session.commit()
+    session.refresh(pm)
+    return pm
+
+
+def delete_payment_method(session: Session, pm_id: int) -> bool:
+    pm = get_payment_method(session, pm_id)
+    if not pm:
+        return False
+    session.delete(pm)
+    session.commit()
+    return True
 
 
 def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optional[str], debit_account: str, credit_account: str, amount: int, party_id: Optional[str] = None, party_name: Optional[str] = None, description: Optional[str] = None, tracking_code: Optional[str] = None) -> models.LedgerEntry:
@@ -1954,6 +2022,49 @@ def get_setting_value(session: Session, key: str, default=None):
         return setting.value in ['true', 'True', '1', True]
     else:
         return setting.value or default
+
+
+# ==================== Person Activities CRUD ====================
+
+def list_person_activities(session: Session, person_id: str, limit: int = 100) -> List[models.PersonActivity]:
+    return session.query(models.PersonActivity).filter(
+        models.PersonActivity.person_id == person_id
+    ).order_by(models.PersonActivity.id.desc()).limit(int(limit or 100)).all()
+
+
+def create_person_activity(session: Session, person_id: str, payload: schemas.PersonActivityCreate, created_by_user_id: Optional[int]) -> models.PersonActivity:
+    # Ensure person exists (best-effort)
+    p = session.query(models.Person).filter(models.Person.id == person_id).first()
+    if not p:
+        raise ValueError('Person not found')
+    act = models.PersonActivity(
+        person_id=person_id,
+        kind=(payload.kind or 'note'),
+        content=payload.content,
+        next_action_at=payload.next_action_at,
+        created_by=created_by_user_id,
+    )
+    session.add(act)
+    session.commit()
+    session.refresh(act)
+    try:
+        from .activity_logger import log_activity
+        log_activity(session, p.name or None, f"ثبت یادداشت برای شخص {p.name}", path=f"/api/persons/{person_id}/activities", method='POST', status_code=201, detail={'person_id': person_id, 'activity_id': act.id})
+    except Exception:
+        pass
+    return act
+
+
+def delete_person_activity(session: Session, person_id: str, activity_id: int) -> bool:
+    act = session.query(models.PersonActivity).filter(
+        models.PersonActivity.id == activity_id,
+        models.PersonActivity.person_id == person_id
+    ).first()
+    if not act:
+        return False
+    session.delete(act)
+    session.commit()
+    return True
 
 
 # ==================== Dashboard Widgets CRUD ====================

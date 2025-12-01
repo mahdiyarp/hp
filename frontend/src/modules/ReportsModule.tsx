@@ -123,8 +123,8 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     return (
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
         <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[#1f2e3b]`}>در حال گردآوری گزارش‌ها...</p>
+          <div className="mx-auto h-8 w-8 border-4 border-[var(--retro-button-bg)] border-dashed rounded-full animate-spin"></div>
+          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>در حال گردآوری گزارش‌ها...</p>
         </div>
       </div>
     )
@@ -140,8 +140,8 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
       {warnings.length > 0 && (
         <div className={`${retroPanel} p-4 space-y-2`}>
-          <p className={`${retroHeading} text-[#7a6b4f]`}>هشدارهای گزارش</p>
-          <ul className="list-disc list-inside text-xs text-[#7a6b4f] space-y-1">
+          <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>هشدارهای گزارش</p>
+          <ul className="list-disc list-inside text-xs text-[var(--retro-muted-text)] space-y-1">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -159,7 +159,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-3 items-center">
-            <label className={`${retroHeading} text-[#f5f1e6] flex items-center gap-2`}>
+            <label className={`${retroHeading} flex items-center gap-2`}>
               بازه (روز)
               <select
                 value={rangeDays}
@@ -172,7 +172,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
                 <option value={365}>۳۶۵</option>
               </select>
             </label>
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadReports(rangeDays)}>
+            <button className={`${retroButton}`} onClick={() => loadReports(rangeDays)}>
               بازخوانی
             </button>
           </div>
@@ -180,15 +180,15 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
         {pnl ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>فروش</p>
               <p className="text-lg font-semibold">{formatNumberFa(pnl.sales)} ریال</p>
             </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>خرید</p>
               <p className="text-lg font-semibold">{formatNumberFa(pnl.purchases)} ریال</p>
             </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>سود ناخالص</p>
               <p className="text-lg font-semibold">{formatNumberFa(pnl.gross_profit)} ریال</p>
             </div>
@@ -204,13 +204,13 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           <h3 className="text-lg font-semibold mt-2">تراز نقدی</h3>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+          <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>کل منابع نقدی</p>
             <p className="text-lg font-semibold">
               {formatNumberFa(cashAll?.balance ?? 0)} ریال
             </p>
           </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+          <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>روش‌های اصلی</p>
             <div className="flex flex-wrap gap-2 text-xs">
               {CASH_METHODS.map(method => (
@@ -233,7 +233,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           </p>
         </header>
         {stock.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+          <table className="w-full border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] text-sm">
             <thead>
               <tr>
                 <th className={retroTableHeader}>کالا</th>

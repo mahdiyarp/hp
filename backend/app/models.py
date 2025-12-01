@@ -122,6 +122,19 @@ class Person(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class PersonActivity(Base):
+    __tablename__ = 'person_activities'
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(String(128), ForeignKey('persons.id', ondelete='CASCADE'), nullable=False, index=True)
+    kind = Column(String(32), nullable=True, index=True)  # note, call, sms, task
+    content = Column(Text, nullable=False)
+    next_action_at = Column(DateTime(timezone=True), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships (lightweight, no backrefs to keep it simple)
+
+
 class Invoice(Base):
     __tablename__ = 'invoices'
     id = Column(Integer, primary_key=True, index=True)
@@ -482,3 +495,24 @@ class DashboardWidget(Base):
     
     # Relationships
     user = relationship('User', backref='dashboard_widgets')
+
+
+class PaymentMethod(Base):
+    __tablename__ = 'payment_methods'
+    id = Column(Integer, primary_key=True, index=True)
+    # Stable identifier used by clients and stored in payments.method for compatibility
+    key = Column(String(64), nullable=False, unique=True, index=True)
+    name = Column(String(128), nullable=False)
+    parent_id = Column(Integer, ForeignKey('payment_methods.id'), nullable=True, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    order = Column(Integer, nullable=False, default=0)
+    # Ledger account name used when posting cash/bank movement for this method
+    account = Column(String(128), nullable=True)
+    # Flag for cheque methods to enable due_date UI/logic
+    is_cheque = Column(Boolean, nullable=False, default=False)
+    # Optional JSON/text configuration (bank name, POS terminal id, etc.)
+    config = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    parent = relationship('PaymentMethod', remote_side=[id])

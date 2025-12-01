@@ -107,18 +107,18 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
   }
 
   const suggestionBase =
-    'text-right border-2 border-[#c5bca5] bg-[#f6f1df] shadow-[3px_3px_0_#c5bca5] px-4 py-3 text-sm rounded-sm transition-all'
+    'text-right border-2 border-[var(--retro-border)] bg-[var(--retro-input-bg)] shadow-[3px_3px_0_var(--retro-shadow)] px-4 py-3 text-sm rounded-sm transition-all'
   const suggestionActive =
-    'bg-[#154b5f] border-[#0e2f3c] text-[#f6f1df] shadow-[3px_3px_0_#0e2f3c]'
+    'bg-[var(--retro-button-bg)] border-[var(--retro-button-border)] text-[var(--retro-button-text)] shadow-[3px_3px_0_var(--retro-button-border)]'
   const suggestionDisabled = 'opacity-40 cursor-not-allowed'
-  const suggestionInteractive = 'hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#0e2f3c] hover:border-[#0e2f3c]'
+  const suggestionInteractive = 'hover:-translate-y-0.5 hover:shadow-[4px_4px_0_var(--retro-button-border)] hover:border-[var(--retro-button-border)]'
 
   if (loading) {
     return (
       <div className={`${retroPanelPadded} flex items-center justify-center`} dir="rtl">
         <div className="space-y-2 text-center">
-          <div className="mx-auto h-8 w-8 border-2 border-dashed border-[#154b5f] rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[#154b5f]`}>در حال آماده‌سازی تاریخ هوشمند</p>
+          <div className="mx-auto h-8 w-8 border-2 border-dashed border-[var(--retro-button-bg)] rounded-full animate-spin"></div>
+          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>در حال آماده‌سازی تاریخ هوشمند</p>
         </div>
       </div>
     )
@@ -152,11 +152,11 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
   return (
     <div className={`${retroPanelPadded} space-y-5`} dir="rtl">
       {context && (
-        <div className="border border-[#c5bca5] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-2">
+        <div className="border border-[var(--retro-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-2">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
             <div className="space-y-1">
               <p className={retroHeading}>سال مالی فعال</p>
-              <h3 className="text-lg font-semibold text-[#1f2e3b]">
+              <h3 className="text-lg font-semibold text-[var(--retro-table-header-text)]">
                 {context.current_financial_year.name}
               </h3>
               <p className={`text-xs ${retroMuted}`}>
@@ -207,7 +207,7 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
       )}
 
       {selectedDate && (
-        <div className="border border-dashed border-[#c5bca5] px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
+        <div className="border border-dashed border-[var(--retro-border)] px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
           <span className={retroBadge}>تاریخ انتخابی: {selectedDate}</span>
           {activeIso && <span className={retroBadge}>ISO: {activeIso.slice(0, 10)}</span>}
           {!disabled && suggestions && (

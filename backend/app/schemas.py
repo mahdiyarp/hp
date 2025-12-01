@@ -922,3 +922,64 @@ class DashboardWidgetUpdate(BaseModel):
     config: Optional[str] = None
     enabled: Optional[bool] = None
     order: Optional[int] = None
+
+
+# ==================== Payment Methods ====================
+
+class PaymentMethodCreate(BaseModel):
+    key: str
+    name: str
+    parent_id: Optional[int] = None
+    enabled: Optional[bool] = True
+    order: Optional[int] = 0
+    account: Optional[str] = None
+    is_cheque: Optional[bool] = False
+    config: Optional[str] = None
+
+
+class PaymentMethodUpdate(BaseModel):
+    name: Optional[str] = None
+    parent_id: Optional[int] = None
+    enabled: Optional[bool] = None
+    order: Optional[int] = None
+    account: Optional[str] = None
+    is_cheque: Optional[bool] = None
+    config: Optional[str] = None
+
+
+class PaymentMethodOut(BaseModel):
+    id: int
+    key: str
+    name: str
+    parent_id: Optional[int]
+    enabled: bool
+    order: int
+    account: Optional[str]
+    is_cheque: bool
+    config: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+# ==================== Person Activities (CRM Notes) ====================
+
+class PersonActivityCreate(BaseModel):
+    content: str
+    kind: Optional[str] = 'note'
+    next_action_at: Optional[datetime] = None
+
+
+class PersonActivityOut(BaseModel):
+    id: int
+    person_id: str
+    kind: Optional[str]
+    content: str
+    next_action_at: Optional[datetime]
+    created_by: Optional[int]
+    created_at: datetime
+
+    class Config:
+        orm_mode = True

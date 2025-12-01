@@ -59,7 +59,15 @@ export default function App() {
   async function syncTime() {
     const before = new Date()
     const resp = await fetch('/api/time/now')
-    const server = (await resp.json()) as TimeNowResponse
+    let server: TimeNowResponse = { utc: new Date().toISOString() }
+    try {
+      if (resp.ok) {
+        server = (await resp.json()) as TimeNowResponse
+      }
+    } catch (e) {
+      // Fallback to client time on parse errors
+      server = { utc: new Date().toISOString() }
+    }
     const after = new Date()
     // choose client time as arrival time (after)
     const clientUtc = after.toISOString()
@@ -181,7 +189,11 @@ export default function App() {
     void fetch('/api/version')
       .then(async r => {
         if (!r.ok) return null
-        return (await r.json()) as VersionResponse
+        try {
+          return (await r.json()) as VersionResponse
+        } catch {
+          return null
+        }
       })
       .then(data => {
         if (data?.version) setVersion(data.version)

@@ -223,19 +223,19 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
             }}
           />
           {loading && (
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#7a6b4f]">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--retro-muted-text)]">
               در حال جستجو...
             </span>
           )}
         </div>
-        <button type="submit" className={`${retroButton} !bg-[#2d3b45]`}>
+        <button type="submit" className={`${retroButton}`}>
           جستجو
         </button>
       </form>
       {visible && (
         <div className={`${retroPanel} absolute right-0 mt-2 w-full z-30 space-y-3 p-3`}>
           <header className="flex items-center justify-between gap-2">
-            <p className={`${retroHeading} text-[#1f2e3b]`}>نتایج سریع</p>
+            <p className={`${retroHeading} text-[var(--retro-table-header-text)]`}>نتایج سریع</p>
             <span className={`${retroBadge}`}>تعداد کل: {formatNumberFa(totalHits)}</span>
           </header>
           {error && <p className={`text-xs ${retroMuted}`}>{error}</p>}
@@ -248,18 +248,18 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                 const hits = results[idx]?.hits ?? []
                 if (hits.length === 0) return null
                 return (
-                  <div key={idx} className="border border-[#c5bca5] bg-[#faf4de] px-3 py-2 space-y-2">
+                  <div key={idx} className="border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] px-3 py-2 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className={retroHeading}>{INDEX_LABELS[idx]}</span>
                       <span className={`${retroBadge} text-[10px]`}>
                         {formatNumberFa(hits.length)}
                       </span>
                     </div>
-                    <ul className="space-y-2 text-xs text-[#1f2e3b] leading-5">
+                    <ul className="space-y-2 text-xs text-[var(--retro-table-header-text)] leading-5">
                       {hits.map((hit, index) => (
                         <li
                           key={index}
-                          className="border border-dashed border-[#bfb69f] px-2 py-1 bg-[#f6f1df] hover:border-[#1f2e3b] transition-colors"
+                          className="border border-dashed border-[var(--retro-input-border)] px-2 py-1 bg-[var(--retro-input-bg)] hover:border-[var(--retro-button-bg)] transition-colors"
                         >
                           <button
                             type="button"
@@ -274,7 +274,7 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
                                 {toPersianDigits(extractSecondaryText(idx, hit) ?? '')}
                               </p>
                             )}
-                            <p className="text-[10px] text-[#5b4a2f]">
+                            <p className="text-[10px] text-[var(--retro-muted-text)]">
                               مشاهده در ماژول {INDEX_LABELS[idx]}
                             </p>
                           </button>
@@ -289,14 +289,14 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
           <div className="flex flex-wrap justify-between items-center gap-2 text-[11px]">
             <button
               type="button"
-              className={`${retroButton} !bg-[#1f2e3b]`}
+              className={`${retroButton}`}
               onClick={handleNavigateSearch}
             >
               مشاهده نمای کامل
             </button>
             <button
               type="button"
-              className={`${retroButton} !bg-[#5b4a2f]`}
+              className={`${retroButton}`}
               onClick={() => {
                 setVisible(false)
                 setResults(null)

@@ -119,10 +119,10 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-10 bg-[#faf4de]">
+      <div className="flex items-center justify-center p-10 bg-[var(--retro-panel-bg)]">
         <div className="text-center">
-          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin mb-3"></div>
-          <p className="text-[#1f2e3b]">در حال بارگذاری داشبورد...</p>
+          <div className="mx-auto h-8 w-8 border-4 border-[var(--retro-button-bg)] border-dashed rounded-full animate-spin mb-3"></div>
+          <p className="text-[var(--retro-table-header-text)]">در حال بارگذاری داشبورد...</p>
         </div>
       </div>
     )
@@ -218,6 +218,30 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// Finance quick actions helper
+export function FinanceQuickActions() {
+  const openNew = (direction: 'in' | 'out') => {
+    window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent('finance-prefill', {
+          detail: { direction, party_name: '', amount: '', reference: '', note: '' },
+        })
+      )
+    }, 150)
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]" onClick={() => openNew('in')}>
+        ثبت دریافت
+      </button>
+      <button className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]" onClick={() => openNew('out')}>
+        ثبت پرداخت
+      </button>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
+import { parseJalaliInput } from '../utils/date'
 import {
   retroBadge,
   retroButton,
@@ -12,6 +13,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import Alert from '../components/Alert'
 
 interface Payment {
   id: number
@@ -50,9 +52,22 @@ interface PaymentFormState {
   party_name: string
   amount: string
   reference: string
-  due_date: string
+  // Dual-date storage: store Jalali for display, ISO for API
+  due_date: string // ISO YYYY-MM-DD (for compatibility)
+  due_date_jalali?: string // e.g., 1404/09/10
   note: string
   invoice_id?: number
+}
+
+interface PaymentMethod {
+  id: number
+  key: string
+  name: string
+  parent_id?: number | null
+  enabled: boolean
+  order: number
+  account?: string | null
+  is_cheque: boolean
 }
 
 export default function FinanceModule({ smartDate }: ModuleComponentProps) {
@@ -72,6 +87,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [peopleLoading, setPeopleLoading] = useState(false)
   const [openInvoices, setOpenInvoices] = useState<any[]>([])
   const [invoicesLoading, setInvoicesLoading] = useState(false)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const emptyForm: PaymentFormState = {
     direction: 'in',
     method: 'cash',
@@ -79,6 +95,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     amount: '',
     reference: '',
     due_date: '',
+    due_date_jalali: '',
     note: '',
   }
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(emptyForm)
@@ -90,6 +107,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     loadData()
     loadPersons()
     loadOpenInvoices()
+    loadPaymentMethods()
     
     // Listen for prefill events from invoice module
     const handlePrefill = (e: Event) => {
@@ -102,6 +120,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         amount: String(amount || ''),
         reference: reference || '',
         due_date: '',
+        due_date_jalali: '',
         note: note || '',
         invoice_id: invoice_id,
       })
@@ -113,6 +132,17 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     window.addEventListener('finance-prefill', handlePrefill)
     return () => window.removeEventListener('finance-prefill', handlePrefill)
   }, [])
+
+  async function loadPaymentMethods() {
+    try {
+      const data = await apiGet<PaymentMethod[]>('/api/payment-methods').catch(() => [])
+      // show only enabled, ordered
+      const list = (data ?? []).filter(m => m.enabled).sort((a, b) => (a.order || 0) - (b.order || 0))
+      setPaymentMethods(list)
+    } catch (e) {
+      console.warn('Failed to load payment methods', e)
+    }
+  }
 
   const openPartyLedger = (party: string) => {
     const related = payments.filter(p => p.party_name === party)
@@ -220,6 +250,18 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     setPaymentForm(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleDueJalaliChange = (value: string) => {
+    // Accept flexible Jalali input and map to ISO date (YYYY-MM-DD)
+    const parsed = parseJalaliInput(value)
+    if (parsed) {
+      const isoDate = parsed.iso.slice(0, 10)
+      setPaymentForm(prev => ({ ...prev, due_date: isoDate, due_date_jalali: parsed.jalali }))
+    } else {
+      // Keep raw input for user; clear ISO if invalid
+      setPaymentForm(prev => ({ ...prev, due_date: '', due_date_jalali: value }))
+    }
+  }
+
   const resetForm = () => {
     setPaymentForm({ ...emptyForm, direction: paymentForm.direction })
     setFormError(null)
@@ -244,7 +286,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         ? new Date(`${smartDate.isoDate}T12:00:00Z`).toISOString()
         : new Date().toISOString()
       const due =
-        paymentForm.due_date.trim() !== ''
+        (paymentForm.due_date && paymentForm.due_date.trim() !== '')
           ? new Date(`${paymentForm.due_date}T12:00:00Z`).toISOString()
           : undefined
       const payload = {
@@ -288,11 +330,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
   return (
     <div className="space-y-8">
-      {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
-      )}
+      {error && <Alert variant="error">{error}</Alert>}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -333,15 +371,9 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         </header>
 
         {(formError || formSuccess) && !showForm && (
-          <div
-            className={`px-3 py-2 text-sm border-2 shadow-[3px_3px_0_rgba(0,0,0,0.12)] ${
-              formError
-                ? 'border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f]'
-                : 'border-[#4f704f] bg-[#e7f4e7] text-[#295329]'
-            }`}
-          >
+          <Alert variant={formError ? 'error' : 'success'}>
             {formError ?? formSuccess}
-          </div>
+          </Alert>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
@@ -427,22 +459,41 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                   onChange={e => handleFormChange('method', e.target.value)}
                   className={`${retroInput} w-full`}
                 >
-                  <option value="cash">نقدی</option>
-                  <option value="bank">بانکی</option>
-                  <option value="pos">دستگاه کارت‌خوان</option>
-                  <option value="cheque">چک</option>
-                  <option value="other">سایر</option>
+                  {paymentMethods.length > 0 ? (
+                    paymentMethods.map(m => (
+                      <option key={m.id} value={m.key}>{m.name}</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="cash">نقدی</option>
+                      <option value="bank">بانکی</option>
+                      <option value="pos">دستگاه کارت‌خوان</option>
+                      <option value="cheque">چک</option>
+                      <option value="other">سایر</option>
+                    </>
+                  )}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>تاریخ سررسید</label>
-                <input
-                  type="date"
-                  value={paymentForm.due_date}
-                  onChange={e => handleFormChange('due_date', e.target.value)}
-                  className={`${retroInput} w-full`}
-                />
-              </div>
+              {(() => {
+                const sel = paymentMethods.find(m => m.key === paymentForm.method)
+                const showDue = sel ? sel.is_cheque : paymentForm.method === 'cheque'
+                return (
+                  <div className="space-y-2">
+                    <label className={retroHeading}>تاریخ سررسید (جلالی)</label>
+                    <input
+                      type="text"
+                      placeholder="مثلاً 1404/09/10 یا 09/10"
+                      value={paymentForm.due_date_jalali || ''}
+                      onChange={e => handleDueJalaliChange(e.target.value)}
+                      className={`${retroInput} w-full ${showDue ? '' : 'opacity-50'}`}
+                      disabled={!showDue}
+                    />
+                    {paymentForm.due_date && (
+                      <p className={`text-[10px] ${retroMuted}`}>ISO: {paymentForm.due_date}</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -511,16 +562,8 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
               )}
             </div>
 
-            {formError && (
-              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
-                {formError}
-              </div>
-            )}
-            {formSuccess && (
-              <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
-                {formSuccess}
-              </div>
-            )}
+            {formError && <Alert variant="error">{formError}</Alert>}
+            {formSuccess && <Alert variant="success">{formSuccess}</Alert>}
 
             <div className="flex flex-wrap gap-3">
               <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">

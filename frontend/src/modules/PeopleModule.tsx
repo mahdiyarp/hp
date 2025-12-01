@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet, apiPost } from '../services/api'
+import { apiGet, apiPost, apiDelete } from '../services/api'
 import { formatNumberFa } from '../utils/num'
 import {
   retroButton,
@@ -96,6 +96,11 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   const [selectedPerson, setSelectedPerson] = useState<PersonWithBalance | null>(null)
   const [ledgerData, setLedgerData] = useState<PersonLedger | null>(null)
   const [loadingLedger, setLoadingLedger] = useState(false)
+  const [activities, setActivities] = useState<Array<{ id: number; person_id: string; kind?: string | null; content: string; created_at: string; created_by?: number | null; next_action_at?: string | null }> | null>(null)
+  const [loadingActivities, setLoadingActivities] = useState(false)
+  const [newActivity, setNewActivity] = useState('')
+  const [newActivityKind, setNewActivityKind] = useState<'note' | 'call' | 'sms' | 'task'>('note')
+  const [actError, setActError] = useState<string | null>(null)
   const emptyForm = {
     name: '',
     kind: 'customer',
@@ -146,6 +151,9 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
     setSelectedPerson(person)
     setLoadingLedger(true)
     setLedgerData(null)
+    setActivities(null)
+    setActError(null)
+    setLoadingActivities(true)
     try {
       const data = await apiGet<PersonLedger>(`/api/ledger/party/${person.id}`)
       setLedgerData(data)
@@ -154,6 +162,15 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       setError('خطا در دریافت گردش حساب')
     } finally {
       setLoadingLedger(false)
+    }
+    try {
+      const acts = await apiGet<Array<{ id: number; person_id: string; kind?: string | null; content: string; created_at: string; created_by?: number | null; next_action_at?: string | null }>>(`/api/persons/${person.id}/activities?limit=50`)
+      setActivities(acts)
+    } catch (e) {
+      console.error('Failed to load activities', e)
+      setActError('بارگذاری یادداشت‌ها ممکن نشد')
+    } finally {
+      setLoadingActivities(false)
     }
   }
 
@@ -617,85 +634,175 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                     </p>
                   </div>
                 </div>
-
-                {ledgerData.entries.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={retroTableHeader}>تاریخ</th>
-                          <th className={retroTableHeader}>شرح</th>
-                          <th className={retroTableHeader}>بدهکار</th>
-                          <th className={retroTableHeader}>بستانکار</th>
-                          <th className={retroTableHeader}>مانده</th>
-                          <th className={retroTableHeader}>سند</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ledgerData.entries.map(entry => (
-                          <tr key={entry.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
-                            <td className="px-3 py-2 text-xs">
-                              {new Date(entry.entry_date).toLocaleDateString('fa-IR')}
-                            </td>
-                            <td className="px-3 py-2">
-                              {entry.description}
-                              {entry.invoice && (
-                                <span className="block text-[10px] text-blue-700 mt-1">
-                                  فاکتور: {entry.invoice.invoice_number}
-                                </span>
-                              )}
-                              {entry.payment && (
-                                <span className="block text-[10px] text-green-700 mt-1">
-                                  پرداخت: {entry.payment.method}
-                                  {entry.payment.reference && ` - ${entry.payment.reference}`}
-                                </span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono">
-                              {entry.debit_account === 'AccountsReceivable' ? (
-                                <span className="text-red-700">{formatNumberFa(entry.amount)}</span>
-                              ) : (
-                                <span className="text-[#7a6b4f]">-</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono">
-                              {entry.credit_account === 'AccountsReceivable' ? (
-                                <span className="text-green-700">{formatNumberFa(entry.amount)}</span>
-                              ) : (
-                                <span className="text-[#7a6b4f]">-</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono font-semibold">
-                              <span className={entry.running_balance > 0 ? 'text-red-700' : entry.running_balance < 0 ? 'text-green-700' : 'text-[#7a6b4f]'}>
-                                {formatNumberFa(Math.abs(entry.running_balance))}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-xs">
-                              {entry.invoice && (
-                                <button 
-                                  className="text-blue-700 underline hover:text-blue-900"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    window.open(`/api/invoices/${entry.invoice!.id}/export`, '_blank')
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div className="lg:col-span-2">
+                    {ledgerData.entries.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                          <thead>
+                            <tr>
+                              <th className={retroTableHeader}>تاریخ</th>
+                              <th className={retroTableHeader}>شرح</th>
+                              <th className={retroTableHeader}>بدهکار</th>
+                              <th className={retroTableHeader}>بستانکار</th>
+                              <th className={retroTableHeader}>مانده</th>
+                              <th className={retroTableHeader}>سند</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {ledgerData.entries.map(entry => (
+                              <tr key={entry.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
+                                <td className="px-3 py-2 text-xs">
+                                  {new Date(entry.entry_date).toLocaleDateString('fa-IR')}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {entry.description}
+                                  {entry.invoice && (
+                                    <span className="block text-[10px] text-blue-700 mt-1">
+                                      فاکتور: {entry.invoice.invoice_number}
+                                    </span>
+                                  )}
+                                  {entry.payment && (
+                                    <span className="block text-[10px] text-green-700 mt-1">
+                                      پرداخت: {entry.payment.method}
+                                      {entry.payment.reference && ` - ${entry.payment.reference}`}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-left font-mono">
+                                  {entry.debit_account === 'AccountsReceivable' ? (
+                                    <span className="text-red-700">{formatNumberFa(entry.amount)}</span>
+                                  ) : (
+                                    <span className="text-[#7a6b4f]">-</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-left font-mono">
+                                  {entry.credit_account === 'AccountsReceivable' ? (
+                                    <span className="text-green-700">{formatNumberFa(entry.amount)}</span>
+                                  ) : (
+                                    <span className="text-[#7a6b4f]">-</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-left font-mono font-semibold">
+                                  <span className={entry.running_balance > 0 ? 'text-red-700' : entry.running_balance < 0 ? 'text-green-700' : 'text-[#7a6b4f]'}>
+                                    {formatNumberFa(Math.abs(entry.running_balance))}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-xs">
+                                  {entry.invoice && (
+                                    <button 
+                                      className="text-blue-700 underline hover:text-blue-900"
+                                      onClick={async (e) => {
+                                        e.stopPropagation()
+                                        try {
+                                          const resp = await apiPost<{ token: string; download_url: string; expires_at?: string }>(
+                                            `/api/exports/invoice/${entry.invoice!.id}?format=pdf`
+                                          )
+                                          if (resp && resp.download_url) {
+                                            window.open(resp.download_url, '_blank')
+                                          }
+                                        } catch (err) {
+                                          console.error('Failed to export invoice', err)
+                                          alert('صدور فایل فاکتور ممکن نشد')
+                                        }
+                                      }}
+                                    >
+                                      مشاهده فاکتور
+                                    </button>
+                                  )}
+                                  {entry.payment && !entry.invoice && (
+                                    <span className="text-green-700">رسید پرداخت</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center text-[#7a6b4f] py-8">
+                        هیچ تراکنشی برای این طرف حساب ثبت نشده است.
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <div className="border border-[#bfb69f] bg-[#f6f1df] px-3 py-2">
+                      <p className={retroHeading}>یادداشت‌ها / فعالیت‌ها</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-2">
+                        <select value={newActivityKind} onChange={e => setNewActivityKind(e.target.value as any)} className={`${retroInput}`}>
+                          <option value="note">یادداشت</option>
+                          <option value="call">تماس</option>
+                          <option value="sms">پیامک</option>
+                          <option value="task">وظیفه</option>
+                        </select>
+                        <div className="col-span-2">
+                          <button
+                            className={`${retroButton} w-full`}
+                            onClick={async () => {
+                              if (!selectedPerson || !newActivity.trim()) return
+                              try {
+                                const created = await apiPost(`/api/persons/${selectedPerson.id}/activities`, {
+                                  content: newActivity.trim(),
+                                  kind: newActivityKind,
+                                })
+                                setActivities(prev => (prev ? [created as any, ...prev] : [created as any]))
+                                setNewActivity('')
+                              } catch (e) {
+                                alert('ثبت یادداشت ممکن نشد')
+                              }
+                            }}
+                          >
+                            ثبت فعالیت
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        className={`${retroInput} w-full h-24`}
+                        placeholder="متن یادداشت..."
+                        value={newActivity}
+                        onChange={e => setNewActivity(e.target.value)}
+                      />
+                    </div>
+                    {loadingActivities ? (
+                      <div className="text-xs text-[#7a6b4f]">در حال بارگذاری...</div>
+                    ) : actError ? (
+                      <div className="text-xs text-red-700">{actError}</div>
+                    ) : activities && activities.length > 0 ? (
+                      <div className="space-y-2">
+                        {activities.map(a => (
+                          <div key={a.id} className="border border-[#c5bca5] bg-[#faf4de] p-2 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold">{a.kind || 'یادداشت'}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[#7a6b4f]">{new Date(a.created_at).toLocaleString('fa-IR')}</span>
+                                <button
+                                  className="text-red-700 hover:text-red-900"
+                                  onClick={async () => {
+                                    if (!selectedPerson) return
+                                    if (!confirm('حذف این یادداشت؟')) return
+                                    try {
+                                      await apiDelete(`/api/persons/${selectedPerson.id}/activities/${a.id}`)
+                                      setActivities(prev => prev ? prev.filter(x => x.id !== a.id) : prev)
+                                    } catch (e) {
+                                      alert('حذف ممکن نشد')
+                                    }
                                   }}
                                 >
-                                  مشاهده فاکتور
+                                  حذف
                                 </button>
-                              )}
-                              {entry.payment && !entry.invoice && (
-                                <span className="text-green-700">رسید پرداخت</span>
-                              )}
-                            </td>
-                          </tr>
+                              </div>
+                            </div>
+                            <p className="mt-1 whitespace-pre-wrap leading-6">{a.content}</p>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-[#7a6b4f]">یادداشتی ثبت نشده است.</div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-center text-[#7a6b4f] py-8">
-                    هیچ تراکنشی برای این طرف حساب ثبت نشده است.
-                  </div>
-                )}
+                </div>
               </>
             ) : null}
           </div>
