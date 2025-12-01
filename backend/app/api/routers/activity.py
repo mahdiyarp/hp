@@ -14,27 +14,32 @@ def recent_activity(
     entity_id: str | None = None,
 ):
     q = db.query(models.AuditLog)
-    if entity_type:
+    # Only filter by fields that actually exist on the model
+    if entity_type and hasattr(models.AuditLog, "entity_type"):
         q = q.filter(models.AuditLog.entity_type == entity_type)
-    if entity_id:
+    if entity_id and hasattr(models.AuditLog, "entity_id"):
         q = q.filter(models.AuditLog.entity_id == str(entity_id))
     q = q.order_by(models.AuditLog.created_at.desc())
     total = q.count()
-    items = q.offset((page-1)*limit).limit(limit).all()
+    items = q.offset((page - 1) * limit).limit(limit).all()
     return {
         "items": [
             {
-                "id": a.id,
-                "actor": a.actor,
-                "action": a.action,
-                "entity_type": a.entity_type,
-                "entity_id": a.entity_id,
-                "detail": a.detail,
-                "created_at": a.created_at.isoformat() if a.created_at else None,
-                "hash": getattr(a, 'block_hash', None)
-            } for a in items
+                "id": getattr(a, "id", None),
+                "actor": getattr(a, "actor", None),
+                "action": getattr(a, "action", None),
+                "entity_type": getattr(a, "entity_type", None),
+                "entity_id": getattr(a, "entity_id", None),
+                "path": getattr(a, "path", None),
+                "method": getattr(a, "method", None),
+                "status_code": getattr(a, "status_code", None),
+                "detail": getattr(a, "detail", None),
+                "created_at": a.created_at.isoformat() if getattr(a, "created_at", None) else None,
+                "hash": getattr(a, "block_hash", None),
+            }
+            for a in items
         ],
         "total": total,
         "page": page,
-        "limit": limit
+        "limit": limit,
     }
