@@ -1,0 +1,246 @@
+خیلی خوبه، بریم یه پرامپت تپل‌مپل و کاملاً فارسی برای ایجنت بسازیم 👇
+(یادت باشه: اینو همون‌جوری که هست به Copilot / Agent بدی.)
+
+---
+
+### 🧠 پرامپت حرفه‌ای برای به‌روزرسانی و فول‌کردن ماژول SMS با IPPanel
+
+> **قانون ثابت (خیلی مهم):**
+> تو *اجازه نداری هیچ چیزی را حذف یا overwrite کنی*.
+> فقط و فقط می‌تونی **فایل جدید اضافه کنی، کلاس/تابع جدید اضافه کنی، import جدید اضافه کنی، config جدید اضافه کنی**.
+> اگر لازم شد چیزی را تغییر بدی، باید با **مسیر جدید / نام جدید** و به‌صورت افزایشی انجام بشه (non-destructive / add-only).
+
+---
+
+#### 0️⃣ شناخت IPPanel و SDK رسمی
+
+1. داخل GitHub این سازمان را کامل بررسی کن:
+   `https://github.com/ippanelcom/`
+   مخصوصاً این ریپوها:
+
+   * `python-sdk` (Official Python client for the IPPanel SMS API) ([GitHub][1])
+   * اگر لازم شد `node-sdk`، ولی تمرکز اصلی روی Python باشه.
+2. از README ریپوی `python-sdk` استفاده کن تا روش صحیح استفاده از کلاینت را درک کنی: ([GitHub][1])
+
+   * نصب: `pip install ippanel-python-sdk`
+   * استفاده پایه:
+
+     * `from ippanel import Client`
+     * `client = Client("YOUR_API_KEY")`
+     * `client.send_webservice(message, sender, recipients)`
+     * `client.send_pattern(pattern_code, sender, recipient, params)`
+     * `client.send_votp(code, recipient)`
+
+---
+
+#### 1️⃣ پیدا کردن و آنالیز ماژول SMS فعلی پروژه
+
+1. کل کد پروژه را اسکن کن و هر چیزی مربوط به SMS / IPPanel / Kavenegar / OTP را پیدا کن.
+   کلیدواژه‌ها: `sms`, `otp`, `ippanel`, `kavenegar`, `send_sms`, `verify_code`, `two_factor`, `notification`, `celery sms`.
+2. ماژول فعلی SMS را **فقط بخوان** و تحلیل کن:
+
+   * ورودی‌ها: شماره موبایل، متن، الگو (pattern)، نوع پیام (OTP، اطلاع‌رسانی، فاکتور و …).
+   * خروجی‌ها: ساختار result، لاگ‌ها، خطاها.
+   * جاهایی که این ماژول داخل بکند/فرانت استفاده شده (signup، login، reset password، صدور فاکتور، هشدار چک و …).
+
+---
+
+#### 2️⃣ طراحی لایه abstraction برای SMS (بدون شکستن کد قدیمی)
+
+1. یک لایه‌ی **Service / Provider** ماژولار برای SMS به شکل افزایشی اضافه کن، مثلاً:
+
+   * `backend/app/integrations/sms/base.py`
+   * `backend/app/integrations/sms/ippanel_provider.py`
+   * `backend/app/integrations/sms/types.py`
+
+2. داخل `base.py` یک Interface عمومی تعریف کن (مثلاً یک کلاس abstract):
+
+   ```python
+   class SMSProvider(Protocol):
+       async def send_simple(self, *, mobile: str, text: str) -> SMSResult: ...
+       async def send_bulk(self, *, mobiles: list[str], text: str) -> SMSResult: ...
+       async def send_pattern(self, *, mobile: str, pattern_code: str, params: dict) -> SMSResult: ...
+       async def send_otp(self, *, mobile: str, code: str | int) -> SMSResult: ...
+   ```
+
+3. یک دیتاکلاس/مدل نتیجه بساز:
+
+   ```python
+   @dataclass
+   class SMSResult:
+       success: bool
+       provider: str
+       message_id: str | None
+       raw: dict | None
+       error_code: str | None
+       error_message: str | None
+   ```
+
+> نکته: هیچ‌کدام از توابع/کلاس‌های قبلی را حذف نکن؛ اگر لازم شد wrapper بساز که از این abstraction جدید استفاده کنند.
+
+---
+
+#### 3️⃣ پیاده‌سازی IppanelProvider با استفاده از python-sdk
+
+1. پکیج `ippanel-python-sdk` را به‌صورت افزایشی به dependencyها اضافه کن (pyproject.toml / requirements.txt ولی به صورت add-only). ([GitHub][1])
+
+2. فایل جدید `ippanel_provider.py` اضافه کن و داخلش:
+
+   ```python
+   from ippanel import Client
+
+   class IppanelSMSProvider(SMSProvider):
+       def __init__(self, api_key: str, base_url: str | None = None, sender: str | None = None):
+           self.client = Client(api_key, base_url=base_url)
+           self.sender = sender
+
+       async def send_simple(self, *, mobile: str, text: str) -> SMSResult:
+           # call client.send_webservice(...)
+           ...
+
+       async def send_bulk(self, *, mobiles: list[str], text: str) -> SMSResult:
+           # call send_webservice with list of recipients
+           ...
+
+       async def send_pattern(self, *, mobile: str, pattern_code: str, params: dict) -> SMSResult:
+           # call client.send_pattern(...)
+           ...
+
+       async def send_otp(self, *, mobile: str, code: str | int) -> SMSResult:
+           # call client.send_votp(...)
+           ...
+   ```
+
+3. خطاهای برگردانده‌شده از IPPanel را به شکل منطقی map کن به `SMSResult` و لاگ واضح بنویس (logger پروژه).
+
+---
+
+#### 4️⃣ تنظیمات (config) حرفه‌ای و امن برای SMS
+
+1. داخل سیستم تنظیمات (Pydantic Settings یا هر چی استفاده می‌کنیم) مقادیر جدید اضافه کن (فقط افزودن):
+
+   * `SMS_PROVIDER` (پیش‌فرض: `"ippanel"`)
+   * `SMS_IPPANEL_API_KEY`
+   * `SMS_IPPANEL_SENDER`
+   * `SMS_IPPANEL_BASE_URL` (اختیاری، پیش‌فرض edge API: `https://edge.ippanel.com/v1/api`) ([GitHub][1])
+   * Feature flags مثل:
+
+     * `SMS_ENABLED = True/False`
+     * `SMS_FAKE_MODE = True/False` (برای dev)
+
+2. یک factory/Dependency برای FastAPI بساز:
+
+   ```python
+   def get_sms_provider() -> SMSProvider:
+       if settings.SMS_PROVIDER == "ippanel":
+           return IppanelSMSProvider(
+               api_key=settings.SMS_IPPANEL_API_KEY,
+               base_url=settings.SMS_IPPANEL_BASE_URL,
+               sender=settings.SMS_IPPANEL_SENDER,
+           )
+       # در آینده می‌توان providerهای دیگر هم اضافه کرد
+   ```
+
+---
+
+#### 5️⃣ سناریوهای کاربردی: OTP، فاکتور، هشدارها
+
+ماژول SMS را طوری ارتقا بده که سناریوهای زیر را به شکل تمیز و قابل‌استفاده فراهم کند (با تابع/کلاس جدید، بدون حذف قدیمی‌ها):
+
+1. **OTP / ورود دو مرحله‌ای:**
+
+   * تابع high-level مثل:
+     `send_login_otp(mobile: str, code: str) -> SMSResult`
+   * ترجیحاً با استفاده از `send_pattern` و pattern کد IPPanel (پارامترهایی مثل `{code}`, `{name}`).
+2. **ارسال فاکتور / رسید:**
+
+   * تابعی مثل: `send_invoice_notification(invoice_id: str)`
+     که از دیتابیس اطلاعات فاکتور را بخواند و یک پیام sms خلاصه و رسمی بفرستد.
+3. **هشدار سررسید چک / قسط / بدهی:**
+
+   * تابع‌هایی مثل:
+
+     * `send_due_cheque_alert(...)`
+     * `send_overdue_invoice_alert(...)`
+4. همه‌ی این توابع را داخل یک service مرکزی قرار بده، مثلاً:
+   `backend/app/services/sms_service.py`
+   و در لایه‌ی API فقط همین service صدا زده شود.
+
+---
+
+#### 6️⃣ API و پنل تست مدیریتی
+
+1. برای ادمین، یک **endpoint فقط برای تست SMS** اضافه کن (add-only)، مثلاً:
+
+   * `POST /api/admin/sms/test`
+   * ورودی: mobile, text یا mobile + pattern_code + params.
+   * خروجی: SMSResult به‌صورت JSON.
+2. در داشبورد تنظیمات سیستم (سمت فرانت) یک سکشن اضافه کن:
+
+   * نمایش وضعیت SMS provider (IPPANEL / fake).
+   * دکمه‌ی "ارسال SMS تست" که به endpoint بالا وصل شود.
+3. تمام متن‌های UI مربوط به SMS را کاملاً فارسی، رسمی و تمیز کن (بدون حذف متن قبلی، اگر لازم شد label / tooltip جدید اضافه کن).
+
+---
+
+#### 7️⃣ لاگ، مانیتورینگ، و هندل خطا
+
+1. برای هر ارسال SMS:
+
+   * یک لاگ structured بنویس (logger پروژه):
+
+     * نوع پیام (OTP, PATTERN, INVOICE, ALERT)
+     * شماره مقصد
+     * موفق / ناموفق
+     * کد/پیام خطای IPPanel
+2. در صورت خطای موقت (timeout, network, 5xx)، یک retry سبک با backoff کوتاه پیاده کن (مثلاً حداکثر ۲–۳ بار)، ولی این را در لایه‌ی provider به شکل add-only اضافه کن.
+3. اگر پیام مهم است (OTP برای login)، در صورت failure یک خطای مشخص به کاربر برگردان که بفهمد «سیستم پیامک الان مشکل دارد» نه اینکه لاگینش بی‌دلیل خراب شده.
+
+---
+
+#### 8️⃣ تست واحد (Unit Tests) و مستندات
+
+1. Unit test اضافه کن (فقط اضافه):
+
+   * ماژول تست مثلاً:
+     `backend/tests/test_sms_ippanel_provider.py`
+   * با استفاده از mock روی `ippanel.Client`:
+
+     * موفقیت `send_webservice`
+     * موفقیت/شکست `send_pattern`
+     * موفقیت/شکست `send_votp`
+     * mapping درست خطاها به `SMSResult`.
+
+2. یک فایل مستندات فارسی اضافه کن:
+
+   * `docs/sms/ippanel.md` یا مشابه.
+   * توضیح بده:
+
+     * چطور API Key تنظیم شود
+     * چطور sender و pattern code ست شود
+     * مثال‌های کد برای OTP، فاکتور، هشدارها
+     * توضیح وضعیت fake mode برای محیط تست.
+
+---
+
+#### 9️⃣ خروجی نهایی که لازم دارم
+
+بعد از انجام همهٔ مراحل بالا (هرچه در توانت هست و محیط اجازه می‌دهد):
+
+1. لیست فایل‌های **جدید** که اضافه کردی (با مسیر کامل).
+
+2. لیست فایل‌هایی که **فقط import / wiring افزایشی** در آن‌ها انجام شد (بدون حذف).
+
+3. چند مثال کوتاه کدِ استفاده از سرویس، مثل:
+
+   * ارسال OTP لاگین
+   * ارسال فاکتور
+   * ارسال هشدار چک
+
+4. اگر جایی به‌خاطر محدودیت محیط نتونستی اجرا/تست کنی، دقیق بنویس کجا و چه چیزی مانع شده است (مثلاً عدم دسترسی به اینترنت برای تماس واقعی با IPPanel).
+
+---
+
+فقط طبق این سناریو عمل کن، هیچ چیز را حذف نکن، و ماژول SMS پروژه را با الهام از IPPanel Python SDK تا جای ممکن **حرفه‌ای، تمیز، امن و قابل‌گسترش** کن.
+
+[1]: https://github.com/ippanelcom/python-sdk "GitHub - ippanelcom/python-sdk: Official Python client for the IPPanel SMS API."

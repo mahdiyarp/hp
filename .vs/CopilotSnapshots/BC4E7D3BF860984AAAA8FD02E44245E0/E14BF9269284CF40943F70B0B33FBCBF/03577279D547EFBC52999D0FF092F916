@@ -1,0 +1,17 @@
+﻿# Backend env for docker-compose + local
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=hesabpak
+# Primary DB inside compose network
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/hesabpak
+SECRET_KEY=change-me-super-secret-key-12345-persian-hesabpak
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+REFRESH_TOKEN_EXPIRE_DAYS=30
+JWT_ALGORITHM=HS256
+MEILI_URL=http://localhost:7700
+MEILI_KEY=
+WORLD_TIME_API=https://worldtimeapi.org/api/timezone/Asia/Tehran
+# Redis configuration for person sync
+REDIS_URL=redis://redis:6379/0
+# Demo seed for initial setup
+DEMO_SEED=true

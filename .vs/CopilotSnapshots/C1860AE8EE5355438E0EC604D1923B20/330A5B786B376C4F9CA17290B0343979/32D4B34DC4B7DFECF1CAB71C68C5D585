@@ -1,0 +1,153 @@
+﻿/* Remove corrupted local font files; use system fonts instead */
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --app-font: 'Vazirmatn', 'IranSans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --primary: #1f2e3b;
+  --secondary: #d7caa4;
+  --background: #f7f2e7;
+  --surface: #ffffff;
+  --border: #c5bca5;
+  --success: #1f6a3d;
+  --warning: #b36b00;
+  --error: #b14242;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-low: 0 8px 0 rgba(0, 0, 0, 0.08);
+  --shadow-high: 0 16px 32px rgba(0, 0, 0, 0.12);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --on-primary: #ffffff;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: var(--app-font);
+}
+
+body {
+  background-color: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body, button, input, textarea, select {
+  font-family: inherit;
+}
+
+/* Ensure direction is RTL throughout */
+html[dir='rtl'] {
+  direction: rtl;
+}
+
+.hp-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-low);
+  color: var(--primary);
+}
+
+.hp-card-muted {
+  background: var(--background);
+}
+
+.hp-button {
+  background: var(--primary);
+  color: var(--on-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  box-shadow: var(--shadow-low);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.hp-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-high);
+}
+
+.hp-button.secondary {
+  background: var(--secondary);
+  color: var(--primary);
+}
+
+.hp-button.ghost {
+  background: transparent;
+  color: var(--primary);
+  border-style: dashed;
+}
+
+.hp-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  color: var(--primary);
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.hp-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(31, 75, 95, 0.12);
+}
+
+.hp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--background);
+  color: var(--primary);
+}
+
+.hp-badge.success {
+  background: color-mix(in srgb, var(--success) 15%, white);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.hp-badge.warning {
+  background: color-mix(in srgb, var(--warning) 15%, white);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.hp-badge.error {
+  background: color-mix(in srgb, var(--error) 15%, white);
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.hp-table th {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 11px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--secondary);
+  color: var(--primary);
+  border-bottom: 1px solid var(--border);
+}
+
+.hp-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}

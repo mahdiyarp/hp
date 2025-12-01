@@ -1,0 +1,143 @@
+﻿#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+A simple encoding repair tool for text files in the repository.
+This script is designed to be safe and idempotent.
+
+Usage: python tools/fix_encodings.py [paths...]
+If no paths are provided, it defaults to scanning 'frontend' and 'backend'.
+
+Heuristics:
+- Reads file bytes to avoid premature decoding.
+- Tries to decode as UTF-8. If successful, it checks for "mojibake" (UTF-8 bytes mis-decoded as a single-byte encoding like Latin-1). If mojibake is detected, it recovers the original UTF-8 string.
+- If UTF-8 decoding fails, it attempts to decode using common legacy encodings like cp1256 (Arabic) and cp1252. If a candidate string contains a significant number of Arabic/Persian characters, it's considered a successful recovery and the file is re-saved as UTF-8.
+- Creates a `.bak` file for any file it modifies, allowing for easy review and rollback.
+
+This tool is best-effort. Always review the changes (e.g., with `git diff`) after running.
+"""
+import sys
+from pathlib import Path
+import re
+
+# File extensions to check
+TEXT_EXTS = {'.js', '.ts', '.tsx', '.jsx', '.py', '.json', '.html', '.css', '.md', '.txt', '.env'}
+
+# Regex to detect Arabic/Persian characters
+ARABIC_PERSIAN_RE = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]')
+
+def get_arabic_persian_score(s: str) -> int:
+    """Calculates the number of Arabic/Persian characters in a string."""
+    return len(ARABIC_PERSIAN_RE.findall(s))
+
+def try_fix_bytes(file_bytes: bytes) -> (str, bool):
+    """
+    Attempts to fix the encoding of a byte string.
+    Returns a tuple of (fixed_text, changed_flag).
+    """
+    # 1. Try to decode as UTF-8 first.
+    try:
+        utf8_text = file_bytes.decode('utf-8')
+        # Check for common mojibake: text was UTF-8 but decoded as latin1/cp1252
+        try:
+            recovered_text = utf8_text.encode('latin1').decode('utf-8')
+            if get_arabic_persian_score(recovered_text) > get_arabic_persian_score(utf8_text):
+                return recovered_text, True
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+        
+        # Also check if it was mis-saved as cp1256
+        try:
+            cp1256_text = file_bytes.decode('cp1256')
+            if get_arabic_persian_score(cp1256_text) > get_arabic_persian_score(utf8_text):
+                return cp1256_text, True
+        except (UnicodeDecodeError):
+            pass
+
+        # If no improvement, the original UTF-8 was likely correct.
+        return utf8_text, False
+    except UnicodeDecodeError:
+        # UTF-8 decoding failed, so it's likely a legacy encoding.
+        pass
+
+    # 2. Try legacy encodings if UTF-8 fails.
+    for enc in ('cp1256', 'cp1252', 'latin1'):
+        try:
+            decoded_text = file_bytes.decode(enc)
+            # If it contains Arabic/Persian characters, we assume it's a success.
+            if get_arabic_persian_score(decoded_text) > 0:
+                return decoded_text, True
+            # Also try the mojibake recovery on this decoded text
+            try:
+                recovered_text = decoded_text.encode('latin1').decode('utf-8')
+                if get_arabic_persian_score(recovered_text) > 0:
+                    return recovered_text, True
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                pass
+        except UnicodeDecodeError:
+            continue
+
+    # 3. If all else fails, decode with replacement to avoid data loss.
+    return file_bytes.decode('utf-8', errors='replace'), False
+
+def is_text_file(path: Path) -> bool:
+    """Determines if a file is likely a text file."""
+    # Ignore large files to avoid performance issues
+    try:
+        if path.stat().st_size > 5 * 1024 * 1024:  # 5 MB limit
+            return False
+    except OSError:
+        return False
+    
+    return path.suffix.lower() in TEXT_EXTS or path.stat().st_size < 200000 # small files without extension
+
+def walk_and_fix(paths_to_scan):
+    """Walks through directories and fixes encoding of text files."""
+    changed_files_count = 0
+    for p_str in paths_to_scan:
+        base_path = Path(p_str)
+        if not base_path.exists():
+            print(f"Warning: Path '{p_str}' does not exist. Skipping.")
+            continue
+        
+        files_to_check = [base_path] if base_path.is_file() else [f for f in base_path.rglob('*') if f.is_file()]
+        
+        for file_path in files_to_check:
+            if not is_text_file(file_path):
+                continue
+            
+            try:
+                original_bytes = file_path.read_bytes()
+                if not original_bytes:
+                    continue
+
+                fixed_text, has_changed = try_fix_bytes(original_bytes)
+                
+                if has_changed:
+                    backup_path = file_path.with_suffix(file_path.suffix + '.bak')
+                    
+                    # Create a backup if it doesn't exist
+                    if not backup_path.exists():
+                        file_path.rename(backup_path)
+                    
+                    # Write the fixed content to the original file path
+                    file_path.write_text(fixed_text, encoding='utf-8')
+                    print(f"✓ Fixed encoding for: {file_path}")
+                    changed_files_count += 1
+
+            except Exception as e:
+                print(f"Error processing file {file_path}: {e}")
+                
+    return changed_files_count
+
+if __name__ == '__main__':
+    # Default to 'frontend' and 'backend' if no arguments are given
+    scan_paths = sys.argv[1:] or ['frontend', 'backend']
+    print(f"Starting encoding fix for paths: {', '.join(scan_paths)}")
+    
+    total_changed = walk_and_fix(scan_paths)
+    
+    if total_changed > 0:
+        print(f"\nSuccessfully fixed {total_changed} file(s).")
+        print("Please review the changes and the `.bak` files before committing.")
+    else:
+        print("\nNo files needed fixing.")

@@ -1,106 +1,257 @@
 <!doctype html>
 <html lang="fa" dir="rtl">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>فاکتور</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Invoice {{ invoice.invoice_number or ('#' ~ invoice.id) }}</title>
     <style>
-      body { font-family: 'Vazir', sans-serif; padding: 1rem; }
-      .invoice {
-        max-width: 800px; margin: auto; background: #fff; padding: 1.5rem; border-radius: .5rem; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      :root {
+        --primary: #1f2e3b;
+        --secondary: #d7caa4;
+        --background: #f7f2e7;
+        --border: #c5bca5;
+        --success: #1f6a3d;
+        --warning: #b36b00;
+        --error: #b14242;
+        --radius: 12px;
+        --radius-sm: 8px;
+        --shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
       }
-      @media print { .no-print { display:none } }
-      .table td, .table th { vertical-align: middle }
+      * { box-sizing: border-box; }
+      body {
+        font-family: "Tehran", "IranSans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at 12% 20%, rgba(215, 202, 164, 0.14), transparent 30%), var(--background);
+        color: var(--primary);
+        margin: 0;
+        padding: 24px;
+      }
+      .sheet {
+        max-width: 1024px;
+        margin: auto;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 28px;
+      }
+      header {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+        align-items: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo {
+        width: 54px;
+        height: 54px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        background: var(--secondary);
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: var(--primary);
+      }
+      .meta {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 12px;
+        background: var(--background);
+        display: grid;
+        gap: 6px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .badge.success { border-color: var(--success); color: var(--success); }
+      .badge.warning { border-color: var(--warning); color: var(--warning); }
+      .badge.error { border-color: var(--error); color: var(--error); }
+      .party, .summary {
+        margin-top: 18px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 14px;
+        background: var(--background);
+      }
+      .muted { opacity: 0.8; font-size: 12px; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+      }
+      th, td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px;
+        text-align: center;
+      }
+      th {
+        background: var(--secondary);
+        letter-spacing: 0.12em;
+        font-size: 12px;
+      }
+      td.desc { text-align: right; }
+      .row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+      .box {
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-sm);
+        padding: 10px;
+        text-align: center;
+        font-size: 12px;
+        color: var(--primary);
+      }
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 22px;
+      }
+      .button {
+        background: var(--primary);
+        color: white;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+      }
+      .button.secondary {
+        background: var(--secondary);
+        color: var(--primary);
+      }
+      .grid-summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .summary-row {
+        display: flex;
+        justify-content: space-between;
+      }
+      @media print {
+        .no-print { display: none !important; }
+        body { background: #fff; }
+        .sheet { box-shadow: none; border: none; }
+      }
     </style>
   </head>
-  <body class="bg-light">
-    <div class="invoice">
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 class="mb-0">شرکت نمونه</h4>
-          <small class="text-muted">آدرس شرکت · تلفن · ایمیل</small>
+  <body>
+    <div class="sheet">
+      <header>
+        <div class="brand">
+          <div class="logo">HP</div>
+          <div>
+            <h2 style="margin:0;">Hesabpak Invoice</h2>
+            <div class="muted">Customer billing document</div>
+            <div class="muted">Fiscal year badge: {{ fiscal_year or 'N/A' }}</div>
+          </div>
         </div>
-        <div class="text-end">
-          <h6 class="mb-0">فاکتور</h6>
-          <small id="invoice-number" class="text-muted">#INV-0001</small>
+        <div class="meta">
+          <div><strong>Invoice #:</strong> {{ invoice.invoice_number or ('#' ~ invoice.id) }}</div>
+          <div><strong>Issue (Jalali):</strong> {{ issue_jalali or issue_gregorian }}</div>
+          {% if due_jalali %}<div><strong>Due (Jalali):</strong> {{ due_jalali }}</div>{% endif %}
+          <div><strong>Type:</strong> {{ invoice.invoice_type | upper }}</div>
+          <div><strong>Status:</strong>
+            {% set s = (invoice.status or 'draft') | lower %}
+            <span class="badge {% if s in ['final','paid'] %}success{% elif s == 'overdue' %}warning{% elif s == 'cancelled' %}error{% endif %}">
+              {{ s }}
+            </span>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <div class="row mb-3">
-        <div class="col-6">
-          <strong>به:</strong>
-          <div id="party-name">مشتری مثال</div>
+      <section class="party">
+        <div class="row">
+          <div>
+            <div class="muted">Customer</div>
+            <strong>{{ invoice.party_name or invoice.party_id or '---' }}</strong>
+          </div>
+          <div>
+            <div class="muted">Tracking</div>
+            <strong>{{ invoice.tracking_code or '---' }}</strong>
+          </div>
+          <div class="row" style="grid-template-columns: repeat(2, minmax(80px,1fr));">
+            <div class="box">QR</div>
+            <div class="box">BARCODE</div>
+          </div>
         </div>
-        <div class="col-6 text-start">
-          <strong>تاریخ:</strong>
-          <div id="invoice-date">2025-11-08</div>
-        </div>
-      </div>
+      </section>
 
-      <div class="table-responsive">
-        <table class="table table-bordered">
-          <thead class="table-light">
-            <tr>
-              <th>شرح</th>
-              <th class="text-center">تعداد</th>
-              <th class="text-center">فی</th>
-              <th class="text-center">جمع</th>
-            </tr>
-          </thead>
-          <tbody id="items">
-            <tr>
-              <td>کالا نمونه</td>
-              <td class="text-center">2</td>
-              <td class="text-center">100,000</td>
-              <td class="text-center">200,000</td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr>
-              <th colspan="3" class="text-end">جمع</th>
-              <th class="text-center" id="total">200,000</th>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Unit Price</th>
+            <th>Discount</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in invoice.items or [] %}
+          <tr>
+            <td class="desc">{{ line.description }}</td>
+            <td>{{ line.quantity }}</td>
+            <td>{{ line.unit or '-' }}</td>
+            <td>{{ '{:,}'.format(line.unit_price) }}</td>
+            <td>{{ '{:,}'.format(line.discount or 0) }}</td>
+            <td>{{ '{:,}'.format(line.total) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
 
-      <div class="d-flex justify-content-between mt-4">
-        <div>
-          <small class="text-muted">توضیحات: فاکتور نمونه ایجاد شده برای نمایش قالب چاپ.</small>
+      <section class="summary">
+        <div class="grid-summary">
+          <div class="summary-row"><span>Subtotal</span><strong>{{ '{:,}'.format(invoice.subtotal or 0) }}</strong></div>
+          <div class="summary-row"><span>Tax ({{ invoice.tax_rate or 0 }}%)</span><strong>{{ '{:,}'.format(invoice.tax or 0) }}</strong></div>
+          <div class="summary-row"><span>Invoice Discount</span><strong>{{ '{:,}'.format(invoice.discount_total or 0) }}</strong></div>
+          <div class="summary-row"><span>Grand Total</span><strong>{{ '{:,}'.format(invoice.total or 0) }}</strong></div>
         </div>
-        <div class="no-print">
-          <button class="btn btn-primary" onclick="window.print()">چاپ</button>
+        {% if invoice.note %}
+        <div style="margin-top:12px;">
+          <div class="muted">Notes</div>
+          <div>{{ invoice.note }}</div>
+        </div>
+        {% endif %}
+        {% if invoice.attachments %}
+        <div style="margin-top:12px;">
+          <div class="muted">Attachments</div>
+          <div class="row">
+            {% for att in invoice.attachments %}
+              <div class="box">{{ att.filename }}</div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </section>
+
+      <div class="actions no-print">
+        <div class="muted">Export ready: PDF / JSON / XML / UBL</div>
+        <div class="row" style="grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap:8px;">
+          <button class="button" onclick="window.print()">Print</button>
+          <button class="button secondary" onclick="window.location.href='/api/invoices/{{ invoice.id }}/export?format=pdf'">Download PDF</button>
         </div>
       </div>
     </div>
-
-    <script>
-      // JS to fetch invoice JSON if invoked via /api/prints/invoice/{id}
-      async function loadInvoice(){
-        try{
-          const path = window.location.pathname;
-          const m = path.match(/invoice\/(\d+)/);
-          if(!m) return;
-          const id = m[1];
-          const r = await fetch('/api/invoices/' + id);
-          if(!r.ok) return;
-          const inv = await r.json();
-          document.getElementById('invoice-number').innerText = inv.invoice_number || ('#' + inv.id);
-          document.getElementById('invoice-date').innerText = (inv.server_time || '').split('T')[0];
-          document.getElementById('party-name').innerText = inv.party_name || inv.party_id || '';
-          const tbody = document.getElementById('items'); tbody.innerHTML = '';
-          let total = 0;
-          (inv.items || []).forEach(it =>{
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${it.description}</td><td class="text-center">${it.quantity}</td><td class="text-center">${it.unit_price.toLocaleString()}</td><td class="text-center">${it.total.toLocaleString()}</td>`;
-            tbody.appendChild(tr);
-            total += it.total || 0;
-          })
-          document.getElementById('total').innerText = total.toLocaleString();
-        }catch(e){console.warn(e)}
-      }
-      loadInvoice();
-    </script>
   </body>
 </html>

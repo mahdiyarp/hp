@@ -1,56 +1,86 @@
 #!/bin/bash
-# HesabPak Startup Script for Linux/Mac
 
-cd "$(dirname "$0")"
+###############################################
+# HesabPak - ”?” „ Õ”«»œ«—? ›«—”?
+# —«Âù«‰œ«“? ”—?⁄ »—«? Linux Ê macOS
+###############################################
+
+set -e
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 echo ""
-echo "Starting HesabPak services..."
+echo "??????????????????????????????????????????????????"
+echo "?   HesabPak - ”?” „ Õ”«»œ«—? Õ”«»ùÅ«ò         ?"
+echo "?   —«Âù«‰œ«“? ŒÊœò«— ”—Ê?”ùÂ«                  ?"
+echo "??????????????????????????????????????????????????"
 echo ""
 
-# Check if Docker is running
-if ! docker ps &> /dev/null; then
-    echo "ERROR: Docker is not running."
-    echo "Please start Docker and try again."
+# »——”? Docker
+if ! command -v docker &> /dev/null; then
+    echo "? Œÿ«: Docker ?«›  ‰‘œ"
+    echo "?? ·ÿ›« Docker —« œ«‰·Êœ Ê ‰’» ò‰?œ:"
+    echo "   https://www.docker.com/products/docker-desktop"
     exit 1
 fi
 
-# Start containers
+# »——”? Docker daemon
+if ! docker ps &> /dev/null; then
+    echo "??  Â‘œ«—: Docker daemon œ— Õ«· «Ã—« ‰?” "
+    echo "?? ·ÿ›« Docker Desktop —« —«Âù«‰œ«“? ò‰?œ"
+    exit 1
+fi
+
+# ‘—Ê⁄ ”—Ê?”ùÂ«
+echo "?? —«Âù«‰œ«“? ”—Ê?”ùÂ«..."
 docker compose up -d --build
 
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to start services"
+if [ "$?" -ne 0 ]; then
+    echo ""
+    echo "? Œÿ«: ‘—Ê⁄ ”—Ê?”ùÂ« ‰«„Ê›ﬁ »Êœ"
+    echo "?? œ” Ê— Œ—ÊÃ: docker compose down"
     exit 1
 fi
 
-# Wait for services to be ready
+# „‰ Ÿ— —«Âù«‰œ«“? ”—Ê?”ùÂ«
 echo ""
-echo "Waiting for services to initialize..."
-sleep 10
+echo "? ’»— »—«? ¬„«œÂ ‘œ‰ ”—Ê?”ùÂ« ( « 30 À«‰?Â)..."
+sleep 30
 
 echo ""
-echo "============================================"
-echo "HesabPak is now running!"
-echo "============================================"
+echo "??????????????????????????????????????????????????"
+echo "?        ? ”—Ê?”ùÂ«? HesabPak ‘—Ê⁄ ‘œ‰œ        ?"
+echo "??????????????????????????????????????????????????"
 echo ""
-echo "Access the application:"
-echo "  Web UI: http://localhost:3000"
-echo "  API Docs: http://localhost:8000/docs"
+echo "?? —«»ÿ ò«—»—? Ê»:"
+echo "   ?? http://localhost:3000"
 echo ""
-echo "Credentials:"
-echo "  Username: developer"
-echo "  Password: 09123506545"
+echo "?? „” ‰œ«  API (Swagger):"
+echo "   ?? http://localhost:8000/docs"
 echo ""
-echo "To stop services, run: docker compose down"
+echo "?? «ÿ·«⁄«  Ê—Êœ Å?‘ù›—÷:"
+echo "   ‰«„ ò«—»—?: developer"
+echo "   —„“ ⁄»Ê—: 09123506545"
+echo ""
+echo "??  ‰Ÿ?„«  Å«?ê«Âùœ«œÂ:"
+echo "   Host: db:5432"
+echo "   ‰«„: hesabpak"
+echo "   ò«—»—: postgres"
+echo "   —„“: postgres"
+echo ""
+echo "?? „ Êﬁ› ò—œ‰ ”—Ê?”ùÂ«:"
+echo "   œ” Ê—: docker compose down"
+echo ""
+echo "??  »—«?  Êﬁ›° Ctrl+C —« ›‘«— œÂ?œ"
 echo ""
 
-# Try to open browser
+# »«“ ò—œ‰ „—Ê—ê—
+echo "?? »«“ ò—œ‰ —«»ÿ ò«—»—?..."
 if command -v xdg-open &> /dev/null; then
-    # Linux
-    xdg-open http://localhost:3000 &
+    xdg-open "http://localhost:3000" &
 elif command -v open &> /dev/null; then
-    # macOS
-    open http://localhost:3000 &
+    open "http://localhost:3000" &
 fi
 
-echo "Services are running. Press Ctrl+C to stop."
+# ‰„«?‘ ·«êùÂ«
 docker compose logs -f

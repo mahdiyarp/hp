@@ -1,0 +1,30 @@
+/* Added by Copilot agent: global Persian font overrides and RTL enforcement helpers */
+
+/* Global font family for Farsi-friendly rendering */
+* {
+  font-family: "IRANSansX", "Vazirmatn", "IranYekan", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* Ensure English content uses proper fallback */
+:lang(en) {
+  font-family: "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* Ant Design / Material UI overrides (basic) */
+.ant-typography, .ant-btn, .ant-input, .ant-table, .ant-menu, .ant-select, .ant-tag {
+  font-family: "IRANSansX", "Vazirmatn", "IranYekan", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+}
+
+.MuiTypography-root, .MuiButton-root, .MuiInputBase-root, .MuiTable-root {
+  font-family: "IRANSansX", "Vazirmatn", "IranYekan", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* RTL helper: apply to top-level container if present */
+.rtl {
+  direction: rtl !important;
+  unicode-bidi: embed !important;
+  text-align: right !important;
+}

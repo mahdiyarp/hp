@@ -1,0 +1,63 @@
+﻿version: '3.9'
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hesabpak
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: hesabpak_redis
+    ports:
+      - '6379:6379'
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    image: hesabpak_backend
+    container_name: hesabpak_backend
+    ports:
+      - '8000:8000'
+    env_file:
+      - ./backend/.env
+    environment:
+      DEMO_SEED: "true"
+      # point backend to local redis
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  person_sync_consumer:
+    image: hesabpak_backend
+    container_name: hesabpak_person_sync_consumer
+    working_dir: /app
+    depends_on:
+      - redis
+      - backend
+    env_file:
+      - ./backend/.env
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+    command: ["python", "-u", "./scripts/person_sync_consumer.py"]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    image: hesabpak_frontend
+    container_name: hesabpak_frontend
+    ports:
+      - '3000:3000'
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:

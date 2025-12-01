@@ -1,0 +1,67 @@
+﻿server {
+  listen 3000;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Helpful safety and performance tweaks
+  sendfile off;
+  tcp_nopush on;
+  tcp_nodelay on;
+
+  # Ensure correct MIME types for webfonts
+  types {
+    text/html html;
+    text/css css;
+    application/javascript js;
+    font/woff2 woff2;
+    font/woff woff;
+    font/ttf ttf;
+    font/otf otf;
+    application/vnd.ms-fontobject eot;
+    image/svg+xml svg;
+    image/png png;
+    image/jpeg jpg jpeg;
+  }
+
+  # Serve fonts directly and allow cross-origin access
+  location ~* \.(?:woff2|woff|ttf|otf|eot|svg)$ {
+    try_files $uri =404;
+    access_log off;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
+    add_header Access-Control-Allow-Origin "*" always;
+    add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Origin, Accept, Content-Type" always;
+    # let nginx choose correct content-type from types{}
+    default_type "";
+  }
+
+  # Serve other static assets with long cache
+  location ~* \.(?:css|js|png|jpg|jpeg|gif|ico|json)$ {
+    try_files $uri =404;
+    access_log off;
+    add_header Cache-Control "public, max-age=31536000" always;
+  }
+
+  # SPA entrypoint - ensure index.html is served with correct headers (avoid download)
+  location / {
+    try_files $uri $uri/ /index.html;
+    # Make sure text/html has charset and not marked as attachment
+    types { text/html html; }
+    default_type text/html;
+    add_header Cache-Control 'no-store, no-cache, must-revalidate, proxy-revalidate' always;
+    add_header Pragma 'no-cache' always;
+    add_header Expires '0' always;
+  }
+
+  # Proxy API to backend service
+  location /api/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_pass http://backend:8000;
+  }
+}
+

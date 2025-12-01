@@ -1,0 +1,66 @@
+﻿#!/usr/bin/env python3
+"""
+اسکر?پت تصح?ح کدگذار? فارس? در تمام فا?ل‌ها? TypeScript و JSON
+"""
+
+import os
+import re
+from pathlib import Path
+
+# لغات شکسته و جا?گز?ن‌ها? صح?ح آن‌ها
+CORRUPTED_TO_CORRECT = {
+    # Dashboard متن‌ها
+    'ط¸ث†ط·آ±ط¸ث†ط·آ¯ ط·آ¨ط¸â€، ط·آ­ط·آ³ط·آ§ط·آ¨أ¢â‚¬إ'ط¸آ¾ط·آ§ط¹آ© ط¹آ©ط¸â€‍ط·آ§ط·آ³ط؛إ'ط¹آ©': 'س?ستم حسابدار? حساب‌پاک',
+    'ط·آ¯ط·آ±ط·آ­ط·آ§ط¸â€‍ ط·آ¢ط¸â€¦ط·آ§ط·آ¯': 'در حال آماده‌ساز?',
+    'ط¹â€ ط¸â€ ط·آ¯ ط¸â€‍ط·آ­ط·آ¸ط¸â€،': 'لطفا صبور باش?د',
+    
+    # عبارات مختلف
+    'ط·آ·ط¢آ²ط·آ¸أ¢â‚¬آ¦': 'در?افت',
+    'ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ¸أ¢â‚¬آ¦': 'سال مال?',
+    'ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·ط›ط¥â€™': 'امروز',
+}
+
+def fix_file(file_path):
+    """اصلاح ?ک فا?ل از کدگذار?‌ها? شکسته"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        original = content
+        
+        # جا?گز?ن? متن‌ها? شکسته
+        for corrupted, correct in CORRUPTED_TO_CORRECT.items():
+            content = content.replace(corrupted, correct)
+        
+        # اگر تغ??ر? رخ داد، فا?ل را ذخ?ره کن
+        if content != original:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return True
+        return False
+    except Exception as e:
+        print(f"خطا در {file_path}: {e}")
+        return False
+
+def process_directory(directory):
+    """تمام فا?ل‌ها? TypeScript و JSON را پردازش کن"""
+    fixed_count = 0
+    
+    for root, dirs, files in os.walk(directory):
+        # ناد?ده بگ?ر node_modules و .git
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'dist', 'build']]
+        
+        for file in files:
+            if file.endswith(('.tsx', '.ts', '.json')):
+                file_path = os.path.join(root, file)
+                if fix_file(file_path):
+                    print(f"? اصلاح شد: {file_path}")
+                    fixed_count += 1
+    
+    return fixed_count
+
+if __name__ == '__main__':
+    frontend_dir = Path(__file__).parent.parent / 'frontend' / 'src'
+    print(f"پردازش دا?رکتور?: {frontend_dir}")
+    count = process_directory(str(frontend_dir))
+    print(f"\nمجموعا {count} فا?ل اصلاح شد")

@@ -1,0 +1,150 @@
+﻿h#!/bin/bash
+# HesabPak Startup Script for Linux/Mac/Windows
+# نسخه بهبود ?افته برا? Docker
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+# ---------- رنگ و توابع لاگ ----------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log() { echo -e "${BLUE}[INFO]${NC} $*"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+err() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+success() { echo -e "${GREEN}[OK]${NC} $*"; }
+
+echo ""
+log "شروع سرو?س‌ها? HesabPak..."
+echo ""
+
+# ---------- بررس? پ?ش‌ن?ازها ----------
+MISSING=()
+need() { command -v "$1" >/dev/null 2>&1 || MISSING+=("$1"); }
+for c in docker docker-compose curl; do need "$c"; done
+
+if ((${#MISSING[@]})); then
+  err "ابزارها? موردن?از نصب ن?ستند: ${MISSING[*]}"
+  echo "لطفاً آن‌ها را نصب کن?د و دوباره اجرا نما??د."
+  exit 1
+fi
+success "تمام پ?ش‌ن?ازها موجود هستند"
+
+# ---------- بررس? و راه‌انداز? Docker ----------
+log "بررس? وضع?ت Docker..."
+if ! docker info >/dev/null 2>&1; then
+  warn "Docker در حال اجرا ن?ست، تلاش برا? راه‌انداز?..."
+  
+  # سع? برا? راه‌انداز? Docker
+  if command -v systemctl >/dev/null 2>&1; then
+    sudo systemctl start docker 2>/dev/null || warn "راه‌انداز? با systemctl ناموفق"
+  fi
+  
+  # منتظر بمان?د تا Docker آماده شود
+  sleep 5
+  
+  if ! docker info >/dev/null 2>&1; then
+    err "Docker هنوز آماده ن?ست. ابتدا Docker را اجرا کن?د."
+    exit 1
+  fi
+fi
+success "Docker در حال اجرا است"
+
+# ---------- بررس? docker-compose ----------
+log "بررس? docker-compose..."
+COMPOSE_CMD="docker-compose"
+if ! command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE_CMD="docker compose"
+  if ! docker compose version >/dev/null 2>&1; then
+    err "docker-compose ?ا docker compose ?افت نشد"
+    exit 1
+  fi
+fi
+success "docker-compose/compose آماده است: $COMPOSE_CMD"
+
+# ---------- بالا آوردن سرو?س‌ها ----------
+log "ساخت و اجرا? سرو?س‌ها (ممکن است ?-? دق?قه طول بکشد)..."
+if ! $COMPOSE_CMD up -d --build; then
+  err "اجرا? سرو?س‌ها ناموفق بود"
+  $COMPOSE_CMD logs --tail=50
+  exit 1
+fi
+success "کانت?نرها اجرا شدند"
+
+log "وضع?ت کانت?نرها:"
+$COMPOSE_CMD ps
+
+# ---------- هلس‌چک ----------
+wait_http() {
+  local url="$1"
+  local name="$2"
+  local timeout="${3:-60}"
+  local interval=3
+  local elapsed=0
+  
+  log "انتظار برا? آماده شدن $name رو? $url (حداکثر ${timeout}s)..."
+  
+  while (( elapsed < timeout )); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      success "$name آماده شد ?"
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
+  done
+  
+  warn "$name در زمان تع??ن‌شده آماده نشد"
+  return 1
+}
+
+log "بررس? سلامت سرو?س‌ها..."
+wait_http "http://localhost:8000/docs" "Backend API" 75 || true
+wait_http "http://localhost:3000" "Frontend" 60 || true
+
+# ---------- خلاصه ----------
+echo ""
+echo "============================================"
+echo "     ? HesabPak در حال اجرا است"
+echo "============================================"
+echo ""
+echo "?? دسترس?‌ها:"
+echo "  ?? Frontend:  http://localhost:3000"
+echo "  ?? Backend:   http://localhost:8000"
+echo "  ?? API Docs:  http://localhost:8000/docs"
+echo "  ?? ReDoc:     http://localhost:8000/redoc"
+echo ""
+echo "?? مشخصات ورود:"
+echo "  Username: developer"
+echo "  Password: 09123506545"
+echo ""
+echo "?? مد?ر?ت سرو?س‌ها:"
+echo "  توقف:     $COMPOSE_CMD down"
+echo "  لاگ‌ها:   $COMPOSE_CMD logs -f [backend|frontend|db]"
+echo "  وضع?ت:   $COMPOSE_CMD ps"
+echo ""
+echo "============================================"
+echo ""
+
+# ---------- باز کردن مرورگر ----------
+log "تلاش برا? باز کردن مرورگر..."
+if command -v xdg-open >/dev/null 2>&1; then
+  xdg-open http://localhost:3000 >/dev/null 2>&1 &
+  success "مرورگر Linux باز شد"
+elif command -v open >/dev/null 2>&1; then
+  open http://localhost:3000 >/dev/null 2>&1 &
+  success "مرورگر macOS باز شد"
+else
+  warn "ابزار باز کردن مرورگر خودکار ?افت نشد"
+  echo "لطفاً دست? مرورگر را باز کن?د:"
+  echo "  Frontend:  http://localhost:3000"
+  echo "  API Docs:  http://localhost:8000/docs"
+fi
+
+# ---------- نما?ش لاگ‌ها? ترک?ب? ----------
+echo ""
+log "نما?ش لاگ‌ها? سرو?س‌ها (Ctrl+C برا? خروج)..."
+echo ""
+$COMPOSE_CMD logs -f

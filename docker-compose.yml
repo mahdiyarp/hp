@@ -2,23 +2,41 @@ version: '3.9'
 services:
   db:
     image: postgres:15-alpine
+    container_name: hesabpak_db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: hesabpak
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - hesabpak-network
 
   redis:
     image: redis:7-alpine
     container_name: hesabpak_redis
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    networks:
+      - hesabpak-network
 
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
+    image: hesabpak_backend:latest
     container_name: hesabpak_backend
     ports:
       - '8000:8000'
@@ -26,32 +44,56 @@ services:
       - ./backend/.env
     environment:
       DEMO_SEED: "true"
-      # point backend to local redis
       REDIS_URL: "redis://redis:6379/0"
+      DATABASE_URL: "postgresql+psycopg2://postgres:postgres@db:5432/hesabpak"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - hesabpak-network
 
   person_sync_consumer:
-    image: hesabpak_backend
+    image: hesabpak_backend:latest
     container_name: hesabpak_person_sync_consumer
-    depends_on:
-      - redis
-      - backend
+    working_dir: /app
     env_file:
       - ./backend/.env
-    command: ["python", "-u", "./backend/scripts/person_sync_consumer.py"]
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      DATABASE_URL: "postgresql+psycopg2://postgres:postgres@db:5432/hesabpak"
+    command: ["python", "-u", "./scripts/person_sync_consumer.py"]
+    depends_on:
+      - backend
+      - redis
     restart: unless-stopped
+    networks:
+      - hesabpak-network
 
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
+    image: hesabpak_frontend:latest
     container_name: hesabpak_frontend
     ports:
       - '3000:3000'
     depends_on:
       - backend
+    restart: unless-stopped
+    networks:
+      - hesabpak-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   db_data:
+
+networks:
+  hesabpak-network:
+    driver: bridge

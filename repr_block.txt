@@ -1,0 +1,9 @@
+··················{methodOptions.map(opt·=>·(
+····················<option·key={opt.value}·value={opt.value}>
+······················{opt.label}
+····················</option>
+··················))}
+················</select>
+··············</div>
+··················<option·value="other">سایر</option>
+'                  {methodOptions.map(opt => (\n                    <option key={opt.value} value={opt.value}>\n                      {opt.label}\n                    </option>\n                  ))}\n                </select>\n              </div>\n                  <option value="other">سایر</option>'

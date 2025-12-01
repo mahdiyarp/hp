@@ -1,16 +1,50 @@
-# Thin compatibility shim so `import app` resolves to `backend.app` when running tests from repo root.
-# This avoids changing sys.path or test commands.
-
+# Compatibility shim so `import app` works both in monorepo layout (`backend/app`)
+# and when the code is copied/flattened to `/app`.
 import importlib
-_backend_app = importlib.import_module('backend.app')
+import sys
 
-# re-export frequently used submodules
-from backend.app import db as db
-from backend.app import models as models
-from backend.app import crud as crud
-from backend.app import schemas as schemas
-from backend.app import main as main
-from backend.app import rate_limit as rate_limit
-from backend.app import search as search
+try:
+    importlib.import_module('backend.app')
+    base_prefix = 'backend.app'
+except ModuleNotFoundError:
+    base_prefix = 'app'
 
-__all__ = ['db', 'models', 'crud', 'schemas', 'main', 'rate_limit', 'search']
+db = importlib.import_module(f'{base_prefix}.db')
+models = importlib.import_module(f'{base_prefix}.models')
+crud = importlib.import_module(f'{base_prefix}.crud')
+schemas = importlib.import_module(f'{base_prefix}.schemas')
+core = importlib.import_module(f'{base_prefix}.core')
+sys.modules['app.core'] = core
+accounting = importlib.import_module(f'{base_prefix}.accounting')
+sys.modules['app.accounting'] = accounting
+sys.modules['app.db'] = db
+settings = importlib.import_module(f'{base_prefix}.settings')
+sys.modules['app.settings'] = settings
+services = importlib.import_module(f'{base_prefix}.services')
+sys.modules['app.services'] = services
+sms_router = importlib.import_module(f'{base_prefix}.sms_router')
+sys.modules['app.sms_router'] = sms_router
+api = importlib.import_module(f'{base_prefix}.api')
+sys.modules['app.api'] = api
+models_smart = importlib.import_module(f'{base_prefix}.models_smart')
+sys.modules['app.models_smart'] = models_smart
+main = importlib.import_module(f'{base_prefix}.main')
+rate_limit = importlib.import_module(f'{base_prefix}.rate_limit')
+search = importlib.import_module(f'{base_prefix}.search')
+
+__all__ = [
+    'db',
+    'models',
+    'crud',
+    'schemas',
+    'main',
+    'rate_limit',
+    'search',
+    'accounting',
+    'core',
+    'settings',
+    'sms_router',
+    'api',
+    'services',
+    'models_smart',
+]

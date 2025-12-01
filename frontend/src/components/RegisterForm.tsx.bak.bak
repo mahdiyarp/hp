@@ -1,0 +1,251 @@
+import React, { useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { useI18n } from '../i18n/I18nContext'
+import {
+  retroButton,
+  retroHeading,
+  retroInput,
+  retroLabel,
+  retroPanelPadded,
+  retroMuted,
+} from './retroTheme'
+
+type OtpResponse = {
+  session_id?: string
+  detail?: string
+}
+
+type VerifyResponse = {
+  success?: boolean
+  detail?: string
+}
+
+export default function RegisterForm({ onSuccess }: { onSuccess?: () => void }) {
+  const { login } = useAuth()
+  const { t } = useI18n()
+  const [step, setStep] = useState<'phone' | 'otp' | 'details'>('phone')
+  const [mobile, setMobile] = useState('')
+  const [otp, setOtp] = useState('')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function requestOTP() {
+    if (!mobile || mobile.length < 10) {
+      setError('ط·آ´ط¸â€¦ط·آ§ط·آ±ط¸â€، ط¸â€¦ط¸ث†ط·آ¨ط·آ§ط·آ¦ط¸â€‍ ط·آ¯ط·آ±ط·آ³ط·ع¾ ط¸â€ ط؛إ’ط·آ³ط·ع¾')
+      return
+    }
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const res = await fetch('/api/auth/register-mobile-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile }),
+      })
+
+      const data = (await res.json()) as OtpResponse
+      if (!res.ok) {
+        throw new Error(data.detail || 'ط·آ¯ط·آ±ط·آ®ط¸ث†ط·آ§ط·آ³ط·ع¾ ط¸â€ ط·آ§ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑ')
+      }
+
+      setStep('otp')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ط·آ®ط·آ±ط·آ§ط·آ¨ط؛إ’ ط·آ¯ط·آ± ط·آ¯ط·آ±ط·آ®ط¸ث†ط·آ§ط·آ³ط·ع¾')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function verifyAndRegister(e: React.FormEvent) {
+    e.preventDefault()
+    
+    if (!otp || otp.length !== 6) {
+      setError('OTP 6 ط؛ظ¾ط¸â€ ط·آ¯ط·آ³ط؛â€™ ط؛ظ¾ط¸ث†ط¸â€ ط·آ§ ط¹â€ ط·آ§ط؛ظ¾ط؛إ’ط؛â€™')
+      return
+    }
+    
+    if (!username || username.length < 3) {
+      setError('ط·آµط·آ§ط·آ±ط¸ظ¾ ط¸â€ ط·آ§ط¸â€¦ ط¹آ©ط¸â€¦ ط·آ§ط·آ² ط¹آ©ط¸â€¦ 3 ط·آ­ط·آ±ط¸ث†ط¸ظ¾ ط؛ظ¾ط¸ث†')
+      return
+    }
+    
+    if (!password || password.length < 6) {
+      setError('ط¸آ¾ط·آ§ط·آ³ ط¸ث†ط·آ±ط¹ث† ط¹آ©ط¸â€¦ ط·آ§ط·آ² ط¹آ©ط¸â€¦ 6 ط·آ­ط·آ±ط¸ث†ط¸ظ¾ ط؛ظ¾ط¸ث†')
+      return
+    }
+    
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const res = await fetch('/api/auth/register-mobile-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mobile,
+          otp_code: otp,
+          username,
+          password,
+          full_name: fullName || username,
+        }),
+      })
+      
+      const data = (await res.json()) as VerifyResponse
+      if (!res.ok) {
+        throw new Error(data.detail || 'ط·آ±ط·آ¬ط·آ³ط¸آ¹ط·آ±ط؛إ’ط·آ´ط¸â€  ط¸â€ ط·آ§ط¸â€¦ط¸ث†ط¸ظ¾ط¸â€ڑ')
+      }
+
+      if (data.success) {
+        // Auto-login
+        await login(username, password)
+        if (onSuccess) onSuccess()
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ط·آ®ط·آ±ط·آ§ط·آ¨ط؛إ’')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (step === 'phone') {
+    return (
+      <div className="w-full max-w-md">
+        <div className={`${retroPanelPadded} space-y-5`}>
+          <header className="space-y-2 text-right">
+            <p className={retroHeading}>{t('registration')}</p>
+            <h2 className="text-2xl font-semibold text-[#1f2e3b]">ط·آµط·آ§ط·آ±ط¸ظ¾ ط·آ¨ط¸â€ ط·آ§ط·آ¦ط؛إ’ط¹ط›</h2>
+            <p className={`text-xs ${retroMuted}`}>
+              ط·آ´ط¸â€¦ط·آ§ط·آ±ط¸â€، ط¸â€¦ط¸ث†ط·آ¨ط·آ§ط·آ¦ط¸â€‍ ط·آ¯ط·آ±ط·آ¬ ط¹آ©ط·آ±ط؛إ’ط¹ط›ط؛â€‌ ط؛ظ¾ط¸â€¦ OTP ط·آ¨ط¹آ¾ط؛إ’ط·آ¬ط؛إ’ط¹ط› ط¹آ¯ط؛â€™ط؛â€‌
+            </p>
+          </header>
+
+          <div>
+            <label className={retroLabel}>ط·آ´ط¸â€¦ط·آ§ط·آ±ط¸â€، ط¸â€¦ط¸ث†ط·آ¨ط·آ§ط·آ¦ط¸â€‍</label>
+            <input
+              type="tel"
+              value={mobile}
+              onChange={e => setMobile(e.target.value)}
+              className={`${retroInput} w-full`}
+              placeholder="9123456789"
+              inputMode="numeric"
+            />
+            <p className={`mt-2 text-[10px] ${retroMuted}`}>
+              ط·آ¨ط·ط›ط؛إ’ط·آ± ط·آµط¸ظ¾ط·آ± ط¹آ©ط؛â€™ ط؛إ’ط·آ§ +98 ط¹آ©ط؛â€™ ط·آ³ط·آ§ط·ع¾ط¹آ¾ ط·آ´ط·آ±ط¸ث†ط·آ¹ ط¹آ©ط·آ±ط؛إ’ط¹ط›
+            </p>
+          </div>
+
+          {error && (
+            <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+              {error}
+            </div>
+          )}
+
+          <button
+            className={`${retroButton} w-full`}
+            onClick={requestOTP}
+            disabled={loading}
+            type="button"
+          >
+            {loading ? 'ط·آ¨ط¹آ¾ط؛إ’ط·آ¬ط·آ§ ط·آ¬ط·آ§ ط·آ±ط؛ظ¾ط·آ§ ط؛ظ¾ط؛â€™...' : 'OTP ط·آ¨ط¹آ¾ط؛إ’ط·آ¬ط؛إ’ط¹ط›'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'otp') {
+    return (
+      <div className="w-full max-w-md">
+        <form onSubmit={verifyAndRegister} className={`${retroPanelPadded} space-y-5`}>
+          <header className="space-y-2 text-right">
+            <p className={retroHeading}>ط·ع¾ط·آµط·آ¯ط؛إ’ط¸â€ڑ ط¹آ©ط·آ±ط؛إ’ط¹ط›</p>
+            <h2 className="text-2xl font-semibold text-[#1f2e3b]">OTP ط·آ¯ط·آ±ط·آ¬ ط¹آ©ط·آ±ط؛إ’ط¹ط›</h2>
+            <p className={`text-xs ${retroMuted}`}>
+              {mobile} ط¸آ¾ط·آ± ط·آ¨ط¹آ¾ط؛إ’ط·آ¬ط·آ§ ط¹آ¯ط؛إ’ط·آ§ 6 ط؛ظ¾ط¸â€ ط·آ¯ط·آ³ط؛â€™ ط¹آ©ط·آ§ ط¹آ©ط¸ث†ط¹ث† ط·آ¯ط·آ±ط·آ¬ ط¹آ©ط·آ±ط؛إ’ط¹ط›ط؛â€‌
+            </p>
+          </header>
+
+          <div className="space-y-4">
+            <div>
+              <label className={retroLabel}>OTP ط¹آ©ط¸ث†ط¹ث†</label>
+              <input
+                value={otp}
+                onChange={e => setOtp(e.target.value.slice(0, 6))}
+                className={`${retroInput} w-full tracking-[0.6em] text-center text-2xl font-bold`}
+                placeholder="000000"
+                inputMode="numeric"
+                pattern="\d{6}"
+              />
+            </div>
+
+            <div>
+              <label className={retroLabel}>ط·آµط·آ§ط·آ±ط¸ظ¾ ط¸â€ ط·آ§ط¸â€¦</label>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className={`${retroInput} w-full`}
+                placeholder="username"
+              />
+            </div>
+
+            <div>
+              <label className={retroLabel}>ط¸آ¾ط·آ§ط·آ³ ط¸ث†ط·آ±ط¹ث†</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className={`${retroInput} w-full`}
+                placeholder="أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢أ¢â‚¬آ¢"
+              />
+            </div>
+
+            <div>
+              <label className={retroLabel}>ط¸â€¦ط¹آ©ط¸â€¦ط¸â€‍ ط¸â€ ط·آ§ط¸â€¦ (ط·آ§ط·آ®ط·ع¾ط؛إ’ط·آ§ط·آ±ط؛إ’)</label>
+              <input
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className={`${retroInput} w-full`}
+                placeholder="ط¸â€ ط·آ§ط¸â€¦"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <button
+              className={`${retroButton} w-full`}
+              type="submit"
+              disabled={loading}
+            >
+              {loading ? 'ط·آ±ط·آ¬ط·آ³ط¸آ¹ط·آ± ط؛ظ¾ط¸ث† ط·آ±ط؛ظ¾ط؛â€™ ط؛ظ¾ط؛إ’ط¹ط›...' : 'ط·آµط·آ§ط·آ±ط¸ظ¾ ط·آ¨ط¸â€ ط·آ§ط·آ¦ط؛إ’ط¹ط› ط·آ§ط¸ث†ط·آ± ط¸ث†ط·آ±ط¸ث†ط·آ¯ ط¹آ©ط·آ±ط؛إ’ط¹ط›'}
+            </button>
+
+            <button
+              className={`${retroButton} !bg-[#5b4a2f] w-full`}
+              type="button"
+              onClick={() => {
+                setStep('phone')
+                setError(null)
+              }}
+              disabled={loading}
+            >
+              ط¸ث†ط·آ§ط¸آ¾ط·آ³ ط·آ¬ط·آ§ط·آ¦ط؛إ’ط¹ط›
+            </button>
+          </div>
+        </form>
+      </div>
+    )
+  }
+
+  return null
+}

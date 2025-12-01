@@ -1,0 +1,16 @@
+﻿/* Force IranYekan globally (additive) */
+* {
+  font-family: "IranYekan", sans-serif !important;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+.ant-typography,
+.MuiTypography-root,
+button,
+input,
+textarea,
+table,
+.chart-label {
+  font-family: "IranYekan", sans-serif !important;
+}

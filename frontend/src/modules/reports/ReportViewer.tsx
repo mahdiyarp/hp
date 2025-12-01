@@ -1,0 +1,44 @@
+import React, { useEffect, useState } from 'react'
+import { apiGet } from '../../services/api'
+import ChartRenderer from './ChartRenderer'
+
+type SalesApi = {
+  summary: Record<string, unknown> | null
+  series?: { series?: Array<{ date: string; total: number }> }
+}
+
+export default function ReportViewer() {
+  const [summary, setSummary] = useState<Record<string, unknown> | null>(null)
+  const [series, setSeries] = useState<Array<{ date: string; total: number }>>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { void load() }, [])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await apiGet<unknown>('/api/reports/sales')
+      const body = res as SalesApi
+      setSummary(body.summary ?? null)
+      setSeries((body.series && body.series.series) || [])
+    } catch (e) {
+      console.error(e)
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div>
+      {loading ? <div>در حال بارگذار?...</div> : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="col-span-2">
+            <ChartRenderer data={series} />
+          </div>
+          <div className="p-3 border bg-[#faf4de]">
+            <h3 className="font-semibold">خلاصه</h3>
+            <pre className="text-xs">{JSON.stringify(summary, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

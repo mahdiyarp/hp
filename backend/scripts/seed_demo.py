@@ -177,12 +177,13 @@ def seed():
                         })
 
                 invoice_type = 'sale' if i % 2 == 0 else 'purchase'
+                # ensure client_time is a string to match InvoiceCreate schema
                 payload = schemas.InvoiceCreate(
                     invoice_type=invoice_type,
                     mode='manual',
                     party_name=persons[i-1].name,
                     party_id=persons[i-1].id,
-                    client_time=datetime.now(timezone.utc),
+                    client_time=datetime.now(timezone.utc).isoformat(),
                     items=[schemas.InvoiceItemCreate(**it) for it in inv_items],
                     note='Demo invoice'
                 )
@@ -216,7 +217,7 @@ def seed():
                 method='cash',
                 amount=random.randint(250000, 1200000),
                 reference=None,
-                client_time=datetime.now(timezone.utc),
+                client_time=datetime.now(timezone.utc).isoformat(),
                 note='Demo payment'
             )
             p = crud.create_payment_manual(session, pay_payload)

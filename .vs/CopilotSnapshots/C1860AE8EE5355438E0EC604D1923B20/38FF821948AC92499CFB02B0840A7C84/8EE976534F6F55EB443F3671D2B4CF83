@@ -1,0 +1,40 @@
+﻿from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from ..db import get_db
+from .. import crud, models
+from ..main import require_permissions, get_current_user
+
+router = APIRouter(prefix='/api/reports', tags=['reports'])
+
+@router.get('/sales')
+def sales_report(start: Optional[str] = None, end: Optional[str] = None, db=Depends(get_db), current=Depends(get_current_user)):
+    require_permissions(['finance_report'])(current)
+    # parse ISO datetimes in crud.report_pnl uses datetimes; reuse existing helper in main if exposed
+    from ..main import _parse_iso_dt
+    s = _parse_iso_dt(start)
+    e = _parse_iso_dt(end)
+    # For sales report we return dataset + chart-friendly series
+    pnl = crud.report_pnl(db, start=s, end=e)
+    series = crud.dashboard_sales_trends(db, days=30)  # default series
+    return {'summary': pnl, 'series': series}
+
+@router.get('/pnl')
+def pnl_report(start: Optional[str] = None, end: Optional[str] = None, db=Depends(get_db), current=Depends(get_current_user)):
+    require_permissions(['finance_report'])(current)
+    from ..main import _parse_iso_dt
+    s = _parse_iso_dt(start)
+    e = _parse_iso_dt(end)
+    out = crud.report_pnl(db, start=s, end=e)
+    return out
+
+@router.get('/stock')
+def stock_report(db=Depends(get_db), current=Depends(get_current_user)):
+    require_permissions(['finance_report'])(current)
+    out = crud.report_stock_valuation(db)
+    return out
+
+@router.get('/cash')
+def cash_report(method: Optional[str] = None, db=Depends(get_db), current=Depends(get_current_user)):
+    require_permissions(['finance_report'])(current)
+    out = crud.report_cash_balance(db, method=method)
+    return out

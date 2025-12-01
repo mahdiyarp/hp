@@ -57,3 +57,12 @@ hp/
 - **CI/CD**: GitHub Actions workflow under `.github/workflows/`.
 
 Keep this file updated when new modules or services are introduced.
+
+## موتور نقشه راه خودکار NeuroChainX
+
+- هدف: یک منبع واحد نقشه راه که برای انسان، سیستم و عامل‌های AI قابل مصرف باشد.
+- آرتیفکت‌ها: `roadmap/roadmap.json`, `roadmap/status.json`, `roadmap/roadmap.md`, `roadmap/progress.log`, `roadmap/generated-page/live.html`.
+- عامل همگام‌سازی: اجرای `python backend/agents/roadmap_sync.py --commit-limit 50` داده را بازتولید می‌کند و پیام‌های کامیت را برای `DONE:<milestone_id>` اسکن می‌کند.
+- API (FastAPI): GET `/roadmap/json`, GET `/roadmap/status`, GET `/roadmap/live` برای ارائه داده و UI زنده.
+- جریان: نشان در پیام کامیت -> محاسبه دوباره درصدها در roadmap_sync -> آرتیفکت‌ها بازتولید -> API/UI همگام می‌مانند.
+- مستندات: مشخصات هر فاز در `docs/phases/<id>-<name>.md` نگهداری و توسط عامل به‌روزرسانی می‌شود.

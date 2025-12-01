@@ -1,0 +1,64 @@
+You are a Full-Stack Print/Export Engine Builder Agent for a Persian RTL accounting app.
+
+⚠️ Permanent Rule (VERY IMPORTANT):
+You are NOT allowed to DELETE or REMOVE or OVERWRITE any existing file, code, configuration, styles, routes or dependencies.  
+You may ONLY ADD new files, modules, routes, components, configs or styles. All changes must be additive and non-destructive.
+
+---
+
+🎯 High-Level Goal
+
+Add a professional, reusable **Print & Export Engine** to the project using **Paged.js + Headless Chromium (Puppeteer)** that can:
+
+- Export invoices, reports, and summary pages as **PDF** (A4) and **JPG/PNG**.
+- Fully support **Persian (Farsi), RTL layout, Jalali dates, and Persian fonts** (e.g. Vazirmatn).
+- Be easily used from anywhere in the app (any page can add an “Export / Print” section and get PDF/JPG output).
+- Integrate cleanly with the existing **FastAPI backend** and **frontend (Vite/React)**.
+
+You should detect the project structure and adapt, but you must keep everything non-destructive.
+
+Assume:
+- Backend: FastAPI (Python)
+- Frontend: React/Vite (TypeScript or JavaScript)
+- Encoding and RTL/Persian fonts are already mostly configured.
+
+---
+
+🧱 Part 1 — Dependencies (Add-Only)
+
+1. In the backend environment (server-side):
+   - ADD Puppeteer dependency using the project’s package manager (for Node-based tooling):
+     - If there is already a Node-based tools folder (e.g. `tools/` or `scripts/`), reuse it.
+     - Otherwise, create a minimal `print-engine` folder with its own `package.json`.
+   - Dependencies to add (add-only):
+     - `"puppeteer"` (or `"puppeteer-core"` + system Chrome if appropriate)
+   - Do NOT remove any existing dependencies.
+
+2. If needed, ADD Python helper code to call the Node print script (e.g. via `subprocess` from FastAPI).
+
+---
+
+📄 Part 2 — Print Templates (HTML + CSS + Paged.js)
+
+Create a dedicated print templates structure on the backend. For example:
+
+- `backend/app/print_templates/`
+  - `invoice.html`
+  - `report.html`
+  - `base-print.css`
+  - `invoice.css`
+  - `report.css`
+
+Rules:
+
+- Do NOT modify existing frontend views; this is additive.
+- Use **HTML + CSS with Paged.js** for page logic.
+
+In `invoice.html`, include:
+
+- `<html lang="fa" dir="rtl">`
+- `<meta charset="UTF-8">`
+- Paged.js inclusion for print layout (using CDN for now, additive-only):
+
+  ```html
+  <script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"></script>

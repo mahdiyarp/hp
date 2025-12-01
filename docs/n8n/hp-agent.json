@@ -1,0 +1,458 @@
+{
+  "name": "Hesabpak Agent FA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hesabpak-agent",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {
+          "responseContentType": "application/json"
+        }
+      },
+      "id": "1",
+      "name": "Webhook In",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/auth/login",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "options": {
+          "timeout": 30
+        },
+        "bodyParametersJson": "={{ JSON.stringify({ username: $env.HP_USER || \"admin\", password: $env.HP_PASS || \"admin\" }) }}"
+      },
+      "id": "2",
+      "name": "Login JWT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{ ($env.LLM_BASE_URL || \"http://localhost:11434/v1\") + '/chat/completions' }}",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.LLM_API_KEY ? 'Bearer ' + $env.LLM_API_KEY : '' }}"
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ JSON.stringify({ model: $env.LLM_MODEL || 'llama-3-8b-instruct', temperature: 0.2, max_tokens: 400, messages: [ {role: 'system', content: 'You are a Persian accounting agent for Hesabpak. Respond only with JSON. Fields: action in [invoice.create, payment.create, report.pnl, search.product, assistant.chat] and payload with needed data. If unsure, use assistant.chat. Keep Jalali (Shamsi) dates untouched. Answer in Persian (fa).'}, {role: 'user', content: $json.body?.text || $json.body?.message || $json.body || $json} ] }) }}"
+      },
+      "id": "3",
+      "name": "LLM Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "mergeByPosition"
+      },
+      "id": "4",
+      "name": "Merge Token+NLP",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [
+        -980,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const raw = items[0].json;\nconst choice = raw.choices?.[0]?.message?.content || raw.message?.content || raw;\nlet parsed = {};\ntry {\n  parsed = typeof choice === 'string' ? JSON.parse(choice) : choice;\n} catch (e) {\n  parsed = { action: 'assistant.chat', payload: { message: choice } };\n}\nconst action = parsed.action || 'assistant.chat';\nconst payload = parsed.payload ?? parsed;\nreturn [{ json: { action, payload } }];"
+      },
+      "id": "5",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1020,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "value2": "invoice.create"
+            }
+          ]
+        }
+      },
+      "id": "6",
+      "name": "If Invoice",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "value2": "payment.create"
+            }
+          ]
+        }
+      },
+      "id": "7",
+      "name": "If Payment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "value2": "report.pnl"
+            }
+          ]
+        }
+      },
+      "id": "8",
+      "name": "If Report",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "value2": "search.product"
+            }
+          ]
+        }
+      },
+      "id": "9",
+      "name": "If Search",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/invoices/manual",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "10",
+      "name": "Create Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/payments/manual",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ JSON.stringify($json.payload) }}"
+      },
+      "id": "11",
+      "name": "Create Payment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -280,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "GET",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/reports/pnl",
+        "responseFormat": "json",
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "queryParametersUi": {
+          "parameter": [
+            {
+              "name": "from_date",
+              "value": "={{$json.payload?.from_date}}"
+            },
+            {
+              "name": "to_date",
+              "value": "={{$json.payload?.to_date}}"
+            }
+          ]
+        }
+      },
+      "id": "12",
+      "name": "Report PnL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -60
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/search",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ JSON.stringify({ query: $json.payload?.q, module: 'products' }) }}"
+      },
+      "id": "13",
+      "name": "Search Product",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        200,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "none",
+        "method": "POST",
+        "url": "={{$env.HP_BASE_URL || \"http://localhost:8000\"}}/api/assistant/chat",
+        "responseFormat": "json",
+        "jsonParameters": true,
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "bodyParametersJson": "={{ JSON.stringify({ message: $json.payload?.message || $json.payload, mode: 'agent' }) }}"
+      },
+      "id": "14",
+      "name": "Assistant Fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        440,
+        60
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook In": {
+      "main": [
+        [
+          {
+            "node": "Login JWT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "LLM Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Login JWT": {
+      "main": [
+        [
+          {
+            "node": "Merge Token+NLP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Intent": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Merge Token+NLP",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Token+NLP": {
+      "main": [
+        [
+          {
+            "node": "If Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Invoice": {
+      "main": [
+        [
+          {
+            "node": "Create Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Payment": {
+      "main": [
+        [
+          {
+            "node": "Create Payment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Report": {
+      "main": [
+        [
+          {
+            "node": "Report PnL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Search": {
+      "main": [
+        [
+          {
+            "node": "Search Product",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assistant Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Tehran"
+  }
+}

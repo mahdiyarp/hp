@@ -1,0 +1,52 @@
+﻿import os
+import json
+import types
+import pytest
+import sys
+
+from app import crud
+
+
+class DummyRedis:
+    def __init__(self):
+        self.published = []
+    def from_url(self, url):
+        return self
+    def publish(self, channel, data):
+        self.published.append((channel, data))
+
+
+class DummyRequestsModule:
+    def __init__(self):
+        self.calls = []
+    def post(self, url, json=None, timeout=None):
+        self.calls.append((url, json))
+        class R: pass
+        return R()
+
+
+def test_notify_person_sync_uses_redis_and_webhook(monkeypatch, tmp_path):
+    # Setup env
+    monkeypatch.setenv('REDIS_URL', 'redis://localhost:6379/0')
+    monkeypatch.setenv('PERSON_SYNC_WEBHOOK', 'http://example.local/hook')
+
+    dredis = DummyRedis()
+    dummy_redis_mod = types.SimpleNamespace(from_url=dredis.from_url)
+
+    dummy_requests = DummyRequestsModule()
+
+    monkeypatch.setitem(sys.modules, 'redis', dummy_redis_mod)
+    monkeypatch.setitem(sys.modules, 'requests', dummy_requests)
+
+    # Call helper
+    crud.notify_person_sync('person-1', {'balance_updated': True})
+
+    # Background thread may run briefly; wait small
+    import time
+    time.sleep(0.2)
+
+    # Assert redis publish recorded
+    assert any(ch == 'person_sync' for ch, _ in dredis.published)
+
+    # Assert webhook call recorded
+    assert any('http://example.local/hook' == call[0] for call in dummy_requests.calls)

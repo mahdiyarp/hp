@@ -1,0 +1,758 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-45cccdc4-3834-46bc-9b83-56d231d35302.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_all_persian_encoding.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:tools\\fix_all_persian_encoding.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:docker-compose.yml||{06C066C6-04A2-4E5D-8202-439FD4234EF1}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\dashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\styles\\dashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\components\\CustomizableDashboard.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\components\\CustomizableDashboard.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\persian-fonts-fix.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\styles\\persian-fonts-fix.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-03132b79-711e-49b6-87bd-7bc7bf987536.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\index.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\index.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\iranYekan-force.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\styles\\iranYekan-force.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\combined-persian-fonts.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\styles\\combined-persian-fonts.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\main.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\main.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\__init__.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\reports\\__init__.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\router.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\reports\\router.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\engine.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\reports\\engine.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\export\\csv.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\reports\\export\\csv.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\main.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\index.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\index.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportFilters.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\ReportFilters.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportViewer.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\ReportViewer.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ChartRenderer.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\ChartRenderer.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\en.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\i18n\\en.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\fa.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\i18n\\fa.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\ku.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\reports\\i18n\\ku.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docs\\reports.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:docs\\reports.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\types\\react-grid-layout.d.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\types\\react-grid-layout.d.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\auth.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\app\\auth.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\nginx.conf||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\nginx.conf||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.bat||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:start.bat||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\Dockerfile||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\Dockerfile||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\README-FRONTEND.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\README-FRONTEND.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_encodings.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:tools\\fix_encodings.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_i18n.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:tools\\fix_i18n.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\translations.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\i18n\\translations.ts||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\DashboardModule.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\modules\\DashboardModule.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\.env||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:backend\\.env||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\App.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\App.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\README.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:README.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.sh||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:start.sh||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\.env.run||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:.env.run||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\check_structure.py||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:check_structure.py||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\QUICK_START.sh||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:QUICK_START.sh||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\cleanup.sh||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:cleanup.sh||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\I18nContext.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\src\\i18n\\I18nContext.tsx||{0F2454B1-A556-402D-A7D0-1FDE7F99DEE0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\package-lock.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:frontend\\package-lock.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Mahdi\\AppData\\Local\\Temp\\CopilotBaseline\\Deleted\\622734953\\package-lock.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 2571,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 6,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{c6f34f0d-7ae5-4f3a-be61-fe0c21ae9eb8}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{aa2115a1-9712-457b-9047-dbb71ca2cdd2}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 44,
+              "Title": "package-lock.json",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\CopilotBaseline\\Deleted\\622734953\\package-lock.json",
+              "RelativeDocumentMoniker": "..\\..\\..\\..\\AppData\\Local\\Temp\\CopilotBaseline\\Deleted\\622734953\\package-lock.json",
+              "ToolTip": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\CopilotBaseline\\Deleted\\622734953\\package-lock.json",
+              "RelativeToolTip": "..\\..\\..\\..\\AppData\\Local\\Temp\\CopilotBaseline\\Deleted\\622734953\\package-lock.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-26T15:03:42.253Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 43,
+              "Title": "package-lock.json",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\package-lock.json",
+              "RelativeDocumentMoniker": "frontend\\package-lock.json",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\package-lock.json",
+              "RelativeToolTip": "frontend\\package-lock.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-26T15:03:41.42Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 42,
+              "Title": "I18nContext.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\I18nContext.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\i18n\\I18nContext.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\I18nContext.tsx",
+              "RelativeToolTip": "frontend\\src\\i18n\\I18nContext.tsx",
+              "ViewState": "AgIAAGQAAAAAAAAAAABRwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-25T14:25:45.264Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "plan-45cccdc4-3834-46bc-9b83-56d231d35302.md",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-45cccdc4-3834-46bc-9b83-56d231d35302.md",
+              "RelativeDocumentMoniker": "..\\..\\..\\..\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-45cccdc4-3834-46bc-9b83-56d231d35302.md",
+              "ToolTip": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-45cccdc4-3834-46bc-9b83-56d231d35302.md",
+              "RelativeToolTip": "..\\..\\..\\..\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-45cccdc4-3834-46bc-9b83-56d231d35302.md",
+              "ViewState": "AgIAAA8AAAAAAAAAAAAAAA8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2025-11-25T14:21:13.562Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 41,
+              "Title": "cleanup.sh",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\cleanup.sh",
+              "RelativeDocumentMoniker": "cleanup.sh",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\cleanup.sh",
+              "RelativeToolTip": "cleanup.sh",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACMAAAAAAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|",
+              "WhenOpened": "2025-11-25T12:47:55.812Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 40,
+              "Title": "QUICK_START.sh",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\QUICK_START.sh",
+              "RelativeDocumentMoniker": "QUICK_START.sh",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\QUICK_START.sh",
+              "RelativeToolTip": "QUICK_START.sh",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACEAAAAAAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|",
+              "WhenOpened": "2025-11-25T12:47:46.235Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 39,
+              "Title": "check_structure.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\check_structure.py",
+              "RelativeDocumentMoniker": "check_structure.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\check_structure.py",
+              "RelativeToolTip": "check_structure.py",
+              "ViewState": "AgIAAEMAAAAAAAAAAIBJwEUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-25T12:47:14.531Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 38,
+              "Title": ".env.run",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\.env.run",
+              "RelativeDocumentMoniker": ".env.run",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\.env.run",
+              "RelativeToolTip": ".env.run",
+              "ViewState": "AgIAAB0AAAAAAAAAAABBwB4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-11-25T12:46:50.408Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 37,
+              "Title": "start.sh",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.sh",
+              "RelativeDocumentMoniker": "start.sh",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.sh",
+              "RelativeToolTip": "start.sh",
+              "ViewState": "AgIAAFMAAAAAAAAAAABRwAYAAAAAAAAAAAAAAA==",
+              "Icon": "00000000-0000-0000-0000-000000000000.000000|",
+              "WhenOpened": "2025-11-25T12:45:57.116Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 36,
+              "Title": "README.md",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\README.md",
+              "RelativeDocumentMoniker": "README.md",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\README.md",
+              "RelativeToolTip": "README.md",
+              "ViewState": "AgIAAD0AAAAAAAAAAABRwAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2025-11-25T12:45:20.103Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "fix_all_persian_encoding.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_all_persian_encoding.py",
+              "RelativeDocumentMoniker": "tools\\fix_all_persian_encoding.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_all_persian_encoding.py",
+              "RelativeToolTip": "tools\\fix_all_persian_encoding.py",
+              "ViewState": "AgIAAB8AAAAAAAAAAAAnwD4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-25T12:42:30.73Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 35,
+              "Title": "App.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\App.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\App.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\App.tsx",
+              "RelativeToolTip": "frontend\\src\\App.tsx",
+              "ViewState": "AgIAABwAAAAAAAAAAIBJwB4AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-25T12:41:50.688Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 34,
+              "Title": ".env",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\.env",
+              "RelativeDocumentMoniker": "backend\\.env",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\.env",
+              "RelativeToolTip": "backend\\.env",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwA0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-11-25T06:12:17.176Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 33,
+              "Title": "DashboardModule.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\DashboardModule.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\DashboardModule.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\DashboardModule.tsx",
+              "RelativeToolTip": "frontend\\src\\modules\\DashboardModule.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAABBwHUDAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T23:28:36.007Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 32,
+              "Title": "translations.ts",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\translations.ts",
+              "RelativeDocumentMoniker": "frontend\\src\\i18n\\translations.ts",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\i18n\\translations.ts",
+              "RelativeToolTip": "frontend\\src\\i18n\\translations.ts",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwHoBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T23:11:07.444Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 31,
+              "Title": "fix_i18n.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_i18n.py",
+              "RelativeDocumentMoniker": "tools\\fix_i18n.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_i18n.py",
+              "RelativeToolTip": "tools\\fix_i18n.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T23:09:41.761Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 30,
+              "Title": "fix_encodings.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_encodings.py",
+              "RelativeDocumentMoniker": "tools\\fix_encodings.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\tools\\fix_encodings.py",
+              "RelativeToolTip": "tools\\fix_encodings.py",
+              "ViewState": "AgIAAI0AAAAAAAAAAIBJwI8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T23:04:55.585Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 29,
+              "Title": "README-FRONTEND.md",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\README-FRONTEND.md",
+              "RelativeDocumentMoniker": "frontend\\README-FRONTEND.md",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\README-FRONTEND.md",
+              "RelativeToolTip": "frontend\\README-FRONTEND.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADsAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2025-11-24T22:54:44.32Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 28,
+              "Title": "Dockerfile",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\Dockerfile",
+              "RelativeDocumentMoniker": "frontend\\Dockerfile",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\Dockerfile",
+              "RelativeToolTip": "frontend\\Dockerfile",
+              "ViewState": "AgIAAB4AAAAAAAAAAABBwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-11-24T22:53:50.22Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 27,
+              "Title": "start.bat",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.bat",
+              "RelativeDocumentMoniker": "start.bat",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\start.bat",
+              "RelativeToolTip": "start.bat",
+              "ViewState": "AgIAAFoAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000614|",
+              "WhenOpened": "2025-11-24T22:47:52.252Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 26,
+              "Title": "nginx.conf",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\nginx.conf",
+              "RelativeDocumentMoniker": "frontend\\nginx.conf",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\nginx.conf",
+              "RelativeToolTip": "frontend\\nginx.conf",
+              "ViewState": "AgIAAEUAAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2025-11-24T22:24:34.048Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 25,
+              "Title": "auth.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\auth.py",
+              "RelativeDocumentMoniker": "backend\\app\\auth.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\auth.py",
+              "RelativeToolTip": "backend\\app\\auth.py",
+              "ViewState": "AgIAADAAAAAAAAAAAABRwDMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:42:40.607Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
+              "Title": "react-grid-layout.d.ts",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\types\\react-grid-layout.d.ts",
+              "RelativeDocumentMoniker": "frontend\\src\\types\\react-grid-layout.d.ts",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\types\\react-grid-layout.d.ts",
+              "RelativeToolTip": "frontend\\src\\types\\react-grid-layout.d.ts",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:17:06.825Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 23,
+              "Title": "reports.md",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docs\\reports.md",
+              "RelativeDocumentMoniker": "docs\\reports.md",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docs\\reports.md",
+              "RelativeToolTip": "docs\\reports.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2025-11-24T21:16:10.378Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 22,
+              "Title": "ku.json",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\ku.json",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\i18n\\ku.json",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\ku.json",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\i18n\\ku.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAABRwAYAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-24T21:16:02.641Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "fa.json",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\fa.json",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\i18n\\fa.json",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\fa.json",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\i18n\\fa.json",
+              "ViewState": "AgIAAAIAAAAAAAAAAABRwAUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-24T21:15:57.605Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": "en.json",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\en.json",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\i18n\\en.json",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\i18n\\en.json",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\i18n\\en.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-11-24T21:15:52.111Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "ChartRenderer.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ChartRenderer.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\ChartRenderer.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ChartRenderer.tsx",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\ChartRenderer.tsx",
+              "ViewState": "AgIAACQAAAAAAAAAAIBJwCYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:15:45.372Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "ReportViewer.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportViewer.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\ReportViewer.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportViewer.tsx",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\ReportViewer.tsx",
+              "ViewState": "AgIAAFUAAAAAAAAAAABRwFgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:15:36.19Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "ReportFilters.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportFilters.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\ReportFilters.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\ReportFilters.tsx",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\ReportFilters.tsx",
+              "ViewState": "AgIAAGEAAAAAAAAAAMBdwGkAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:15:25.394Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "index.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\index.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\modules\\reports\\index.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\modules\\reports\\index.tsx",
+              "RelativeToolTip": "frontend\\src\\modules\\reports\\index.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:15:15.857Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "main.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\main.py",
+              "RelativeDocumentMoniker": "backend\\app\\main.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\main.py",
+              "RelativeToolTip": "backend\\app\\main.py",
+              "ViewState": "AgIAAJ0DAAAAAAAAAABRwKADAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:12:51.393Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "csv.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\export\\csv.py",
+              "RelativeDocumentMoniker": "backend\\app\\reports\\export\\csv.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\export\\csv.py",
+              "RelativeToolTip": "backend\\app\\reports\\export\\csv.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:12:42.131Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "engine.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\engine.py",
+              "RelativeDocumentMoniker": "backend\\app\\reports\\engine.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\engine.py",
+              "RelativeToolTip": "backend\\app\\reports\\engine.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:12:31.089Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "router.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\router.py",
+              "RelativeDocumentMoniker": "backend\\app\\reports\\router.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\router.py",
+              "RelativeToolTip": "backend\\app\\reports\\router.py",
+              "ViewState": "AgIAACMAAAAAAAAAAABRwCYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:12:20.509Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "__init__.py",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\__init__.py",
+              "RelativeDocumentMoniker": "backend\\app\\reports\\__init__.py",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\backend\\app\\reports\\__init__.py",
+              "RelativeToolTip": "backend\\app\\reports\\__init__.py",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.002457|",
+              "WhenOpened": "2025-11-24T21:12:07.025Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "main.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\main.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\main.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\main.tsx",
+              "RelativeToolTip": "frontend\\src\\main.tsx",
+              "ViewState": "AgIAABUAAAAAAAAAAABRwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T21:03:14.366Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "combined-persian-fonts.css",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\combined-persian-fonts.css",
+              "RelativeDocumentMoniker": "frontend\\src\\styles\\combined-persian-fonts.css",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\combined-persian-fonts.css",
+              "RelativeToolTip": "frontend\\src\\styles\\combined-persian-fonts.css",
+              "ViewState": "AgIAAEMAAAAAAAAAAIBJwEUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-11-24T21:02:47.514Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "iranYekan-force.css",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\iranYekan-force.css",
+              "RelativeDocumentMoniker": "frontend\\src\\styles\\iranYekan-force.css",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\iranYekan-force.css",
+              "RelativeToolTip": "frontend\\src\\styles\\iranYekan-force.css",
+              "ViewState": "AgIAAA8AAAAAAAAAAABBwAMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-11-24T21:01:22.131Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "index.css",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\index.css",
+              "RelativeDocumentMoniker": "frontend\\src\\index.css",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\index.css",
+              "RelativeToolTip": "frontend\\src\\index.css",
+              "ViewState": "AgIAAJUAAAAAAAAAAEBVwJgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-11-24T21:00:47.306Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "docker-compose.yml",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docker-compose.yml",
+              "RelativeDocumentMoniker": "docker-compose.yml",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\docker-compose.yml",
+              "RelativeToolTip": "docker-compose.yml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003775|",
+              "WhenOpened": "2025-11-24T20:54:09.164Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "CustomizableDashboard.tsx",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\components\\CustomizableDashboard.tsx",
+              "RelativeDocumentMoniker": "frontend\\src\\components\\CustomizableDashboard.tsx",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\components\\CustomizableDashboard.tsx",
+              "RelativeToolTip": "frontend\\src\\components\\CustomizableDashboard.tsx",
+              "ViewState": "AgIAAAkDAAAAAAAAAAAnwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2025-11-24T20:53:35.178Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "persian-fonts-fix.css",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\persian-fonts-fix.css",
+              "RelativeDocumentMoniker": "frontend\\src\\styles\\persian-fonts-fix.css",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\persian-fonts-fix.css",
+              "RelativeToolTip": "frontend\\src\\styles\\persian-fonts-fix.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAADwvwAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-11-24T20:53:28.138Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "dashboard.css",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\dashboard.css",
+              "RelativeDocumentMoniker": "frontend\\src\\styles\\dashboard.css",
+              "ToolTip": "C:\\Users\\Mahdi\\source\\repos\\mahdiyarp\\hp\\frontend\\src\\styles\\dashboard.css",
+              "RelativeToolTip": "frontend\\src\\styles\\dashboard.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAADwvwAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-11-24T20:53:16.039Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "plan-03132b79-711e-49b6-87bd-7bc7bf987536.md",
+              "DocumentMoniker": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-03132b79-711e-49b6-87bd-7bc7bf987536.md",
+              "RelativeDocumentMoniker": "..\\..\\..\\..\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-03132b79-711e-49b6-87bd-7bc7bf987536.md",
+              "ToolTip": "C:\\Users\\Mahdi\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-03132b79-711e-49b6-87bd-7bc7bf987536.md",
+              "RelativeToolTip": "..\\..\\..\\..\\AppData\\Local\\Temp\\VisualStudio\\copilot-vs\\plan-03132b79-711e-49b6-87bd-7bc7bf987536.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2025-11-23T21:32:21.268Z"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{56df62a4-05a3-4e5b-aa1a-99371ccfb997}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
