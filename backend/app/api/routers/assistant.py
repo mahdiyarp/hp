@@ -127,14 +127,6 @@ def get_settings(session: Session = Depends(db.get_db), current: models.User = D
 @router.put("/settings", response_model=schemas.AssistantSettingsOut)
 def put_settings(payload: Dict[str, Any] = Body(...), session: Session = Depends(db.get_db), current: models.User = Depends(lambda: models.User())):
 
-    st = assistant_service.get_settings(session)
-    try:
-        last_model = getattr(assistant_service, "_LAST_MODEL_NAME", None)
-        if last_model:
-            st.model_name = last_model
-    except Exception:
-        pass
-
     try:
 
 
