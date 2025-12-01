@@ -15,6 +15,9 @@ meilisearch==0.37.1
 beautifulsoup4==4.12.2
 lxml==4.9.3
 jdatetime==3.0.0
+
+# Optional: PDF/Excel export support (gracefully degrades if not installed)
+# Note: reportlab requires system package libcairo2-dev
 reportlab==4.0.0
 openpyxl==3.1.2
 pandas==2.2.2
