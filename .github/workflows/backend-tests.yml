@@ -69,6 +69,23 @@ jobs:
           path: backend/coverage/
           if-no-files-found: warn
 
+      - name: Generate coverage summary
+        if: always()
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: backend/coverage/coverage.xml
+          badge: true
+          format: markdown
+          output: both
+          indicators: true
+
+      - name: Post coverage comment to PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          path: code-coverage-results.md
+
       - name: Publish unit test results
         if: always()
         uses: EnricoMi/publish-unit-test-result-action@v2
