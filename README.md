@@ -89,6 +89,7 @@ The project includes comprehensive documentation:
 - **[DEVELOPER_PROFILE.md](DEVELOPER_PROFILE.md)** — Developer account details, responsibilities, and legal restrictions for Mehdi Pakzamir
 - **[TEAM_AND_ACCESS_CONTROL.md](TEAM_AND_ACCESS_CONTROL.md)** — RBAC structure with 6 roles, 23 permissions, and access matrix
 - **[API_SECURITY.md](API_SECURITY.md)** — Authentication, authorization, and API security guidelines
+- **Exports & Shared Files** — Invoice and Sale Order exports support CSV (always), PDF & Excel (if optional deps installed). Each export creates a time‑limited token stored in DB (`shared_files` table) and exposes `download_url` under `/api/exports/shared/{token}` valid for 24h. Missing optional libraries (reportlab / openpyxl) cause the respective format tests to skip.
 
 ### Developer Access
 

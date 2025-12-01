@@ -599,3 +599,44 @@ class PaymentMethod(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     parent = relationship('PaymentMethod', remote_side=[id])
+
+
+# ==================== Sales Module ====================
+
+class SaleOrder(Base):
+    __tablename__ = 'sale_orders'
+    id = Column(Integer, primary_key=True, index=True)
+    order_number = Column(String(64), unique=True, index=True, nullable=True)
+    status = Column(String(32), nullable=False, default='draft')  # draft, final, cancelled
+    party_id = Column(String(128), ForeignKey('persons.id'), nullable=True)
+    party_name = Column(String(512), nullable=True)
+    client_time = Column(DateTime(timezone=True), nullable=True)
+    server_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    subtotal = Column(Integer, nullable=True)
+    discount = Column(Integer, nullable=True)
+    tax = Column(Integer, nullable=True)
+    shipping = Column(Integer, nullable=True)
+    total = Column(Integer, nullable=True)
+    currency = Column(String(8), nullable=False, default='IRR')
+    note = Column(Text, nullable=True)
+    tracking_code = Column(String(64), nullable=True, index=True)
+    invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=True, index=True)
+
+    invoice = relationship('Invoice', backref='sale_order')
+
+
+class SaleOrderItem(Base):
+    __tablename__ = 'sale_order_items'
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey('sale_orders.id', ondelete='CASCADE'), nullable=False, index=True)
+    product_id = Column(String(128), ForeignKey('products.id'), nullable=True)
+    description = Column(String(1024), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    unit = Column(String(64), nullable=True)
+    unit_price = Column(Integer, nullable=False)
+    discount = Column(Integer, nullable=True)
+    tax_rate = Column(Integer, nullable=True)
+    total = Column(Integer, nullable=False)
+
+    order = relationship('SaleOrder', backref='items')
+    product = relationship('Product')

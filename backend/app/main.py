@@ -22,7 +22,16 @@ from .schemas import PersonActivityCreate, PersonActivityOut
 from . import external_search
 from .schemas import ExternalSearchRequest, ExternalProduct, SaveExternalProductRequest
 from .schemas import AssistantRequest, AssistantResponse, AssistantToggle, OTPVerifyRequest, OTPSetupResponse, OTPDisableRequest
-from .exports import export_invoice_pdf, export_invoice_csv, export_invoice_excel, EXPORT_DIR
+from .exports import (
+    export_invoice_pdf,
+    export_invoice_csv,
+    export_invoice_excel,
+    export_sale_order_csv,
+    export_sale_order_pdf,
+    export_sale_order_excel,
+    share_exported_file,
+    EXPORT_DIR,
+)
 from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
@@ -1480,20 +1489,31 @@ def api_export_invoice(invoice_id: int, format: Optional[str] = 'pdf', session: 
             path = export_invoice_pdf(session, invoice_id)
         elif format == 'csv':
             path = export_invoice_csv(session, invoice_id)
-        elif format in ('xls','xlsx'):
+        elif format in ('xls', 'xlsx'):
             path = export_invoice_excel(session, invoice_id)
         else:
             raise HTTPException(status_code=400, detail='unsupported format')
-        # create share token
-        import secrets
-        token = secrets.token_urlsafe(18)
-        filename = os.path.basename(path)
-        # default expiry 24h
-        from datetime import datetime, timedelta
-        expires = datetime.utcnow() + timedelta(hours=24)
-        sf = crud.create_shared_file(session, token=token, file_path=path, filename=filename, created_by=current.id, expires_at=expires.isoformat())
-        link = f"/api/exports/shared/{token}"
-        return {'token': token, 'download_url': link, 'expires_at': sf.expires_at}
+        return share_exported_file(session, current.id, path)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/api/exports/sale-order/{order_id}')
+def api_export_sale_order(order_id: int, format: Optional[str] = 'csv', session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Export a sale order in requested format (csv, pdf, xlsx)."""
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman'])(current)
+    try:
+        if format == 'csv':
+            path = export_sale_order_csv(session, order_id)
+        elif format == 'pdf':
+            path = export_sale_order_pdf(session, order_id)
+        elif format in ('xls', 'xlsx'):
+            path = export_sale_order_excel(session, order_id)
+        else:
+            raise HTTPException(status_code=400, detail='unsupported format')
+        return share_exported_file(session, current.id, path)
     except HTTPException:
         raise
     except Exception as e:
@@ -1508,7 +1528,7 @@ def download_shared_file(token: str):
     if not sf:
         raise HTTPException(status_code=404, detail='not found')
     from datetime import datetime
-    if sf.expires_at and sf.expires_at < datetime.utcnow():
+    if sf.expires_at and sf.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=410, detail='expired')
     # serve file
     from fastapi.responses import FileResponse

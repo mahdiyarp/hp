@@ -126,7 +126,7 @@ def create_product_from_external(session: Session, external: dict, unit: Optiona
     Stores the external metadata inside the product.description as a JSON blob (best-effort).
     """
     from .normalizer import normalize_for_search
-    from datetime import datetime
+    from datetime import datetime, timezone
     # prepare product create payload
     title = external.get('title') or external.get('name') or 'external-product'
     desc = external.get('description') or ''
@@ -144,7 +144,7 @@ def create_product_from_external(session: Session, external: dict, unit: Optiona
     try:
         price = external.get('price')
         if create_price_history and price:
-            ph = models.PriceHistory(product_id=prod.id, price=int(price), type='sell', effective_at=datetime.utcnow())
+            ph = models.PriceHistory(product_id=prod.id, price=int(price), type='sell', effective_at=datetime.now(timezone.utc))
             session.add(ph)
             session.commit()
     except Exception:
@@ -386,7 +386,7 @@ def revoke_refresh_token(session: Session, user: models.User):
 def _generate_invoice_number(session: Session, invoice_type: str) -> str:
     # Format: {TYPELETTER}{YYYY}{MM}{DD}-{id:06d}
     # We will create invoice first to get id; helper for after-commit numbering.
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     prefix = invoice_type[:1].upper() if invoice_type else 'I'
     return f"{prefix}{now.year:04d}{now.month:02d}{now.day:02d}"
 
@@ -648,7 +648,7 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
 
 
 def _generate_payment_number(session: Session, direction: str) -> str:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     prefix = 'R' if direction == 'in' else 'P'
     return f"{prefix}{now.year:04d}{now.month:02d}{now.day:02d}"
 
@@ -945,7 +945,7 @@ def review_ai_report(session: Session, report_id: int, status: str, reviewer_id:
     rep.status = status
     rep.reviewed_by = reviewer_id
     from datetime import datetime
-    rep.reviewed_at = datetime.utcnow()
+    rep.reviewed_at = datetime.now(timezone.utc)
     session.add(rep)
     session.commit()
     session.refresh(rep)
@@ -1019,7 +1019,7 @@ def create_backup(session: Session, created_by: Optional[int] = None, kind: str 
     # fallback to backend/backups relative to project root
     backup_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'backups'))
     os.makedirs(backup_dir, exist_ok=True)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     fname = f"backup-{now.strftime('%Y%m%dT%H%M%SZ')}.json"
     fpath = os.path.join(backup_dir, fname)
     # gather snapshots
@@ -1100,7 +1100,7 @@ def close_financial_year(session: Session, fy_id: int, create_rollover: bool = T
     if fy.is_closed:
         return fy
     # determine period end: use fy.end_date or now
-    end = fy.end_date if fy.end_date else datetime.utcnow()
+    end = fy.end_date if fy.end_date else datetime.now(timezone.utc)
     # compute balances per account: debit - credit
     accounts = {}
     entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.entry_date <= end).all()
@@ -1130,7 +1130,7 @@ def close_financial_year(session: Session, fy_id: int, create_rollover: bool = T
             pass
     # mark closed
     fy.is_closed = True
-    fy.closed_at = datetime.utcnow()
+    fy.closed_at = datetime.now(timezone.utc)
     fy.opening_balances = json.dumps(rollover, ensure_ascii=False)
     session.add(fy)
     session.commit()
@@ -2238,5 +2238,159 @@ def reorder_dashboard_widgets(session: Session, user_id: int, widget_positions: 
                 widget.height = pos.get('height', widget.height)
         session.commit()
         return True
-    except:
+    except Exception:
+        session.rollback()
         return False
+
+
+# ==================== Sales (Sale Orders) CRUD ====================
+
+def _generate_sale_order_number(reference_dt: datetime, so_id: int) -> str:
+    # Format: SO-YYYYMMDD-{id:06d}
+    if isinstance(reference_dt, datetime):
+        if reference_dt.tzinfo is None:
+            ref_aware = reference_dt.replace(tzinfo=timezone.utc)
+        else:
+            ref_aware = reference_dt.astimezone(timezone.utc)
+    else:
+        ref_aware = datetime.now(timezone.utc)
+    date_part = ref_aware.strftime('%Y%m%d')
+    return f"SO-{date_part}-{so_id:06d}"
+
+
+def create_sale_order(session: Session, payload: 'schemas.SaleOrderCreate') -> models.SaleOrder:
+    server_time = datetime.now(timezone.utc)
+    client_time = payload.client_time or server_time
+    tracking_code = f"TRC-{int(server_time.timestamp())}-{secrets.token_hex(3).upper()}"
+    so = models.SaleOrder(
+        party_id=payload.party_id,
+        party_name=payload.party_name,
+        client_time=client_time,
+        server_time=server_time,
+        status='draft',
+        currency=payload.currency or 'IRR',
+        note=payload.note,
+        tracking_code=tracking_code,
+    )
+    session.add(so)
+    session.commit()
+    session.refresh(so)
+
+    subtotal = 0
+    for it in payload.items:
+        qty = int(it.quantity or 0)
+        unit_price = int(it.unit_price or 0)
+        line_total = qty * unit_price
+        soi = models.SaleOrderItem(
+            order_id=so.id,
+            description=it.description,
+            quantity=qty,
+            unit=it.unit,
+            unit_price=unit_price,
+            discount=int(it.discount or 0) if hasattr(it, 'discount') and it.discount is not None else None,
+            tax_rate=int(it.tax_rate or 0) if hasattr(it, 'tax_rate') and it.tax_rate is not None else None,
+            total=line_total,
+            product_id=it.product_id,
+        )
+        session.add(soi)
+        subtotal += line_total
+    so.subtotal = subtotal
+    so.total = subtotal if so.total is None else so.total
+    # assign order number after id known
+    so.order_number = _generate_sale_order_number(client_time, so.id)
+    session.add(so)
+    session.commit()
+    session.refresh(so)
+    # attach items
+    so.items = session.query(models.SaleOrderItem).filter(models.SaleOrderItem.order_id == so.id).all()
+    try:
+        from .activity_logger import log_activity
+        log_activity(session, payload.party_name or None, f"ایجاد سفارش فروش {so.order_number}", path=f"/api/sales/orders", method='POST', status_code=201, detail={'sale_order_id': so.id})
+    except Exception:
+        pass
+    return so
+
+
+def get_sale_orders(session: Session, q: Optional[str] = None, limit: int = 100) -> List[models.SaleOrder]:
+    qs = session.query(models.SaleOrder).order_by(models.SaleOrder.id.desc())
+    if q:
+        ql = q.lower()
+        qs = qs.filter((models.SaleOrder.order_number.ilike(f"%{ql}%")) | (models.SaleOrder.party_name.ilike(f"%{ql}%")))
+    out = qs.limit(limit).all()
+    for so in out:
+        so.items = session.query(models.SaleOrderItem).filter(models.SaleOrderItem.order_id == so.id).all()
+    return out
+
+def get_sale_order(session: Session, so_id: int) -> Optional[models.SaleOrder]:
+        so = session.query(models.SaleOrder).filter(models.SaleOrder.id == so_id).first()
+        if not so:
+            return None
+        so.items = session.query(models.SaleOrderItem).filter(models.SaleOrderItem.order_id == so.id).all()
+        return so
+
+def update_sale_order(session: Session, so_id: int, data: dict) -> Optional[models.SaleOrder]:
+        so = session.query(models.SaleOrder).filter(models.SaleOrder.id == so_id).first()
+        if not so:
+            return None
+        for k, v in data.items():
+            if hasattr(so, k):
+                setattr(so, k, v)
+        session.add(so)
+        session.commit()
+        session.refresh(so)
+        so.items = session.query(models.SaleOrderItem).filter(models.SaleOrderItem.order_id == so.id).all()
+        return so
+
+def finalize_sale_order(session: Session, so_id: int, client_time: Optional[datetime] = None) -> Optional[models.SaleOrder]:
+        so = session.query(models.SaleOrder).filter(models.SaleOrder.id == so_id).first()
+        if not so:
+            return None
+        if so.status == 'final':
+            return so
+        # create corresponding invoice (sale) then finalize it to reuse inventory/ledger logic
+        items = session.query(models.SaleOrderItem).filter(models.SaleOrderItem.order_id == so.id).all()
+        inv_items = [
+            schemas.InvoiceItemCreate(
+                description=i.description,
+                quantity=int(i.quantity or 0),
+                unit=i.unit,
+                unit_price=int(i.unit_price or 0),
+                product_id=i.product_id,
+            ) for i in items
+        ]
+        inv_payload = schemas.InvoiceCreate(
+            invoice_type='sale',
+            mode='manual',
+            party_id=so.party_id,
+            party_name=so.party_name,
+            client_time=client_time or so.client_time,
+            items=inv_items,
+            note=so.note,
+        )
+        invoice = create_invoice_manual(session, inv_payload)
+        try:
+            finalize_invoice(session, invoice.id, client_time=client_time)
+        except ValueError as e:
+            # roll back invoice if inventory insufficient
+            try:
+                session.delete(invoice)
+                session.commit()
+            except Exception:
+                session.rollback()
+            raise e
+        # link invoice to sale order and mark final
+        so.invoice_id = invoice.id
+        so.status = 'final'
+        if client_time:
+            so.client_time = client_time
+        so.server_time = datetime.now(timezone.utc)
+        session.add(so)
+        session.commit()
+        session.refresh(so)
+        so.items = items
+        try:
+            from .activity_logger import log_activity
+            log_activity(session, so.party_name or None, f"تأیید سفارش فروش {so.order_number}", path=f"/api/sales/orders/{so.id}/finalize", method='POST', status_code=200, detail={'sale_order_id': so.id, 'invoice_id': so.invoice_id})
+        except Exception:
+            pass
+        return so

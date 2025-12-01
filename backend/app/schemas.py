@@ -1083,3 +1083,58 @@ class PersonActivityOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+# ==================== Sales (Sale Orders) ====================
+
+class SaleOrderItemBase(BaseModel):
+    description: str
+    quantity: int = 1
+    unit: Optional[str] = None
+    unit_price: int
+    product_id: Optional[str] = None
+    discount: Optional[int] = None
+    tax_rate: Optional[int] = None
+
+
+class SaleOrderItemCreate(SaleOrderItemBase):
+    pass
+
+
+class SaleOrderItemOut(SaleOrderItemBase):
+    id: int
+
+    class Config:
+        orm_mode = True
+
+
+class SaleOrderCreate(BaseModel):
+    party_id: Optional[str] = None
+    party_name: Optional[str] = None
+    client_time: Optional[datetime] = None
+    items: List[SaleOrderItemCreate]
+    note: Optional[str] = None
+    currency: Optional[str] = 'IRR'
+
+
+class SaleOrderOut(BaseModel):
+    id: int
+    order_number: Optional[str]
+    status: str
+    party_id: Optional[str]
+    party_name: Optional[str]
+    client_time: Optional[datetime]
+    server_time: datetime
+    subtotal: Optional[int]
+    discount: Optional[int]
+    tax: Optional[int]
+    shipping: Optional[int]
+    total: Optional[int]
+    currency: str
+    note: Optional[str]
+    tracking_code: Optional[str]
+    invoice_id: Optional[int]
+    items: List[SaleOrderItemOut] = []
+
+    class Config:
+        orm_mode = True

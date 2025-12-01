@@ -1,7 +1,7 @@
 import os
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any, Dict
 import jdatetime
 
@@ -30,7 +30,7 @@ def _format_persian(user_display: Optional[str], operation: str, ref: Optional[s
     Example:
     👤 کاربر #رضا | عملیات: صدور فاکتور #S-20251108-000123 | تاریخ: 1404/08/20 ساعت 15:32
     """
-    when = when or datetime.utcnow()
+    when = when or datetime.now(timezone.utc)
     # convert to Jalali using jdatetime
     try:
         j = jdatetime.datetime.fromgregorian(datetime=when)
@@ -49,7 +49,7 @@ def log_activity(db_session: Optional[Any], user_display: Optional[str], operati
     If db_session is None, a new session will be created for the DB write.
     """
     try:
-        when = datetime.utcnow()
+        when = datetime.now(timezone.utc)
         message = _format_persian(user_display, operation, ref=None, when=when)
         # append path/method/status to detail
         payload = {

@@ -44,6 +44,7 @@ alembic upgrade 0033 || echo "SMS config migration applied or skipped"
 alembic upgrade 0034 || echo "Payment methods migration applied or skipped"
 alembic upgrade 0035 || echo "Person activities migration applied or skipped"
 alembic upgrade 0036 || echo "Core CRM/inventory/cheques migration applied or skipped"
+alembic upgrade 0037 || echo "Sales orders migration applied or skipped"
 set -e
 
 # optional demo seeding

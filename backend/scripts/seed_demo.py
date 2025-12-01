@@ -345,6 +345,50 @@ def seed():
                     ))
         session.commit()
 
+        # Create demo sale orders and finalize some
+        print("[SEED] Creating sale orders", flush=True)
+        try:
+            if products and persons:
+                for i in range(1, min(6, len(persons) + 1)):
+                    # pick 1-2 items
+                    inv_items = []
+                    cnt = random.randint(1, 2)
+                    for _ in range(cnt):
+                        prod = random.choice(products)
+                        qty = random.randint(1, 3)
+                        price = random.randint(15000, 60000)
+                        inv_items.append(schemas.SaleOrderItemCreate(
+                            description=prod.name,
+                            quantity=qty,
+                            unit=prod.unit or 'pcs',
+                            unit_price=price,
+                            product_id=prod.id
+                        ))
+                    so = crud.create_sale_order(session, schemas.SaleOrderCreate(
+                        party_id=persons[i-1].id,
+                        party_name=persons[i-1].name,
+                        client_time=datetime.now(timezone.utc),
+                        items=inv_items,
+                        note='Demo sale order'
+                    ))
+                    print(f"[SEED] Created sale order {so.id}", flush=True)
+                    # finalize half
+                    if i % 2 == 0:
+                        # ensure enough inventory for involved products
+                        for it in so.items:
+                            if it.product_id:
+                                p = session.query(models.Product).filter(models.Product.id == it.product_id).first()
+                                if p and (p.inventory or 0) < it.quantity:
+                                    p.inventory = int(it.quantity) + 5
+                                    session.add(p)
+                        session.commit()
+                        crud.finalize_sale_order(session, so.id)
+                        print(f"[SEED] Finalized sale order {so.id}", flush=True)
+            else:
+                print("[SEED] Skipping sale orders: need products and persons", flush=True)
+        except Exception as e:
+            print(f"[SEED] Sale orders seeding error: {e}", flush=True)
+
         print('[SEED] Seeding completed successfully', flush=True)
     except Exception as e:
         print(f'[SEED] ERROR: {e}', flush=True)

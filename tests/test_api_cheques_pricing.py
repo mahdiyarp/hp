@@ -46,7 +46,9 @@ def client(test_session):
 
     app.dependency_overrides[deps.get_current_user] = _fake_current_user
     app.dependency_overrides[app_db.get_db] = _get_db
-    return TestClient(app)
+    with TestClient(app) as tc:
+        yield tc
+    app.dependency_overrides.clear()
 
 
 def test_pricing_effective_endpoint(client, test_session):

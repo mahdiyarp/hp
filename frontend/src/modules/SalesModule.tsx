@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'
+import { listSaleOrders, finalizeSaleOrder, createSaleOrder, exportSaleOrder, type SaleOrder } from '../services/saleOrders'
+import DocumentRow, { DocumentTableHeader } from '../components/DocumentRow'
 import { formatNumberFa, isoToJalali, toPersianDigits, formatPrice, formatCurrencyFa, numberToPersianWords } from '../utils/num'
 import {
   retroBadge,
@@ -141,10 +143,25 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [saleOrders, setSaleOrders] = useState<SaleOrder[]>([])
   const [invoiceListLimit, setInvoiceListLimit] = useState(20) // تعداد فاکتورهای نمایشی
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [search, setSearch] = useState('')
+  const [viewMode, setViewMode] = useState<'invoices' | 'saleOrders'>('invoices')
+  const [showSaleOrderForm, setShowSaleOrderForm] = useState(false)
+  const [creatingSaleOrder, setCreatingSaleOrder] = useState(false)
+  const [saleOrderAutoFinalize, setSaleOrderAutoFinalize] = useState(true)
+  const [saleOrderFormError, setSaleOrderFormError] = useState<string | null>(null)
+  const [saleOrderFormSuccess, setSaleOrderFormSuccess] = useState<string | null>(null)
+  const emptySoItem = { description: '', quantity: 1, unit: '', unit_price: 0, product_id: undefined as string | null }
+  const [saleOrderItems, setSaleOrderItems] = useState<Array<typeof emptySoItem>>([{ ...emptySoItem }])
+  const [saleOrderPartyName, setSaleOrderPartyName] = useState('')
+  const [saleOrderNote, setSaleOrderNote] = useState('')
+  const [salesSummary, setSalesSummary] = useState<any | null>(null)
+  const [topCustomers, setTopCustomers] = useState<Array<{ party_id: string; party_name: string | null; total: number }>>([])
+  const [salesTrendSeries, setSalesTrendSeries] = useState<Array<{ day: string; total: number }>>([])
+  const [salesKpiLoading, setSalesKpiLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -228,7 +245,30 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   useEffect(() => {
     loadInvoices()
     loadAuxData()
+    loadSaleOrders()
   }, [])
+
+  useEffect(() => {
+    if (viewMode === 'saleOrders') {
+      void loadSalesKpis()
+    }
+  }, [viewMode])
+
+  async function loadSalesKpis() {
+    setSalesKpiLoading(true)
+    try {
+      const summary = await apiGet<any>('/api/reports/sales/summary').catch(() => null)
+      setSalesSummary(summary)
+      const customers = await apiGet<Array<{ party_id: string; party_name: string | null; total: number }>>('/api/reports/sales/top-customers?limit=5').catch(() => [])
+      setTopCustomers(customers)
+      const trends = await apiGet<{ days: number; series: Array<{ day: string; total: number }> }>('/api/reports/sales/trends?days=14').catch(() => ({ days: 0, series: [] }))
+      setSalesTrendSeries(trends.series || [])
+    } catch (err) {
+      console.warn('Failed loading sales KPIs', err)
+    } finally {
+      setSalesKpiLoading(false)
+    }
+  }
 
   async function loadAuxData() {
     setAuxLoading(true)
@@ -258,6 +298,113 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     } finally {
       if (showSpinner) setLoading(false)
     }
+  }
+
+  async function loadSaleOrders(showSpinner = false) {
+    if (showSpinner) setLoading(true)
+    try {
+      const data = await listSaleOrders(200)
+      setSaleOrders(data)
+    } catch (err) {
+      console.warn('Failed to load sale orders', err)
+    } finally {
+      if (showSpinner) setLoading(false)
+    }
+  }
+
+  const resetSaleOrderForm = () => {
+    setSaleOrderItems([{ ...emptySoItem }])
+    setSaleOrderPartyName('')
+    setSaleOrderNote('')
+    setSaleOrderAutoFinalize(true)
+    setSaleOrderFormError(null)
+    setSaleOrderFormSuccess(null)
+  }
+
+  const addSaleOrderItem = () => {
+    setSaleOrderItems(prev => [...prev, { ...emptySoItem }])
+  }
+
+  const updateSaleOrderItem = (index: number, field: 'description' | 'quantity' | 'unit' | 'unit_price', value: string) => {
+    setSaleOrderItems(prev => prev.map((it, idx) => (idx === index ? { ...it, [field]: field === 'quantity' || field === 'unit_price' ? Number(value) : value } : it)))
+  }
+
+  const removeSaleOrderItem = (index: number) => {
+    setSaleOrderItems(prev => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
+  const saleOrderSubtotal = useMemo(() => saleOrderItems.reduce((acc, it) => acc + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0), [saleOrderItems])
+
+  const submitSaleOrder = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!saleOrderPartyName.trim()) {
+      setSaleOrderFormError('نام طرف حساب را وارد کنید.')
+      return
+    }
+    if (saleOrderItems.some(i => !i.description.trim())) {
+      setSaleOrderFormError('شرح هر ردیف باید وارد شود.')
+      return
+    }
+    if (saleOrderItems.some(i => i.quantity <= 0 || i.unit_price <= 0)) {
+      setSaleOrderFormError('تعداد و قیمت واحد باید بزرگ‌تر از صفر باشند.')
+      return
+    }
+    setCreatingSaleOrder(true)
+    setSaleOrderFormError(null)
+    try {
+      const clientIso = computeClientTimestamp()
+      const payload = {
+        party_name: saleOrderPartyName.trim(),
+        client_time: clientIso,
+        client_calendar: smartDate.jalali ? 'jalali' : 'gregorian',
+        note: saleOrderNote.trim() || undefined,
+        items: saleOrderItems.map(it => ({
+          description: it.description.trim(),
+          quantity: Number(it.quantity),
+          unit: it.unit.trim() || undefined,
+          unit_price: Number(it.unit_price),
+          product_id: it.product_id || undefined,
+        })),
+      }
+      const created = await createSaleOrder(payload)
+      let successMsg = 'سفارش فروش ثبت شد.'
+      if (saleOrderAutoFinalize) {
+        try {
+          const finalized = await finalizeSaleOrder(created.id, clientIso)
+          successMsg = 'سفارش ثبت و قطعی شد.'
+          setSaleOrders(prev => [finalized, ...prev])
+        } catch (fErr) {
+          console.error(fErr)
+          successMsg = 'سفارش ثبت شد اما قطعی‌سازی با خطا مواجه شد.'
+        }
+      } else {
+        setSaleOrders(prev => [created, ...prev])
+      }
+      setSaleOrderFormSuccess(successMsg)
+      setShowSaleOrderForm(false)
+      resetSaleOrderForm()
+    } catch (err) {
+      setSaleOrderFormError(err instanceof Error ? err.message : 'ثبت سفارش با خطا روبه‌رو شد.')
+    } finally {
+      setCreatingSaleOrder(false)
+    }
+  }
+
+  const duplicateSaleOrder = (so: SaleOrder) => {
+    setSaleOrderPartyName(so.party_name || '')
+    setSaleOrderNote(so.note || '')
+    setSaleOrderItems(
+      (so.items || []).map(it => ({
+        description: it.description,
+        quantity: it.quantity,
+        unit: it.unit || '',
+        unit_price: it.unit_price,
+        product_id: it.product_id || null,
+      })) || [{ ...emptySoItem }],
+    )
+    setShowSaleOrderForm(true)
+    setSaleOrderFormError(null)
+    setSaleOrderFormSuccess(null)
   }
 
   const resetForm = (type: InvoiceFormState['invoice_type'] = invoiceForm.invoice_type) => {
@@ -307,6 +454,22 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   }
 
   const filtered = useMemo(() => {
+    if (viewMode === 'saleOrders') {
+      const filteredOrders = saleOrders
+        .filter(o => {
+          if (statusFilter !== 'all' && o.status !== statusFilter) return false
+          if (search) {
+            const q = search.trim().toLowerCase()
+            if (!q) return true
+            const haystack = `${o.order_number ?? ''} ${o.party_name ?? ''}`.toLowerCase()
+            if (!haystack.includes(q)) return false
+          }
+          return true
+        })
+        .sort((a, b) => new Date(b.server_time).getTime() - new Date(a.server_time).getTime())
+        .slice(0, invoiceListLimit)
+      return filteredOrders as any[]
+    }
     const result = invoices
       .filter(inv => {
         if (statusFilter !== 'all' && inv.status !== statusFilter) return false
@@ -335,6 +498,18 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   }, [invoices, statusFilter, typeFilter, search, invoiceListLimit, recentlyViewedInvoiceId])
 
   const totals = useMemo(() => {
+    if (viewMode === 'saleOrders') {
+      const allOrders = saleOrders.reduce(
+        (acc, o) => {
+          if (o.status === 'final') acc.finalized += 1
+          if (o.status === 'draft') acc.drafts += 1
+          acc.sales += o.total || 0
+          return acc
+        },
+        { sales: 0, purchases: 0, finalized: 0, drafts: 0 },
+      )
+      return allOrders
+    }
     const all = invoices.reduce(
       (acc, inv) => {
         if (inv.invoice_type === 'sale') acc.sales += inv.total || 0
@@ -586,16 +761,43 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <p className={retroHeading}>Sales Console</p>
-            <h2 className="text-2xl font-semibold mt-2">مدیریت فاکتورها</h2>
+            <h2 className="text-2xl font-semibold mt-2">
+              {viewMode === 'invoices' ? 'مدیریت فاکتورها' : 'سفارش‌های فروش'}
+            </h2>
             <p className={`text-xs ${retroMuted} mt-2`}>
               تاریخ مرجع جاری: {smartDate.jalali ?? 'تعیین نشده'} (ISO:{' '}
               {smartDate.isoDate ?? '---'})
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadInvoices()}>
-              بروزرسانی فهرست
-            </button>
+            <div className="flex gap-2">
+              <button
+                className={`${retroButton} ${viewMode === 'invoices' ? '!bg-[#1f2e3b]' : ''}`}
+                onClick={() => setViewMode('invoices')}
+              >
+                فاکتورها
+              </button>
+              <button
+                className={`${retroButton} ${viewMode === 'saleOrders' ? '!bg-[#1f2e3b]' : ''}`}
+                onClick={() => setViewMode('saleOrders')}
+              >
+                سفارش‌ها
+              </button>
+            </div>
+            {viewMode === 'invoices' ? (
+              <button className={`${retroButton}`} onClick={() => loadInvoices()}>
+                بروزرسانی فهرست
+              </button>
+            ) : (
+              <button className={`${retroButton}`} onClick={() => loadSaleOrders(true)}>
+                بروزرسانی سفارش‌ها
+              </button>
+            )}
+            {viewMode === 'saleOrders' && (
+              <button className={retroButton} onClick={() => { resetSaleOrderForm(); setShowSaleOrderForm(true) }}>
+                ایجاد سفارش فروش
+              </button>
+            )}
             <button
               className={retroButton}
               onClick={() => launchForm('sale')}
@@ -644,7 +846,215 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
             <p className="text-lg font-semibold">{formatNumberFa(totals.drafts)}</p>
           </div>
         </div>
+        {viewMode === 'saleOrders' && (
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="border border-[#bfb69f] bg-[#faf4de] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>تعداد سفارش‌ها</p>
+                <p className="text-lg font-semibold">
+                  {salesKpiLoading ? '...' : formatNumberFa(salesSummary?.count || 0)}
+                </p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#faf4de] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>مجموع فروش سفارش‌ها</p>
+                <p className="text-lg font-semibold">
+                  {salesKpiLoading ? '...' : formatPrice(salesSummary?.total || 0, 'ریال')}
+                </p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#faf4de] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>میانگین</p>
+                <p className="text-lg font-semibold">
+                  {salesKpiLoading ? '...' : formatPrice(salesSummary?.average || 0, 'ریال')}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm">
+                <p className={retroHeading}>مشتریان برتر (۱۴ روز اخیر)</p>
+                {salesKpiLoading && topCustomers.length === 0 ? (
+                  <p className="text-xs text-[#7a6b4f] mt-2">در حال بارگذاری...</p>
+                ) : topCustomers.length > 0 ? (
+                  <ul className="mt-2 space-y-1 text-xs">
+                    {topCustomers.map(c => (
+                      <li key={c.party_id} className="flex justify-between">
+                        <span>{c.party_name || c.party_id}</span>
+                        <span className="font-semibold">{formatNumberFa(c.total)} ریال</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-[#7a6b4f] mt-2">داده‌ای موجود نیست.</p>
+                )}
+              </div>
+              <div className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm">
+                <p className={retroHeading}>روند فروش (۱۴ روز)</p>
+                {salesTrendSeries.length > 0 ? (
+                  <div className="flex items-end gap-1 mt-3 h-24">
+                    {salesTrendSeries.map(pt => {
+                      const max = Math.max(...salesTrendSeries.map(p => p.total), 1)
+                      const h = Math.round((pt.total / max) * 90)
+                      return (
+                        <div key={pt.day} className="flex flex-col items-center" style={{ width: '14px' }}>
+                          <div
+                            style={{ height: `${h}px` }}
+                            className="w-full bg-[#154b5f] rounded-sm"
+                            title={`${pt.day}: ${formatNumberFa(pt.total)}`}
+                          ></div>
+                          <div className="text-[8px] mt-1 rotate-[-45deg] origin-top-left text-[#7a6b4f]">
+                            {pt.day.slice(5)}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : salesKpiLoading ? (
+                  <p className="text-xs text-[#7a6b4f] mt-2">در حال بارگذاری...</p>
+                ) : (
+                  <p className="text-xs text-[#7a6b4f] mt-2">داده‌ای موجود نیست.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
+
+      {viewMode === 'saleOrders' && showSaleOrderForm && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header className="flex items-center justify-between">
+            <div>
+              <p className={retroHeading}>فرم سفارش فروش</p>
+              <h3 className="text-lg font-semibold mt-2">ایجاد سفارش جدید</h3>
+            </div>
+            <button className={retroButton} onClick={() => { setShowSaleOrderForm(false); resetSaleOrderForm() }}>
+              بستن فرم
+            </button>
+          </header>
+          <form className="space-y-4" onSubmit={submitSaleOrder}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>طرف حساب *</label>
+                <input
+                  value={saleOrderPartyName}
+                  onChange={e => setSaleOrderPartyName(e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="نام مشتری"
+                  required
+                  list="sale-order-persons"
+                />
+                <datalist id="sale-order-persons">
+                  {persons.map(p => (
+                    <option key={p.id} value={p.name}>{p.kind ? `${p.name} (${p.kind})` : p.name}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>یادداشت</label>
+                <input
+                  value={saleOrderNote}
+                  onChange={e => setSaleOrderNote(e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="یادداشت سفارش"
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className={retroHeading}>ردیف‌های سفارش</p>
+                <button type="button" className={retroButton} onClick={addSaleOrderItem}>افزودن ردیف</button>
+              </div>
+              {saleOrderItems.map((it, idx) => {
+                const rowSubtotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
+                return (
+                  <div key={idx} className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <div className="space-y-2">
+                        <label className={retroHeading}>شرح *</label>
+                        <input
+                          value={it.description}
+                          onChange={e => updateSaleOrderItem(idx, 'description', e.target.value)}
+                          className={`${retroInput} w-full`}
+                          placeholder="کالا یا خدمت"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={retroHeading}>تعداد *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={it.quantity}
+                          onChange={e => updateSaleOrderItem(idx, 'quantity', e.target.value)}
+                          className={`${retroInput} w-full`}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={retroHeading}>واحد</label>
+                        <input
+                          value={it.unit}
+                          onChange={e => updateSaleOrderItem(idx, 'unit', e.target.value)}
+                          className={`${retroInput} w-full`}
+                          placeholder="عدد / بسته"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className={retroHeading}>قیمت واحد (ریال) *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={it.unit_price}
+                          onChange={e => updateSaleOrderItem(idx, 'unit_price', e.target.value)}
+                          className={`${retroInput} w-full`}
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-[#7a6b4f]">مبلغ ردیف: {formatNumberFa(rowSubtotal)} ریال</div>
+                      <button
+                        type="button"
+                        className={`${retroButton} !bg-[#c35c5c] text-[11px]`}
+                        onClick={() => removeSaleOrderItem(idx)}
+                        disabled={saleOrderItems.length === 1}
+                      >
+                        حذف
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-4 py-3 rounded text-center space-y-1">
+              <p className={retroHeading}>جمع تقریبی سفارش</p>
+              <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>{formatNumberFa(saleOrderSubtotal)}</p>
+            </div>
+            <div className="border border-dashed border-[#c5bca5] px-3 py-2 rounded-sm text-sm space-y-2">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={saleOrderAutoFinalize}
+                  onChange={e => setSaleOrderAutoFinalize(e.target.checked)}
+                />
+                <span>پس از ثبت، سفارش قطعی شود</span>
+              </label>
+            </div>
+            {saleOrderFormError && (
+              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">{saleOrderFormError}</div>
+            )}
+            {saleOrderFormSuccess && (
+              <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">{saleOrderFormSuccess}</div>
+            )}
+            <div className="flex flex-wrap gap-3">
+              <button type="submit" className={`${retroButton} !bg-[#1f2e3b]`} disabled={creatingSaleOrder}>
+                {creatingSaleOrder ? 'در حال ثبت...' : 'ثبت سفارش'}
+              </button>
+              <button type="button" className={`${retroButton} !bg-[#5b4a2f]`} disabled={creatingSaleOrder} onClick={resetSaleOrderForm}>
+                پاک‌سازی فرم
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
 
       {showForm && (
         <section className={`${retroPanelPadded} space-y-4`}>
@@ -1097,73 +1507,77 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         </div>
 
         <div className="border border-dashed border-[#c5bca5] p-3 text-xs text-[#7a6b4f] rounded-sm">
-          {formatNumberFa(filtered.length)} فاکتور (جدیدترین {invoiceListLimit} فاکتور از {formatNumberFa(invoices.length)}) نمایش داده می‌شود.
+          {viewMode === 'invoices'
+            ? `${formatNumberFa(filtered.length)} فاکتور (جدیدترین ${invoiceListLimit} فاکتور از ${formatNumberFa(invoices.length)}) نمایش داده می‌شود.`
+            : `${formatNumberFa(filtered.length)} سفارش فروش (نمایش ${invoiceListLimit} مورد از ${formatNumberFa(saleOrders.length)})`}
         </div>
 
         {filtered.length > 0 ? (
           <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
             <thead>
-              <tr>
-                <th className={retroTableHeader}>شماره</th>
-                <th className={retroTableHeader}>نوع</th>
-                <th className={retroTableHeader}>طرف حساب</th>
-                <th className={retroTableHeader}>مبلغ</th>
-                <th className={retroTableHeader}>وضعیت</th>
-                <th className={retroTableHeader}>زمان‌ها</th>
-                <th className={retroTableHeader}>عملیات</th>
-              </tr>
+              <DocumentTableHeader type={viewMode === 'invoices' ? 'invoice' : 'saleOrder'} />
             </thead>
             <tbody>
-              {filtered.map(inv => (
-                <tr key={inv.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">
-                    {toPersianDigits(inv.invoice_number || `#${inv.id}`)}
-                    <span className="block text-[10px] text-[#7a6b4f] mt-1">حالت: {inv.mode}</span>
-                    {(inv as any).tracking_code && (
-                      <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">
-                        📍 {(inv as any).tracking_code}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={
-                      inv.invoice_type === 'sale'
-                        ? 'text-green-700 font-semibold'
-                        : inv.invoice_type === 'purchase'
-                        ? 'text-blue-700 font-semibold'
-                        : 'text-gray-600 italic'
-                    }>
-                      {invoiceTypeTitles[inv.invoice_type as InvoiceFormState['invoice_type']] || inv.invoice_type}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">{inv.party_name ?? 'نامشخص'}</td>
-                  <td className="px-3 py-2 text-left">
-                    {formatCurrencyFa(inv.total || 0, 'ریال', false).numeric} <span className="text-xs">ریال</span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`${retroBadge}`}>{inv.status}</span>
-                  </td>
-                  <td className="px-3 py-2 text-left space-y-1">
-                    <p>سرور: {inv.server_time ? isoToJalali(inv.server_time) : '-'}</p>
-                    <p className="text-[11px] text-[#7a6b4f]">
-                      کلاینت: {inv.client_time ? isoToJalali(inv.client_time) : '---'}
-                    </p>
-                  </td>
-                  <td className="px-3 py-2 text-left">
-                    <button
-                      className={`${retroButton} text-[11px]`}
-                      onClick={() => openInvoiceDetail(inv.id)}
-                    >
-                      مشاهده
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {viewMode === 'invoices'
+                ? filtered.map((inv: any) => (
+                    <DocumentRow
+                      key={inv.id}
+                      kind="invoice"
+                      id={inv.id}
+                      number={inv.invoice_number}
+                      party_name={inv.party_name}
+                      total={inv.total}
+                      status={inv.status}
+                      server_time={inv.server_time}
+                      client_time={inv.client_time}
+                      tracking_code={inv.tracking_code}
+                      invoice_type={inv.invoice_type}
+                      mode={inv.mode}
+                      titleMap={invoiceTypeTitles}
+                      onView={openInvoiceDetail}
+                    />
+                  ))
+                : filtered.map((so: any) => (
+                    <DocumentRow
+                      key={so.id}
+                      kind="saleOrder"
+                      id={so.id}
+                      number={so.order_number}
+                      party_name={so.party_name}
+                      total={so.total}
+                      status={so.status}
+                      server_time={so.server_time}
+                      client_time={so.client_time}
+                      tracking_code={so.tracking_code}
+                      invoice_id={so.invoice_id}
+                      onFinalize={async id => {
+                        try {
+                          const updated = await finalizeSaleOrder(id, new Date().toISOString())
+                          setSaleOrders(prev => prev.map(o => (o.id === id ? updated : o)))
+                        } catch (err) {
+                          console.error('Finalize sale order failed', err)
+                        }
+                      }}
+                      onViewInvoice={openInvoiceDetail}
+                      onExport={async (id, format) => {
+                        try {
+                          const res = await exportSaleOrder(id, format)
+                          if (res?.download_url) {
+                            window.open(res.download_url, '_blank', 'noopener')
+                          }
+                        } catch (err) {
+                          console.error('Sale order export failed', err)
+                        }
+                      }}
+                    />
+                  ))}
             </tbody>
           </table>
         ) : (
           <div className="text-xs text-[#7a6b4f]">
-            سندی با شرایط انتخابی یافت نشد. فیلترها را تغییر دهید یا سند جدیدی ثبت کنید.
+            {viewMode === 'invoices'
+              ? 'سندی با شرایط انتخابی یافت نشد. فیلترها را تغییر دهید یا سند جدیدی ثبت کنید.'
+              : 'سفارشی یافت نشد. سفارش جدیدی ایجاد کنید یا فیلترها را تغییر دهید.'}
           </div>
         )}
       </section>

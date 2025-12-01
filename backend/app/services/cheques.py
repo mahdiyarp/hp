@@ -149,4 +149,4 @@ def delete_cheque(session: Session, cheque_id: int) -> bool:
     session.delete(ch)
     session.commit()
     return True
-*** End Patch
+ 

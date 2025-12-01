@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Optional, Dict, Any, List
 from . import db, models
@@ -36,7 +36,7 @@ def analyze_period(db_session, start: Optional[datetime] = None, end: Optional[d
     """Run rule-based analysis over audit logs and invoices/payments in the given period.
     Returns a dict with summary (Persian) and findings (list).
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if end is None:
         end = now
     if start is None:

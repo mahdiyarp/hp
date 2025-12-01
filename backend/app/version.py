@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 def _root_path():
     # in container the app package is at /app/app, project root is /app
@@ -27,6 +27,6 @@ def get_version_info(changelog_lines: int = 20):
 
     return {
         'version': version,
-        'checked_at': datetime.utcnow().isoformat() + 'Z',
+        'checked_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
         'changelog_preview': changelog,
     }

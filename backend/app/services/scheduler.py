@@ -1,6 +1,6 @@
 import os
 import threading
-import time
+from contextlib import suppress
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -17,10 +17,8 @@ class _Scheduler(threading.Thread):
 
     def run(self):
         while not self._stop.is_set():
-            try:
+            with suppress(Exception):
                 self.tick()
-            except Exception:
-                pass
             self._stop.wait(self.interval)
 
     def stop(self):
@@ -31,6 +29,7 @@ class _Scheduler(threading.Thread):
         session: Session = db.SessionLocal()
         try:
             self._check_overdue_cheques(session)
+            self._prune_shared_files(session)
             # TODO: add invoice unpaid → overdue and ledger integrity checks
         finally:
             session.close()
@@ -43,13 +42,11 @@ class _Scheduler(threading.Thread):
             models.Cheque.status != 'approved'
         ).all()
         for ch in cheques:
-            # Try to find mobile via person by name
             mobile = None
-            party_name = None
-            if ch.payment and ch.payment.party_name:
-                party_name = ch.payment.party_name
+            party_name = ch.payment.party_name if ch.payment and getattr(ch.payment, 'party_name', None) else None
+            if party_name:
                 per = session.query(models.Person).filter(models.Person.name == party_name).first()
-                if per and per.mobile:
+                if per and getattr(per, 'mobile', None):
                     mobile = per.mobile
             message = f"یادآوری: چک سررسید شده {ch.cheque_number or ch.id} برای {party_name or ''}"
             trigger_event(session, 'cheque.overdue', {
@@ -58,6 +55,14 @@ class _Scheduler(threading.Thread):
                 'mobile': mobile,
                 'message': message,
             })
+
+    def _prune_shared_files(self, session: Session):
+        try:
+            from ..exports import prune_expired_shared_files  # type: ignore
+        except Exception:
+            return
+        with suppress(Exception):
+            prune_expired_shared_files(session, remove_files=True)
 
 
 _scheduler: _Scheduler | None = None
