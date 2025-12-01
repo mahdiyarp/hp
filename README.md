@@ -18,6 +18,23 @@ Frontend app: `http://localhost:3000`
 
 For local development copy `backend/.env.example` → `backend/.env` and adjust secrets.
 
+### Background Scheduler (optional)
+
+A lightweight background scheduler can emit automation events (e.g., overdue cheques reminders).
+
+- Enable with `SCHEDULER_ENABLED=true` in `backend/.env`
+- Interval is configurable via `SCHEDULER_INTERVAL_SEC` (default 300 seconds)
+- Safe by default: if SMS is not configured in DB system settings, events won't send external requests
+
+### Integrations & Automation
+
+- Admin endpoints under `/api/integrations` for simple provider configs (e.g., FX services) and `/api/integrations/test/sms` for sending a test SMS using system settings
+- Automation events currently supported:
+	- `invoice.finalized`
+	- `payment.posted`
+	- `cheque.overdue`
+	These trigger best-effort SMS notifications when a phone number is resolvable for the counterparty.
+
 ## Tooling
 
 - Python: `pytest`, `black`, `isort` (managed via `pre-commit`).
