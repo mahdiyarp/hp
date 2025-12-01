@@ -256,6 +256,55 @@ def seed():
             session.commit()
             print(f"[SEED] Created cheque payment {cheque_payment.id}", flush=True)
 
+        # Add one near-due and one overdue cheque sample
+        if persons:
+            print("[SEED] Creating near-due and overdue cheques", flush=True)
+            # Near due in 2 days
+            near_due_pay = crud.create_payment_manual(session, schemas.PaymentCreate(
+                direction='out',
+                mode='manual',
+                party_id=persons[0].id,
+                party_name=persons[0].name,
+                method='cheque',
+                amount=random.randint(40000, 90000),
+                note='Near-due cheque',
+                due_date=datetime.now(timezone.utc) + timedelta(days=2)
+            ))
+            crud.finalize_payment(session, near_due_pay.id)
+            session.add(models.Cheque(
+                payment_id=near_due_pay.id,
+                cheque_number='CHK-ND-001',
+                bank_name='Melli',
+                branch_name='Central',
+                status='pending',
+                issue_date=datetime.now(timezone.utc),
+                due_date=datetime.now(timezone.utc) + timedelta(days=2)
+            ))
+            session.commit()
+
+            # Overdue 2 days ago
+            overdue_pay = crud.create_payment_manual(session, schemas.PaymentCreate(
+                direction='out',
+                mode='manual',
+                party_id=persons[1 % len(persons)].id,
+                party_name=persons[1 % len(persons)].name,
+                method='cheque',
+                amount=random.randint(40000, 90000),
+                note='Overdue cheque',
+                due_date=datetime.now(timezone.utc) - timedelta(days=2)
+            ))
+            crud.finalize_payment(session, overdue_pay.id)
+            session.add(models.Cheque(
+                payment_id=overdue_pay.id,
+                cheque_number='CHK-OD-001',
+                bank_name='Mellat',
+                branch_name='City',
+                status='pending',
+                issue_date=datetime.now(timezone.utc) - timedelta(days=5),
+                due_date=datetime.now(timezone.utc) - timedelta(days=2)
+            ))
+            session.commit()
+
         # Seed product stock and prices
         print("[SEED] Creating stock items & prices", flush=True)
         for prod in products:
