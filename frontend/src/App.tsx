@@ -17,18 +17,19 @@ import Activity from './pages/Activity'
 import Tasks from './pages/Tasks'
 import TaskEditor from './pages/TaskEditor'
 import PaymentEditor from './pages/PaymentEditor'
+import BackupRestore from './pages/BackupRestore'
 
-type RouteKey = 'dashboard' | 'invoices' | 'persons' | 'products' | 'reports' | 'settings' | 'contacts' | 'activity' | 'tasks' | 'payments'
+type RouteKey = 'dashboard' | 'invoices' | 'persons' | 'products' | 'reports' | 'settings' | 'contacts' | 'activity' | 'tasks' | 'payments' | 'backup'
 
 function useHashRoute(defaultRoute: RouteKey = 'dashboard') {
 	const [route, setRoute] = React.useState<RouteKey>(() => {
 		const h = (window.location.hash || '').replace('#', '') as RouteKey
-		return (['dashboard','invoices','persons','products','reports','settings','contacts','activity','tasks','payments'] as RouteKey[]).includes(h) ? h : defaultRoute
+		return (['dashboard','invoices','persons','products','reports','settings','contacts','activity','tasks','payments','backup'] as RouteKey[]).includes(h) ? h : defaultRoute
 	})
 	React.useEffect(() => {
 		const onHash = () => {
 				const h = (window.location.hash || '').replace('#', '') as RouteKey
-				if ((['dashboard','invoices','persons','products','reports','settings','contacts','activity','tasks','payments'] as RouteKey[]).includes(h)) {
+				if ((['dashboard','invoices','persons','products','reports','settings','contacts','activity','tasks','payments','backup'] as RouteKey[]).includes(h)) {
 				setRoute(h)
 			}
 		}
@@ -77,9 +78,10 @@ const App: React.FC = () => {
 								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='persons'?'bg-[var(--background)]':''}`} href="#persons" onClick={(e)=>{e.preventDefault();navigate('persons')}}>اشخاص</a></li>
 								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='products'?'bg-[var(--background)]':''}`} href="#products" onClick={(e)=>{e.preventDefault();navigate('products')}}>کالاها</a></li>
 								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='reports'?'bg-[var(--background)]':''}`} href="#reports" onClick={(e)=>{e.preventDefault();navigate('reports')}}>گزارشات</a></li>
-								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='settings'?'bg-[var(--background)]':''}`} href="#settings" onClick={(e)=>{e.preventDefault();navigate('settings')}}>تنظیمات</a></li>
-								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='activity'?'bg-[var(--background)]':''}`} href="#activity" onClick={(e)=>{e.preventDefault();navigate('activity')}}>فعالیت‌ها</a></li>
-								<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='tasks'?'bg-[var(--background)]':''}`} href="#tasks" onClick={(e)=>{e.preventDefault();navigate('tasks')}}>وظایف</a></li>
+						<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='settings'?'bg-[var(--background)]':''}`} href="#settings" onClick={(e)=>{e.preventDefault();navigate('settings')}}>تنظیمات</a></li>
+						<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='backup'?'bg-[var(--background)]':''}`} href="#backup" onClick={(e)=>{e.preventDefault();navigate('backup')}}>پشتیبان‌گیری</a></li>
+						<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='activity'?'bg-[var(--background)]':''}`} href="#activity" onClick={(e)=>{e.preventDefault();navigate('activity')}}>فعالیت‌ها</a></li>
+						<li><a className={`block px-3 py-2 rounded hover:bg-[var(--background)] ${route==='tasks'?'bg-[var(--background)]':''}`} href="#tasks" onClick={(e)=>{e.preventDefault();navigate('tasks')}}>وظایف</a></li>
 							</ul>
 						</nav>
 					</aside>
@@ -94,6 +96,7 @@ const App: React.FC = () => {
 						{route === 'products' && <Products />}
 						{route === 'payments' && <Payments />}
 						{route === 'settings' && <Settings />}
+						{route === 'backup' && <BackupRestore />}
 						{route === 'activity' && <Activity />}
 						{route === 'tasks' && <Tasks />}
 

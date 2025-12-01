@@ -1,8 +1,12 @@
+import os
 import pytest
 from datetime import date, timedelta
 
 from app import db, models
 from app.accounting import fiscal_service, journal_service
+
+# Force isolated engines for this module (overrides payment test cache flag)
+os.environ["TEST_ISOLATED_ENGINE"] = "1"
 
 
 def make_session():

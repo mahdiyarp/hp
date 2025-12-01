@@ -1,8 +1,12 @@
+import os
 import pytest
 from datetime import date, timedelta
 from app import db, crud
 from app import models, schemas
 from app.accounting import fiscal_service
+
+# Force isolated engine for this integration test
+os.environ["TEST_ISOLATED_ENGINE"] = "1"
 
 
 def test_invoice_finalize_updates_ledger_and_person_balance():

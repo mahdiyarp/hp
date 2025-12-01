@@ -92,10 +92,24 @@ def merge_persons(pid: int, other_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{pid}/timeline")
 def person_timeline(pid: int, db: Session = Depends(get_db)):
-    # stub timeline
     p = db.query(Person).get(pid)
     if not p: raise HTTPException(status_code=404, detail="Person not found")
-    return {"items": [{"type": "person", "id": p.id, "title": "ایجاد مخاطب", "at": str(p.created_at)}]}
+    # Retrieve related invoices, payments, tasks
+    from app import models
+    items = []
+    # Invoices
+    invs = db.query(models.Invoice).filter(models.Invoice.party_id == str(pid)).order_by(models.Invoice.server_time.desc()).limit(10).all()
+    for inv in invs:
+        items.append({"type": "invoice", "id": inv.id, "title": f"فاکتور {inv.invoice_number or inv.id}", "at": inv.server_time.isoformat() if inv.server_time else None})
+    # Payments
+    pays = db.query(models.Payment).filter(models.Payment.party_id == str(pid)).order_by(models.Payment.server_time.desc()).limit(10).all()
+    for pay in pays:
+        items.append({"type": "payment", "id": pay.id, "title": f"پرداخت {pay.payment_number or pay.id}", "at": pay.server_time.isoformat() if pay.server_time else None})
+    # Creation event
+    items.append({"type": "person", "id": p.id, "title": "ایجاد مخاطب", "at": str(p.created_at)})
+    # Sort by date descending
+    items.sort(key=lambda x: x.get("at") or "", reverse=True)
+    return {"items": items[:20]}
 
 @router.post("/{pid}/score")
 def person_score(pid: int, db: Session = Depends(get_db)):

@@ -1,0 +1,22 @@
+line-length = 100
+indent-width = 4
+target-version = "py310"
+
+# Lint rules
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+]
+# Commonly noisy rule in legacy codebases; rely on formatter instead
+ignore = [
+  "E501",  # line too long
+]
+
+# Limit to backend and tests by default when running at the repo root
+src = ["backend", "tests"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
