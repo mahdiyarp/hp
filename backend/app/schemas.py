@@ -187,6 +187,43 @@ class PriceHistoryOut(BaseModel):
         orm_mode = True
 
 
+# ==================== Product Pricing ====================
+
+class ProductPriceCreate(BaseModel):
+    price_type: str = 'sale'  # sale, purchase, retail, wholesale
+    currency: str = 'IRR'
+    amount: int
+    effective_at: Optional[datetime] = None
+
+
+class ProductPriceUpdate(BaseModel):
+    price_type: Optional[str] = None
+    currency: Optional[str] = None
+    amount: Optional[int] = None
+    effective_at: Optional[datetime] = None
+
+
+class ProductPriceOut(BaseModel):
+    id: int
+    product_id: str
+    price_type: str
+    currency: str
+    amount: int
+    effective_at: datetime
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class EffectivePriceOut(BaseModel):
+    product_id: str
+    price_type: str
+    at: Optional[datetime]
+    amount: Optional[int]
+    currency: Optional[str]
+
+
 class PersonBase(BaseModel):
     name: str
     kind: Optional[str] = None

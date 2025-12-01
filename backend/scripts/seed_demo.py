@@ -320,17 +320,29 @@ def seed():
                     reserved_quantity=0,
                     threshold=5
                 ))
-            price = session.query(models.ProductPrice).filter(
-                models.ProductPrice.product_id == prod.id,
-                models.ProductPrice.price_type == 'sale'
-            ).first()
-            if not price:
-                session.add(models.ProductPrice(
-                    product_id=prod.id,
-                    price_type='sale',
-                    currency='IRR',
-                    amount=random.randint(20000, 80000)
-                ))
+            # Add several pricing variations (sale, retail, wholesale) with staggered effective dates
+            for ptype in ['sale', 'retail', 'wholesale']:
+                exists = session.query(models.ProductPrice).filter(
+                    models.ProductPrice.product_id == prod.id,
+                    models.ProductPrice.price_type == ptype
+                ).first()
+                if not exists:
+                    base = random.randint(20000, 80000)
+                    # Create two entries: one older, one recent
+                    session.add(models.ProductPrice(
+                        product_id=prod.id,
+                        price_type=ptype,
+                        currency='IRR',
+                        amount=base - random.randint(1000, 5000),
+                        effective_at=datetime.now(timezone.utc) - timedelta(days=30)
+                    ))
+                    session.add(models.ProductPrice(
+                        product_id=prod.id,
+                        price_type=ptype,
+                        currency='IRR',
+                        amount=base,
+                        effective_at=datetime.now(timezone.utc) - timedelta(days=5)
+                    ))
         session.commit()
 
         print('[SEED] Seeding completed successfully', flush=True)
