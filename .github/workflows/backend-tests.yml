@@ -38,7 +38,8 @@ jobs:
         env:
           DATABASE_URL: sqlite:///:memory:
         run: |
-          python -m pytest -q
+          mkdir -p test-results
+          python -m pytest -q --junitxml=test-results/pytest.xml
 
       - name: Upload pytest cache (always)
         if: always()
@@ -46,3 +47,11 @@ jobs:
         with:
           name: pytest-cache
           path: backend/.pytest_cache
+
+      - name: Upload JUnit test results (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-results
+          path: backend/test-results/pytest.xml
+          if-no-files-found: warn

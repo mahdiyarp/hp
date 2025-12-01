@@ -1,5 +1,7 @@
 # HesabPak - سیستم حسابداری فارسی 💰
 
+[![Backend Tests](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml)
+
 سیستم جامع حسابداری و مدیریت تراکنش‌های مالی با رابط کاربری فارسی و امکانات کامل.
 
 ## 🚀 راه‌اندازی سریع
