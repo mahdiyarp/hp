@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { apiGet } from '../services/api';
 
 interface Payment {
   id: number;
@@ -13,6 +14,7 @@ interface Payment {
 export default function Payments() {
   const [items, setItems] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState('');
   const [status, setStatus] = useState('');
   const [direction, setDirection] = useState('');
@@ -22,8 +24,7 @@ export default function Payments() {
   const [limit, setLimit] = useState(20);
   const [totalCount, setTotalCount] = useState(0);
 
-  const load = async () => {
-    setLoading(true);
+  const query = useMemo(() => {
     const params = new URLSearchParams();
     if (method) params.set('method', method);
     if (status) params.set('status', status);
@@ -32,17 +33,27 @@ export default function Payments() {
     if (dateTo) params.set('date_to', dateTo);
     params.set('page', String(page));
     params.set('limit', String(limit));
-    const res = await fetch(`/api/payments?${params.toString()}`);
-    const data = await res.json();
-    setItems(data || []);
-    // fetch count for pagination
-    const resCount = await fetch(`/api/payments/count?${params.toString()}`);
-    const c = await resCount.json();
-    setTotalCount(Number(c?.count || 0));
-    setLoading(false);
+    return params.toString();
+  }, [method, status, direction, dateFrom, dateTo, page, limit]);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiGet<Payment[]>(`/api/payments?${query}`);
+      setItems(Array.isArray(data) ? data : []);
+      const c = await apiGet<{ count: number }>(`/api/payments/count?${query}`);
+      setTotalCount(Number(c?.count || 0));
+    } catch (e: any) {
+      setError(e?.message || 'خطا در دریافت اطلاعات');
+      setItems([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, [method, status, direction, dateFrom, dateTo, page]);
+  useEffect(() => { load(); }, [query]);
 
   const exportCsv = async () => {
     const params = new URLSearchParams();
@@ -71,6 +82,10 @@ export default function Payments() {
           <button className="px-3 py-1 bg-green-600 text-white rounded" onClick={() => { location.hash = '#payment/new'; }}>افزودن پرداخت</button>
         </div>
       </div>
+
+      {error ? (
+        <div className="hp-card p-3 border border-red-300 bg-red-50 text-red-700 text-sm">{error}</div>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
         <select className="border p-2 rounded" value={direction} onChange={e => setDirection(e.target.value)}>
@@ -111,7 +126,15 @@ export default function Payments() {
             </tr>
           </thead>
           <tbody>
-            {items.map((p) => (
+            {loading ? (
+              <tr>
+                <td className="p-4 text-center" colSpan={7}>در حال بارگذاری...</td>
+              </tr>
+            ) : items.length === 0 ? (
+              <tr>
+                <td className="p-4 text-center text-slate-500" colSpan={7}>موردی یافت نشد</td>
+              </tr>
+            ) : items.map((p) => (
               <tr key={p.id} className="border-t">
                 <td className="p-2">{p.id}</td>
                 <td className="p-2">
