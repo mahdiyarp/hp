@@ -8,7 +8,8 @@ from app.activity_logger import log_activity
 from app.blockchain import hash_event as bc_hash_event
 from app.auth import get_current_user
 
-router = APIRouter(prefix="/api/payments", tags=["payments"])
+from fastapi import Depends as _Depends  # alias to avoid confusion
+router = APIRouter(prefix="/api/payments", tags=["payments"], dependencies=[_Depends(get_current_user)])
 
 
 def _update_invoice_status(session: Session, invoice_id: Optional[int]):
