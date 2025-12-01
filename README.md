@@ -25,6 +25,14 @@
 	- Coverage: artifact `coverage-report` contains `coverage.xml` and summary comment on PRs.
 	- PR Annotations: failing tests are annotated directly on pull requests.
 
+- Lint (Ruff):
+	```powershell
+	python -m venv .venv
+	.\.venv\Scripts\Activate.ps1
+	python -m pip install ruff
+	ruff check backend
+	```
+
 - Enforcing required checks (maintainers):
 	1. Settings → Branches → Add rule for `main`.
 	2. Enable "Require status checks to pass" and select the workflow checks named like `Backend Tests / tests (3.10|3.11|3.12)`.
