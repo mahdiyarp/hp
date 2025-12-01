@@ -2,22 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app import crud, schemas, models
-from app.database import get_db
+from app import crud, schemas, models, db
 from app.services.backup_service import create_structured_backup
 
 router = APIRouter(prefix='/api/backups', tags=['backups'])
 
 
 @router.get('/', response_model=List[schemas.BackupOut])
-def list_backups(limit: int = 100, session: Session = Depends(get_db)):
+def list_backups(limit: int = 100, session: Session = Depends(db.get_db)):
     """List all backups, newest first."""
     backups = crud.list_backups(session, limit=limit)
     return backups
 
 
 @router.post('/manual', response_model=schemas.BackupOut, status_code=201)
-def create_manual_backup(note: Optional[str] = None, session: Session = Depends(get_db)):
+def create_manual_backup(note: Optional[str] = None, session: Session = Depends(db.get_db)):
     """Create a manual backup snapshot."""
     result = create_structured_backup(session, created_by=None, kind='manual', note=note or 'Manual backup')
     backup_id = result.get('backup_id')
@@ -30,7 +29,7 @@ def create_manual_backup(note: Optional[str] = None, session: Session = Depends(
 
 
 @router.get('/{backup_id}', response_model=schemas.BackupOut)
-def get_backup_detail(backup_id: int, session: Session = Depends(get_db)):
+def get_backup_detail(backup_id: int, session: Session = Depends(db.get_db)):
     """Retrieve a single backup by ID."""
     backup = crud.get_backup(session, backup_id)
     if not backup:
@@ -39,7 +38,7 @@ def get_backup_detail(backup_id: int, session: Session = Depends(get_db)):
 
 
 @router.get('/{backup_id}/download')
-def download_backup(backup_id: int, session: Session = Depends(get_db)):
+def download_backup(backup_id: int, session: Session = Depends(db.get_db)):
     """Download a backup file."""
     from fastapi.responses import FileResponse
     import os
@@ -53,7 +52,7 @@ def download_backup(backup_id: int, session: Session = Depends(get_db)):
 
 
 @router.delete('/{backup_id}', status_code=204)
-def delete_backup(backup_id: int, session: Session = Depends(get_db)):
+def delete_backup(backup_id: int, session: Session = Depends(db.get_db)):
     """Delete a backup record and file."""
     import os
 

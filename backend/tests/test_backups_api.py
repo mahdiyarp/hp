@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from backend.app.main import app
-from backend.app import crud
+from app.main import app
+from app import crud
 
 
 client = TestClient(app)
