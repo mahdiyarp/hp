@@ -11,7 +11,6 @@ from app import db, models, schemas
 
 
 from app.services import assistant_service
-from app.main import get_current_user
 
 
 
