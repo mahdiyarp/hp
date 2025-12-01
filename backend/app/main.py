@@ -28,6 +28,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, SUPPORTED_PROVIDERS
 from .api import api_router
+from .services.scheduler import start_scheduler, stop_scheduler
 from .api.deps import get_current_user, require_roles, require_permissions
 
 DB = db
@@ -136,6 +137,23 @@ def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, session: Sessio
 def on_startup():
     # Ensure DB tables exist for simple dev setup. Alembic is primary migration tool.
     db.Base.metadata.create_all(bind=db.engine)
+
+
+@app.on_event("startup")
+def _start_background_scheduler():
+    try:
+        start_scheduler()
+    except Exception:
+        # Do not block app startup if scheduler fails
+        pass
+
+
+@app.on_event("shutdown")
+def _stop_background_scheduler():
+    try:
+        stop_scheduler()
+    except Exception:
+        pass
 
 
 @app.get("/api/hello")

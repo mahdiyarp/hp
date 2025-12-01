@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from .routes import auth, crm, finance_invoices, finance_payments, finance_cheques, finance_pricing, system_backup
+from .routes import auth, crm, finance_invoices, finance_payments, finance_cheques, finance_pricing, system_backup, integrations
 
 # Central router that aggregates all sub-routers with the /api prefix.
 api_router = APIRouter(prefix="/api")
@@ -12,3 +12,4 @@ api_router.include_router(finance_payments.router)
 api_router.include_router(finance_cheques.router)
 api_router.include_router(finance_pricing.router)
 api_router.include_router(system_backup.router)
+api_router.include_router(integrations.router)

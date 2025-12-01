@@ -632,6 +632,18 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
         log_activity(session, inv.party_name or None, f"تأیید/پایان فاکتور {inv.invoice_number}", path=f"/api/invoices/{inv.id}/finalize", method='POST', status_code=200, detail={'invoice_id': inv.id})
     except Exception:
         pass
+    # Automation hooks
+    try:
+        from .services.automation import trigger_event as _trigger
+        _trigger(session, 'invoice.finalized', {
+            'id': inv.id,
+            'invoice_number': inv.invoice_number,
+            'party_id': inv.party_id,
+            'party_name': inv.party_name,
+            'total': int(inv.total or 0),
+        })
+    except Exception:
+        pass
     return inv
 
 
@@ -817,6 +829,18 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     try:
         from .activity_logger import log_activity
         log_activity(session, pay.party_name or None, f"تأیید/پست پرداخت {pay.payment_number}", path=f"/api/payments/{pay.id}/finalize", method='POST', status_code=200, detail={'payment_id': pay.id})
+    except Exception:
+        pass
+    # Automation hooks
+    try:
+        from .services.automation import trigger_event as _trigger
+        _trigger(session, 'payment.posted', {
+            'id': pay.id,
+            'payment_number': pay.payment_number,
+            'party_id': pay.party_id,
+            'party_name': pay.party_name,
+            'amount': int(pay.amount or 0),
+        })
     except Exception:
         pass
     

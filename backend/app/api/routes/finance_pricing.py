@@ -15,7 +15,7 @@ router = APIRouter(prefix="/products", tags=["Finance - Pricing"])
 def list_prices(
     product_id: str,
     session: Session = Depends(db.get_db),
-    _: models.User = Depends(require_roles(["Admin", "Manager", "Accountant", "Viewer"]))
+    _: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant", "Viewer"]))
 ):
     return [schemas.ProductPriceOut.from_orm(p) for p in pricing_service.list_product_prices(session, product_id)]
 
@@ -26,7 +26,7 @@ def effective_price(
     price_type: str = 'sale',
     at: Optional[str] = None,
     session: Session = Depends(db.get_db),
-    _: models.User = Depends(require_roles(["Admin", "Manager", "Accountant", "Viewer"]))
+    _: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant", "Viewer"]))
 ):
     at_dt = datetime.fromisoformat(at) if at else None
     pp = pricing_service.get_effective_price(session, product_id, price_type, at_dt)
@@ -44,7 +44,7 @@ def create_price(
     product_id: str,
     payload: schemas.ProductPriceCreate,
     session: Session = Depends(db.get_db),
-    _: models.User = Depends(require_roles(["Admin", "Manager"]))
+    _: models.User = Depends(require_roles(role_names=["Admin", "Manager"]))
 ):
     try:
         pp = pricing_service.create_product_price(session, product_id, payload)
@@ -58,7 +58,7 @@ def update_price(
     price_id: int,
     payload: schemas.ProductPriceUpdate,
     session: Session = Depends(db.get_db),
-    _: models.User = Depends(require_roles(["Admin", "Manager"]))
+    _: models.User = Depends(require_roles(role_names=["Admin", "Manager"]))
 ):
     pp = pricing_service.update_product_price(session, price_id, payload)
     if not pp:
@@ -70,7 +70,7 @@ def update_price(
 def delete_price(
     price_id: int,
     session: Session = Depends(db.get_db),
-    _: models.User = Depends(require_roles(["Admin"]))
+    _: models.User = Depends(require_roles(role_names=["Admin"]))
 ):
     ok = pricing_service.delete_product_price(session, price_id)
     if not ok:

@@ -20,7 +20,7 @@ def list_cheques(
     overdue: Optional[bool] = None,
     limit: int = 100,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_roles(["Admin", "Manager", "Accountant", "Viewer"]))
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant", "Viewer"]))
 ):
     rows = cheques_service.list_cheques(session, status, start, end, near_due_days, overdue, limit)
     # enrich with jalali strings in response
@@ -57,7 +57,7 @@ def list_cheques(
 def get_cheque(
     cheque_id: int,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_roles(["Admin", "Manager", "Accountant", "Viewer"]))
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant", "Viewer"]))
 ):
     ch = cheques_service.get_cheque(session, cheque_id)
     if not ch:
@@ -91,7 +91,7 @@ def get_cheque(
 def create_cheque(
     payload: schemas.ChequeCreate,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_roles(["Admin", "Manager", "Accountant"]))
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant"]))
 ):
     try:
         ch = cheques_service.create_cheque(session, payload)
@@ -105,7 +105,7 @@ def update_cheque(
     cheque_id: int,
     payload: schemas.ChequeUpdate,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_roles(["Admin", "Manager", "Accountant"]))
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant"]))
 ):
     ch = cheques_service.update_cheque(session, cheque_id, payload)
     if not ch:
@@ -117,7 +117,7 @@ def update_cheque(
 def delete_cheque(
     cheque_id: int,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_roles(["Admin", "Manager", "Accountant"]))
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Manager", "Accountant"]))
 ):
     ok = cheques_service.delete_cheque(session, cheque_id)
     if not ok:
