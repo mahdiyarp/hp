@@ -2,12 +2,12 @@ name: Backend Tests
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ main, copilot/* ]
   pull_request:
-    branches: [ "**" ]
+    branches: [ main ]
 
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,11 +32,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+          if [ -f requirements-dev.txt ]; then python -m pip install -r requirements-dev.txt; else python -m pip install -r requirements.txt; fi
 
       - name: Run tests
         env:
-          # Tests set this internally, but we keep a safe default here too
           DATABASE_URL: sqlite:///:memory:
         run: |
           python -m pytest -q
+
+      - name: Upload pytest cache (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-cache
+          path: backend/.pytest_cache
