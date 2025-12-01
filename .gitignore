@@ -26,6 +26,21 @@ backend/*.db
 # Repository-level artifacts
 logs/
 
+# IDE artifacts
+.vs/
+
+# Local databases
+hp_local.db
+*.sqlite
+*.sqlite3
+
+# Secrets and keys
+site/id_rsa
+site/id_rsa.ppk
+site/id_rsa*
+*.pem
+*.key
+
 # Frontend
 frontend/node_modules/
 frontend/dist/

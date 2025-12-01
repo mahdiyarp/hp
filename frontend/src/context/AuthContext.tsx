@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import authService, { clearTokens } from '../services/auth'
+import authService, { clearTokens } from '../services/auth.js'
 
 type User = { id: number; username: string; role: string; otp_enabled: boolean }
 
@@ -16,6 +16,7 @@ const AuthContext = createContext<{
   modules: string[]
   permissions: Permission[]
   login: (u: string, p: string, otp?: string) => Promise<{ otpRequired: boolean }>
+  loginPhone: (mobile: string, otpCode?: string, sessionId?: string) => Promise<{ needsOtp: boolean }>
   logout: () => void
 }>({ 
   user: null, 
@@ -23,6 +24,7 @@ const AuthContext = createContext<{
   modules: [], 
   permissions: [],
   login: async () => ({ otpRequired: false }), 
+  loginPhone: async () => ({ needsOtp: true }),
   logout: () => {} 
 })
 
@@ -95,6 +97,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { otpRequired: false }
   }
 
+  const loginPhone = async (mobile: string, otpCode?: string, sessionId?: string) => {
+    if (!otpCode) {
+      await authService.loginPhoneRequest(mobile)
+      return { needsOtp: true }
+    }
+    await authService.verifyPhoneOtp(sessionId || '', otpCode)
+    const res = await authService.fetchWithAuth('/api/auth/me')
+    if (res.ok) {
+      const d = await res.json()
+      setUser({ id: d.id, username: d.username, role: d.role, otp_enabled: d.otp_enabled })
+      const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
+      if (modsRes.ok) {
+        const mods = await modsRes.json()
+        setModules(Array.isArray(mods) ? mods : [])
+      }
+      const permsRes = await authService.fetchWithAuth('/api/current-user/permissions')
+      if (permsRes.ok) {
+        const perms = await permsRes.json()
+        setPermissions(Array.isArray(perms) ? perms : [])
+      }
+    }
+    return { needsOtp: false }
+  }
+
   const logout = () => {
     authService
       .fetchWithAuth('/api/auth/logout', { method: 'POST' })
@@ -108,6 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, modules, permissions, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, setUser, modules, permissions, login, loginPhone, logout }}>{children}</AuthContext.Provider>
   )
 }

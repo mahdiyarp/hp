@@ -1,0 +1,928 @@
+from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
+from . import db, crud, schemas, security
+from .ocr_parser import parse_invoice_file
+from .ocr_parser import parse_payment_file
+import tempfile
+import shutil
+from sqlalchemy.orm import Session
+from datetime import datetime, timezone, timedelta
+import jdatetime
+from typing import List, Optional, Dict, Any
+import os
+from pathlib import Path
+import json
+import secrets
+import openai
+import logging
+import threading
+import time
+from uuid import uuid4
+from app.accounting import fiscal_service
+from app.core import rule_engine
+from app.settings.router import router as settings_router
+from app.sms_router import router as sms_router
+from app.api.routers import assistant as assistant_router
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.security import OAuth2PasswordBearer
+from . import models
+from .schemas import InvoiceCreate, InvoiceOut
+from .schemas import PaymentCreate, PaymentOut
+from .search import search_multi, suggest_live
+from . import integrations
+from .services.backup_service import create_structured_backup, create_scheduled_backup
+from .schemas import ProductCreate, ProductOut, PersonCreate, PersonOut
+from . import external_search
+from .schemas import ExternalSearchRequest, ExternalProduct, SaveExternalProductRequest
+from .schemas import AssistantRequest, AssistantResponse, AssistantToggle, OTPVerifyRequest, OTPSetupResponse, OTPDisableRequest
+from .exports import (
+    export_invoice_pdf,
+    export_invoice_csv,
+    export_invoice_excel,
+    export_invoice_json,
+    export_invoice_xml,
+    export_invoice_ubl_stub,
+    EXPORT_DIR,
+)
+from .activity_logger import log_activity
+from fastapi.responses import HTMLResponse, FileResponse
+try:
+    from fastapi.templating import Jinja2Templates
+    TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+    templates = Jinja2Templates(directory=TEMPLATE_DIR)
+except Exception:
+    # Fallback minimal templates object when jinja2 is unavailable/incompatible in test env
+    class DummyTemplates:
+        def __init__(self, directory=None):
+            self.directory = directory
+
+        def TemplateResponse(self, name, context):
+            # Return a minimal HTMLResponse to satisfy callers in tests
+            return HTMLResponse(content="", status_code=200)
+
+    TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+    templates = DummyTemplates(directory=TEMPLATE_DIR)
+
+from .version import get_version_info
+from .sms import send_sms, SUPPORTED_PROVIDERS
+from app.sms_router import router as sms_router
+from .rate_limit import limiter
+from .middleware.date_conversion import date_conversion_middleware
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ROADMAP_DIR = PROJECT_ROOT / "roadmap"
+ROADMAP_JSON_PATH = ROADMAP_DIR / "roadmap.json"
+ROADMAP_STATUS_PATH = ROADMAP_DIR / "status.json"
+ROADMAP_LIVE_PATH = ROADMAP_DIR / "generated-page" / "live.html"
+
+DB = db
+
+app = FastAPI(title="hesabpak Backend")
+
+# Ensure responses include explicit utf-8 charset where appropriate
+@app.middleware("http")
+async def ensure_charset_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        ct = response.headers.get('content-type')
+        if ct:
+            if 'charset' not in ct.lower():
+                # Append charset for textual/media types only
+                if ct.startswith('application/json') or ct.startswith('text/') or 'application/' in ct:
+                    response.headers['content-type'] = f"{ct}; charset=utf-8"
+        else:
+            # Fallback: if response has media_type attribute, set sensible default
+            mt = getattr(response, 'media_type', None)
+            if mt and ('json' in mt or mt.startswith('text/')):
+                response.headers['content-type'] = f"{mt}; charset=utf-8"
+    except Exception:
+        # do not break responses on header manipulation issues
+        pass
+    return response
+
+# No-cache middleware: add Cache-Control headers for static/html/json responses
+@app.middleware("http")
+async def no_cache_middleware(request: Request, call_next):
+    response = await call_next(request)
+    try:
+        # Only set no-cache for textual responses to avoid interfering with binary downloads
+        ct = response.headers.get('content-type', '')
+        if ct and (ct.startswith('text/') or 'json' in ct):
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+    except Exception:
+        pass
+    return response
+
+# Add date conversion middleware
+app.add_middleware(BaseHTTPMiddleware, dispatch=date_conversion_middleware)
+
+# Add CORS middleware for development - allow frontend origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://172.22.176.1:5173",
+        "http://172.22.176.1:3000",
+        # Add more origins as needed for production
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+TOKEN_BASE_FEE = 1
+SERVICE_FEE_MAP = {
+    'sms': 3,
+    'ai': 5,
+    'store': 10,
+    'user_signup': 2,
+    'transfer': 1,
+}
+
+PAGE_BUILDER_TEMPLATES_KEY = 'page_builder_templates'
+PAGE_BUILDER_CATEGORY = 'page_builder'
+PAGE_BUILDER_DISPLAY = 'Page builder templates'
+BACKUP_INTERVAL_MIN = int(os.getenv('BACKUP_INTERVAL_MIN', '0') or '0')
+BACKUP_SCHEDULER_STARTED = False
+LOGGER = logging.getLogger(__name__)
+
+
+def _start_backup_scheduler():
+    global BACKUP_SCHEDULER_STARTED
+    if BACKUP_INTERVAL_MIN <= 0 or BACKUP_SCHEDULER_STARTED:
+        return
+    BACKUP_SCHEDULER_STARTED = True
+
+    def _loop():
+        while True:
+            time.sleep(BACKUP_INTERVAL_MIN * 60)
+            session = db.SessionLocal()
+            try:
+                create_scheduled_backup(session, note='Auto-scheduled snapshot')
+                LOGGER.info('Scheduled backup created by scheduler')
+            except Exception as exc:
+                LOGGER.warning('Scheduled backup failed: %s', exc)
+            finally:
+                try:
+                    session.close()
+                except Exception:
+                    pass
+
+    thread = threading.Thread(target=_loop, daemon=True, name='backup-scheduler')
+    thread.start()
+
+
+def charge_token_fee(session: Session, user_id: Optional[int], service_type: str, ref_id: Optional[str] = None):
+    if not user_id:
+        return
+    fee = SERVICE_FEE_MAP.get(service_type, TOKEN_BASE_FEE)
+    account = crud.get_or_create_token_account(session, user_id=user_id)
+    if account.balance < fee:
+        raise HTTPException(status_code=402, detail=f'ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ط·آ·ط¢آ³ط·آ·ط¹آ¾ ({fee} token)')
+    crud.record_token_transfer(
+        session=session,
+        from_account=account,
+        to_address='treasury',
+        amount=fee,
+        fee_amount=0,
+        memo=service_type,
+    )
+    crud.add_consumption_log(session, user_id=user_id, service_type=service_type, ref_id=ref_id, cost_token=fee, metadata_json=None)
+
+
+# Simple audit middleware: logs each request/response to audit_logs table
+class AuditMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        user_id = None
+        auth = request.headers.get('authorization')
+        if auth and auth.lower().startswith('bearer '):
+            token = auth.split(None, 1)[1]
+            try:
+                payload = security.decode_token(token)
+                sub = payload.get('sub')
+                # lookup user id by username
+                session = DB.SessionLocal()
+                try:
+                    user = crud.get_user_by_username(session, sub)
+                    if user:
+                        user_id = user.id
+                finally:
+                    session.close()
+            except Exception:
+                user_id = None
+        response = await call_next(request)
+        # write audit log (file + DB) using activity_logger
+        try:
+            from .activity_logger import log_request
+            uname = None
+            if user_id:
+                # try to get username for nicer display
+                s = DB.SessionLocal()
+                try:
+                    u = crud.get_user(s, user_id)
+                    if u:
+                        uname = u.username
+                finally:
+                    try:
+                        s.close()
+                    except Exception:
+                        pass
+            log_request(request, response, username=uname)
+        except Exception:
+            pass
+        return response
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# app.add_middleware(AuditMiddleware)  # Temporarily disabled due to async issues
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(db.get_db)):
+    try:
+        payload = security.decode_token(token)
+        username = payload.get('sub')
+        if username is None:
+            raise HTTPException(status_code=401, detail='Invalid authentication')
+    except Exception as e:
+        raise HTTPException(status_code=401, detail='Invalid token')
+    user = crud.get_user_by_username(session, username)
+    if not user:
+        raise HTTPException(status_code=401, detail='User not found')
+    return user
+
+# Include routers that depended on auth helpers after helpers defined
+app.include_router(settings_router, dependencies=[Depends(lambda: None)])
+app.include_router(sms_router, dependencies=[Depends(lambda: None)])
+app.include_router(assistant_router.router, dependencies=[Depends(lambda: None)])
+
+# import and include reports router now to avoid circular import
+from .auth import get_current_user, require_permissions, require_roles
+from app.reports import router as reports_router
+app.include_router(reports_router)
+
+
+@app.get('/api/admin/activity', response_model=list[schemas.ActivityLogOut])
+def list_activity(q: Optional[str] = None, user_id: Optional[int] = None, start: Optional[str] = None, end: Optional[str] = None, limit: Optional[int] = 100, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    qs = session.query(models.AuditLog).order_by(models.AuditLog.created_at.desc())
+    if q:
+        qs = qs.filter(models.AuditLog.detail.ilike(f"%{q}%"))
+    if user_id:
+        qs = qs.filter(models.AuditLog.user_id == user_id)
+    if start:
+        try:
+            from datetime import datetime
+            s = datetime.fromisoformat(start)
+            qs = qs.filter(models.AuditLog.created_at >= s)
+        except Exception:
+            pass
+    if end:
+        try:
+            from datetime import datetime
+            e = datetime.fromisoformat(end)
+            qs = qs.filter(models.AuditLog.created_at <= e)
+        except Exception:
+            pass
+    return qs.limit(int(limit or 100)).all()
+
+
+@app.get('/api/admin/activity/{aid}', response_model=schemas.ActivityLogOut)
+def get_activity(aid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    a = session.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
+    if not a:
+        raise HTTPException(status_code=404, detail='Activity not found')
+    return a
+
+
+@app.patch('/api/admin/activity/{aid}', response_model=schemas.ActivityLogOut)
+def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    a = session.query(models.AuditLog).filter(models.AuditLog.id == aid).first()
+    if not a:
+        raise HTTPException(status_code=404, detail='Activity not found')
+    if payload.detail is not None:
+        a.detail = payload.detail
+    session.add(a)
+    session.commit()
+    session.refresh(a)
+    # also write to file log to reflect edit
+    try:
+        log_activity(None, current.username if current else None, f"ط·آ¸ط«â€ ط·ط›ط¥â€™ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ´ ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ§ط·آ¹ط¢آ¯ {aid}", path=f"/api/admin/activity/{aid}", method='PATCH', status_code=200, detail={'edited_by': current.username})
+    except Exception:
+        pass
+    return a
+
+
+def require_roles(role_ids: List[int] = None, role_names: List[str] = None):
+    """ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ·ط¢آ³ role ID ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦
+    
+    ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ¸ط¸آ¾ط·آ·ط¢آ§ط·آ·ط¢آ¯ط·آ¸أ¢â‚¬طŒ:
+    - require_roles(role_ids=[1])  # ط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ· Admin (ID=1)
+    - require_roles(role_names=['Admin'])  # ط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ· Admin (ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦)
+    """
+    def _dependency(current_user: models.User = Depends(get_current_user)):
+        if not current_user.role_id:
+            raise HTTPException(status_code=403, detail='ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ´ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¯')
+        
+        if role_ids and current_user.role_id not in role_ids:
+            raise HTTPException(status_code=403, detail='ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ¯')
+        
+        if role_names and current_user.role_obj:
+            if current_user.role_obj.name not in role_names:
+                raise HTTPException(status_code=403, detail='ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ¯')
+        
+        return current_user
+    return _dependency
+
+
+def require_permissions(permission_names: List[str]):
+    """ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ·ط¢آ³ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ permission
+    
+    ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ¸ط¸آ¾ط·آ·ط¢آ§ط·آ·ط¢آ¯ط·آ¸أ¢â‚¬طŒ:
+    - require_permissions(['finance_view'])  # ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ´ط·آ·ط¢آ§ط·آ¸أ¢â‚¬طŒط·آ·ط¢آ¯ط·آ¸أ¢â‚¬طŒ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چط·ط›ط¥â€™
+    - require_permissions(['sales_create', 'sales_edit'])  # ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·آ·ط¢آ§ط·آ·ط¢آ¯ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸ط«â€ ط·ط›ط¥â€™ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ´ ط·آ¸ط¸آ¾ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ·ط¢آ´
+    """
+    def _dependency(current_user: models.User = Depends(get_current_user)):
+        if not current_user.role_id or not current_user.role_obj:
+            raise HTTPException(status_code=403, detail='ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ´ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¯')
+        
+        user_perm_names = set(p.name for p in (current_user.role_obj.permissions or []))
+        required_perms = set(permission_names)
+        
+        # Check if user has at least one of the required permissions
+        if not user_perm_names & required_perms:
+            raise HTTPException(status_code=403, detail=f'ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ¯. ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬طŒ ط·ط›ط¥â€™ط·آ¹ط¢آ©ط·ط›ط¥â€™ ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ¸أ¢â‚¬آ  ط·آ·ط¢آ¯ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ط£آ¢أ¢â€ڑآ¬ط¥â€™ط·آ¸أ¢â‚¬طŒط·آ·ط¢آ§: {", ".join(permission_names)}')
+        
+        return current_user
+    return _dependency
+
+
+@app.on_event("startup")
+def on_startup():
+    # Ensure DB tables exist for simple dev setup. Alembic is primary migration tool.
+    db.Base.metadata.create_all(bind=db.engine)
+    _start_backup_scheduler()
+
+    # Ensure system setting 'reports.enabled' exists (default true)
+    try:
+        s = db.SessionLocal()
+        try:
+            existing = crud.get_system_setting(s, 'reports.enabled')
+            if not existing:
+                from .schemas import SystemSettingCreate
+                setting = SystemSettingCreate(
+                    key='reports.enabled',
+                    value='true',
+                    setting_type='bool',
+                    display_name='Enable Reports Module',
+                    description='Toggle reports module availability',
+                    category='reports',
+                    is_secret=False,
+                )
+                try:
+                    crud.create_system_setting(s, setting, updated_by=None)
+                except Exception:
+                    pass
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+@app.get("/api/hello")
+def hello():
+    return {"message": "Hello from hesabpak backend (FastAPI)!"}
+
+
+@app.get("/api/time/now")
+def time_now():
+    # return server time snapshots with Jalali representation
+    local_now = datetime.now().astimezone()
+    utc_now = local_now.astimezone(timezone.utc)
+    offset_delta = local_now.utcoffset()
+    offset_seconds = int(offset_delta.total_seconds()) if offset_delta is not None else 0
+    sign = '+' if offset_seconds >= 0 else '-'
+    total_minutes = abs(offset_seconds) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    offset_str = f"{sign}{hours:02d}:{minutes:02d}"
+    try:
+        jalali_now = jdatetime.datetime.fromgregorian(datetime=local_now.replace(tzinfo=None))
+        jalali_str = jalali_now.strftime("%Y/%m/%d %H:%M:%S")
+    except Exception:
+        jalali_str = None
+    return {
+        "utc": utc_now.isoformat(),
+        "server_local": local_now.isoformat(),
+        "server_offset_seconds": offset_seconds,
+        "server_offset": offset_str,
+        "jalali": jalali_str,
+        "epoch_ms": int(utc_now.timestamp() * 1000),
+    }
+
+
+@app.get('/api/version')
+def api_version():
+    try:
+        return get_version_info()
+    except Exception:
+        return {"version": "unknown"}
+
+
+@app.post("/api/time/sync", response_model=schemas.TimeSync)
+def time_sync(payload: schemas.TimeSyncCreate, session: Session = Depends(db.get_db)):
+    # Create a timesync record where server_time is canonical (UTC)
+    try:
+        record = crud.create_time_sync(session, payload)
+        return record
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/users", response_model=schemas.UserOut)
+def create_user(user: schemas.UserCreate, session: Session = Depends(db.get_db)):
+    try:
+        return crud.create_user(session, user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post('/api/auth/register', response_model=schemas.UserOut)
+def register(user_in: schemas.UserCreate, session: Session = Depends(db.get_db)):
+    try:
+        user = crud.create_user(session, user_in)
+        # create token account with initial airdrop
+        crud.get_or_create_token_account(session, user.id)
+        return user
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post('/api/auth/login', response_model=schemas.Token)
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(db.get_db)):
+    user = crud.authenticate_user(session, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=400, detail='Incorrect username or password')
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail='User disabled')
+    # ensure token account exists (airdrop handled in CRUD)
+    crud.get_or_create_token_account(session, user.id)
+    form = await request.form()
+    otp_code = form.get('otp')
+    if user.otp_enabled:
+        otp_secret = security.decrypt_value(user.otp_secret) if user.otp_secret else None
+        if not otp_code:
+            raise HTTPException(status_code=428, detail='OTP required')
+        if not otp_secret or not security.verify_otp(otp_secret, otp_code):
+            raise HTTPException(status_code=400, detail='Invalid OTP')
+    access_token = security.create_access_token(user.username, expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(user.username)
+    crud.set_refresh_token(session, user, refresh_token)
+    return schemas.Token(access_token=access_token, refresh_token=refresh_token, otp_required=False)
+
+
+@app.post('/api/auth/refresh', response_model=schemas.Token)
+def refresh_token(payload: dict, session: Session = Depends(db.get_db)):
+    refresh = payload.get('refresh_token')
+    if not refresh:
+        raise HTTPException(status_code=400, detail='refresh_token required')
+    try:
+        data = security.decode_token(refresh)
+        username = data.get('sub')
+    except Exception:
+        raise HTTPException(status_code=401, detail='Invalid refresh token')
+    user = crud.get_user_by_username(session, username)
+    if not user or not crud.verify_refresh_token(session, user, refresh):
+        raise HTTPException(status_code=401, detail='Invalid refresh token')
+    # issue new tokens
+    access_token = security.create_access_token(user.username)
+    new_refresh = security.create_refresh_token(user.username)
+    crud.set_refresh_token(session, user, new_refresh)
+    return schemas.Token(access_token=access_token, refresh_token=new_refresh, otp_required=False)
+
+
+@app.post('/api/auth/logout')
+def logout(current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    crud.revoke_refresh_token(session, current_user)
+    return {'ok': True}
+
+
+@app.post('/api/auth/otp/setup', response_model=OTPSetupResponse)
+def otp_setup(current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    secret = security.generate_otp_secret()
+    crud.set_user_otp_secret(session, current_user, secret, enabled=False)
+    uri = security.generate_otp_uri(current_user.username, secret)
+    return OTPSetupResponse(secret=secret, uri=uri)
+
+
+@app.post('/api/auth/otp/verify')
+def otp_verify(payload: OTPVerifyRequest, current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    otp_secret = security.decrypt_value(current_user.otp_secret) if current_user.otp_secret else None
+    if not otp_secret:
+        raise HTTPException(status_code=400, detail='OTP secret not generated')
+    if not security.verify_otp(otp_secret, payload.code):
+        raise HTTPException(status_code=400, detail='Invalid OTP code')
+    crud.enable_user_otp(session, current_user)
+    return {'otp_enabled': True}
+
+
+@app.post('/api/auth/otp/disable')
+def otp_disable(payload: OTPDisableRequest, current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    if current_user.otp_enabled:
+        if payload.code:
+            otp_secret = security.decrypt_value(current_user.otp_secret) if current_user.otp_secret else None
+            if not otp_secret or not security.verify_otp(otp_secret, payload.code):
+                raise HTTPException(status_code=400, detail='Invalid OTP code')
+        crud.disable_user_otp(session, current_user)
+    return {'otp_enabled': False}
+
+
+# Example protected route
+@app.get('/api/admin-only')
+def admin_only(user = Depends(require_roles(role_names=['Admin']))):
+    return {'msg': f'Hello {user.username}, you are admin.'}
+
+
+@app.get('/api/auth/me')
+def me(current_user: models.User = Depends(get_current_user)):
+    """Return current user info"""
+    from fastapi.responses import JSONResponse
+    return JSONResponse({
+        'id': current_user.id,
+        'username': current_user.username,
+        'email': current_user.email,
+        'full_name': current_user.full_name,
+        'mobile': current_user.mobile,
+        'role': current_user.role,
+        'role_id': current_user.role_id,
+        'is_active': current_user.is_active,
+        'otp_enabled': getattr(current_user, 'otp_enabled', False)
+    })
+
+
+@app.post('/api/auth/login-phone', response_model=schemas.PhoneLoginResponse)
+def login_phone(payload: schemas.PhoneLoginRequest, session: Session = Depends(db.get_db)):
+    """
+    ط·آ·ط¢آ¯ط·آ·ط¢آ±ط·آ·ط¢آ®ط·آ¸ط«â€ ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾ ط·آ¸ط«â€ ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·آ·ط¢آ¨ط·آ·ط¢آ§ ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬â€چط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬آ .
+    OTP ط·آ·ط¢آ±ط·آ·ط¢آ§ ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ·ط¢آ·ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘ ط·آ¸ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ ط·آ¹ط¢آ©ط·آ¸ط«â€ ط·آ·ط¹آ¾ط·آ·ط¢آ§ط·آ¸أ¢â‚¬طŒ ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ¸أ¢â‚¬آ¦ط·ط›ط¥â€™ط£آ¢أ¢â€ڑآ¬ط¥â€™ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯.
+    """
+    from .sms import create_otp_session, send_sms as send_sms_func
+    
+    phone = payload.phone.strip()
+    
+    # ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ±ط·آ·ط¢آ³ط·ط›ط¥â€™ ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬â€چط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬آ 
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬â€چط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¹ط·آ·ط¹آ¾ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾')
+    
+    # ط·آ·ط¢آ¬ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ¬ط·آ¸ط«â€  ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¥â€™ ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ¨ط·آ·ط¢آ§ ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ¸أ¢â‚¬آ  ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬â€چط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬آ 
+    user: Optional[models.User] = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail='ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ¨ط·آ·ط¢آ§ ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ¸أ¢â‚¬آ  ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬â€چط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬آ  ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·آ·ط¹آ¾ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ´ط·آ·ط¢آ¯')
+    
+    if user and not user.is_active:
+        raise HTTPException(status_code=403, detail='ط·آ·ط¢آ­ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ·ط¢آ¨ ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·ط›ط¥â€™ ط·آ·ط·â€؛ط·ط›ط¥â€™ط·آ·ط¢آ± ط·آ¸ط¸آ¾ط·آ·ط¢آ¹ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾')
+    
+    # ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·آ·ط¢آ§ط·آ·ط¢آ¯ ط·آ·ط¢آ¬ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ³ط·آ¸أ¢â‚¬طŒ OTP
+    session_id, otp_code = create_otp_session(phone)
+    
+    # ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ OTP
+    message = f'ط·آ¹ط¢آ©ط·آ·ط¢آ¯ ط·آ¸ط«â€ ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ§: {otp_code}\nط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ¸أ¢â‚¬آ  ط·آ¹ط¢آ©ط·آ·ط¢آ¯ 5 ط·آ·ط¢آ¯ط·آ¸أ¢â‚¬ع‘ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘ط·آ¸أ¢â‚¬طŒ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¹ط·آ·ط¹آ¾ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾.'
+    success, msg = send_sms_func(session, phone, message, user_id=user.id if user else None)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f'ط·آ·ط¢آ®ط·آ·ط¢آ·ط·آ·ط¢آ§ ط·آ·ط¢آ¯ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ¸ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦: {msg}')
+    
+    return schemas.PhoneLoginResponse(
+        success=True,
+        message='ط·آ¹ط¢آ©ط·آ·ط¢آ¯ ط·آ·ط¹آ¾ط·آ·ط¢آ£ط·ط›ط¥â€™ط·ط›ط¥â€™ط·آ·ط¢آ¯ ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ·ط¢آ·ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘ ط·آ¸ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ ط·آ¹ط¢آ©ط·آ¸ط«â€ ط·آ·ط¹آ¾ط·آ·ط¢آ§ط·آ¸أ¢â‚¬طŒ ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ·ط¢آ´ط·آ·ط¢آ¯',
+        session_id=session_id
+    )
+
+
+@app.post('/api/auth/verify-phone-otp', response_model=schemas.PhoneOtpVerifyResponse)
+def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = Depends(db.get_db)):
+    """
+    ط·آ·ط¹آ¾ط·آ·ط¢آ£ط·ط›ط¥â€™ط·ط›ط¥â€™ط·آ·ط¢آ¯ ط·آ¹ط¢آ©ط·آ·ط¢آ¯ OTP ط·آ¸ط«â€  ط·آ·ط¢آ¯ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·آ·ط¹آ¾ access token.
+    """
+    from .sms import verify_otp_session
+    
+    is_valid, phone = verify_otp_session(payload.session_id, payload.otp_code)
+    
+    if not is_valid or not phone:
+        raise HTTPException(status_code=400, detail='ط·آ¹ط¢آ©ط·آ·ط¢آ¯ OTP ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¹ط·آ·ط¹آ¾ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸أ¢â‚¬آ¦ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ¶ط·ط›ط¥â€™ ط·آ·ط¢آ´ط·آ·ط¢آ¯ط·آ¸أ¢â‚¬طŒ ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾')
+    
+    # ط·آ·ط¢آ¬ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ·ط¢آ¬ط·آ¸ط«â€  ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¥â€™ ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ±
+    user: Optional[models.User] = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail='ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·آ·ط¹آ¾ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ´ط·آ·ط¢آ¯')
+    
+    # ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·آ·ط¢آ§ط·آ·ط¢آ¯ access token
+    access_token = security.create_access_token(str(user.username), expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = security.create_refresh_token(str(user.username))
+    crud.set_refresh_token(session, user, refresh_token)
+    
+    return schemas.PhoneOtpVerifyResponse(
+        success=True,
+        access_token=access_token,
+        token_type='bearer',
+        message='ط·آ¸ط«â€ ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬ع‘'
+    )
+
+
+# ==================== ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¨ط·آ·ط¢آ§ط·آ·ط¢آ¦ط·آ¸أ¢â‚¬â€چ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ ====================
+
+@app.post('/api/auth/register-mobile-otp', response_model=schemas.MobileOTPResponse)
+def register_mobile_otp(payload: schemas.MobileOTPRequest, session: Session = Depends(db.get_db)):
+    """
+    ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¨ط·آ·ط¢آ§ط·آ·ط¢آ¦ط·آ¸أ¢â‚¬â€چ ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ ط·ط›أ¢â‚¬â„¢ ط·آ¹ط¢آ©ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬â€چط·ط›ط¥â€™ط·ط›أ¢â‚¬â„¢ OTP ط·آ·ط¢آ·ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ¨ ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛ط·ط›أ¢â‚¬â€Œ
+    """
+    from .sms import create_otp_session, send_sms
+    
+    phone = payload.mobile.strip()
+    
+    # ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ¹ط¢آ©ط·ط›ط¥â€™ ط·آ·ط¹آ¾ط·آ·ط¢آµط·آ·ط¢آ¯ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط·â€؛ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ· ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢')
+    
+    # ط·آ¹أ¢â‚¬آ ط·ط›ط¥â€™ط·آ¹ط¢آ© ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛ ط·آ¹ط¢آ©ط·ط›ط¸آ¾ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ¸ط¢آ¾ط·ط›ط¸آ¾ط·آ¸أ¢â‚¬â€چط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¬ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·آ·ط¹آ¾ط·آ¸ط«â€  ط·آ¸أ¢â‚¬آ ط·ط›ط¸آ¾ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    existing_user = session.query(models.User).filter(
+        models.User.mobile == phone
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=409, detail='ط·ط›ط¥â€™ط·ط›ط¸آ¾ ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ¸ط¢آ¾ط·ط›ط¸آ¾ط·آ¸أ¢â‚¬â€چط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ±ط·آ·ط¢آ¬ط·آ·ط¢آ³ط·آ¸ط¢آ¹ط·آ·ط¢آ± ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢')
+    
+    # OTP ط·آ·ط¢آ¬ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ³ط·ط›ط¸آ¾ ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ·ط¢آ¦ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    session_id, otp_code = create_otp_session(phone)
+    
+    # OTP ط·آ·ط¢آ¨ط·آ¹ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    message = f'ط·آ·ط¢آ¢ط·آ¸ط¢آ¾ ط·آ¹ط¢آ©ط·آ·ط¢آ§ ط·آ·ط¢آ±ط·آ·ط¢آ¬ط·آ·ط¢آ³ط·آ¸ط¢آ¹ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ´ط·آ¸أ¢â‚¬آ  ط·آ¹ط¢آ©ط·آ¸ط«â€ ط·آ¹ط«â€ : {otp_code}\nط·ط›ط¥â€™ط·ط›ط¸آ¾ ط·آ¹ط¢آ©ط·آ¸ط«â€ ط·آ¹ط«â€  5 ط·آ¸أ¢â‚¬آ¦ط·آ¸أ¢â‚¬آ ط·آ¸ط¢آ¹ ط·آ·ط¹آ¾ط·آ¹ط¢آ© ط·آ·ط¢آ¯ط·آ·ط¢آ±ط·آ·ط¢آ³ط·آ·ط¹آ¾ ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢ط·ط›أ¢â‚¬â€Œ'
+    success, msg = send_sms(session, phone, message)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail=f'OTP ط·آ·ط¢آ¨ط·آ¹ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·آ¸أ¢â‚¬آ ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ¦ط·ط›ط¥â€™ط·آ¹ط·â€؛ ط·آ·ط¢آ®ط·آ·ط¢آ±ط·آ·ط¢آ§ط·آ·ط¢آ¨ط·ط›ط¥â€™: {msg}')
+    
+    return schemas.MobileOTPResponse(
+        success=True,
+        message='OTP ط·آ·ط¢آ¢ط·آ¸ط¢آ¾ ط·آ¹ط¢آ©ط·ط›أ¢â‚¬â„¢ ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸ط¢آ¾ط·آ·ط¢آ± ط·آ·ط¢آ¨ط·آ¹ط¢آ¾ط·ط›ط¥â€™ط·آ·ط¢آ¬ط·آ·ط¢آ§ ط·آ¹ط¢آ¯ط·ط›ط¥â€™ط·آ·ط¢آ§',
+        session_id=session_id
+    )
+
+
+@app.post('/api/auth/register-mobile-verify', response_model=schemas.MobileRegisterResponse)
+def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Session = Depends(db.get_db)):
+    """
+    ط·آ·ط¹آ¾ط·آ·ط¢آ£ط·ط›ط¥â€™ط·ط›ط¥â€™ط·آ·ط¢آ¯ ط·آ¹ط¢آ©ط·آ·ط¢آ¯ OTP ط·آ¸ط«â€  ط·آ·ط¢آ¯ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·آ·ط¹آ¾ access token.
+    """
+    from .sms import verify_otp_session
+    
+    phone = payload.mobile.strip()
+    username = payload.username.strip()
+    password = payload.password.strip()
+    full_name = payload.full_name.strip() if payload.full_name else None
+    
+    # ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ  ط·آ¸ط¢آ¾ط·آ¸ط¢آ¹ ط·آ¹ط¢آ©ط·ط›ط¥â€™ ط·آ·ط¢آ¬ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ ط·آ¹أ¢â‚¬آ  ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    if not phone or len(phone) < 10:
+        raise HTTPException(status_code=400, detail='ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ·ط·â€؛ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ· ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢')
+    
+    if not username or len(username) < 3:
+        raise HTTPException(status_code=400, detail='ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬آ¦ ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬آ¦ 3 ط·آ·ط¢آ­ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ¸ط¸آ¾ ط·ط›ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ ط·آ¹أ¢â‚¬آ ط·آ·ط¢آ§ط·ط›ط¸آ¾ط·ط›ط¥â€™ط·ط›أ¢â‚¬â„¢')
+    
+    if not password or len(password) < 6:
+        raise HTTPException(status_code=400, detail='ط·آ¸ط¢آ¾ط·آ·ط¢آ§ط·آ·ط¢آ³ ط·آ¸ط«â€ ط·آ·ط¢آ±ط·آ¹ط«â€  ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬آ¦ ط·آ·ط¢آ§ط·آ·ط¢آ² ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬آ¦ 6 ط·آ·ط¢آ­ط·آ·ط¢آ±ط·آ¸ط«â€ ط·آ¸ط¸آ¾ ط·ط›ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ ط·آ¹أ¢â‚¬آ ط·آ·ط¢آ§ط·ط›ط¸آ¾ط·ط›ط¥â€™ط·ط›أ¢â‚¬â„¢')
+    
+    # OTP ط·آ·ط¹آ¾ط·آ·ط¢آµط·آ·ط¢آ¯ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘ ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    is_valid, verified_phone = verify_otp_session(payload.otp_code, payload.otp_code)
+    
+    # ط·آ·ط¢آ¨ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¸آ¾ ط·آ·ط¢آ±ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾ ط·آ·ط¢آ¬ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ ط·آ¹أ¢â‚¬آ  - ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ·ط¢آ¯ط·ط›ط¸آ¾ ط·آ·ط¹آ¾ط·آ·ط¢آ± ط·آ·ط¢آ·ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¸أ¢â‚¬ع‘ط·ط›ط¸آ¾
+    # ط·ط›ط¥â€™ط·ط›ط¸آ¾ط·آ·ط¢آ§ط·آ¹ط·â€؛ session_id ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ phone ط·آ·ط¢آ­ط·آ·ط¢آ§ط·آ·ط¢آµط·آ¸أ¢â‚¬â€چ ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    from .sms import _otp_sessions
+    session_data = _otp_sessions.get(payload.otp_code)  # ط·ط›ط¥â€™ط·ط›ط¸آ¾ط·آ·ط¢آ§ط·آ¹ط·â€؛ OTP session_id ط·ط›ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ ط·آ¹أ¢â‚¬آ ط·آ·ط¢آ§ط·ط›ط¸آ¾ط·ط›ط¥â€™ط·ط›أ¢â‚¬â„¢
+    
+    if not session_data or session_data['phone'] != phone or session_data['otp_code'] != payload.otp_code:
+        raise HTTPException(status_code=400, detail='OTP ط·آ·ط·â€؛ط·آ¸أ¢â‚¬â€چط·آ·ط¢آ· ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸أ¢â‚¬آ¦ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ¶ط·ط›ط¥â€™ ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢')
+    
+    # ط·آ¹أ¢â‚¬آ ط·ط›ط¥â€™ط·آ¹ط¢آ© ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛ ط·آ¹ط¢آ©ط·ط›ط¸آ¾ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸ط¢آ¾ط·ط›ط¸آ¾ط·آ¸أ¢â‚¬â€چط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¬ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·آ·ط¹آ¾ط·آ¸ط«â€  ط·آ¸أ¢â‚¬آ ط·ط›ط¸آ¾ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    existing_user = session.query(models.User).filter(
+        (models.User.username == username) | (models.User.mobile == phone)
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=409, detail='ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ  ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¨ط·آ·ط¢آ± ط·آ¸ط¢آ¾ط·ط›ط¸آ¾ط·آ¸أ¢â‚¬â€چط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¬ط·آ¸ط«â€ ط·آ·ط¢آ¯ ط·ط›ط¸آ¾ط·ط›أ¢â‚¬â„¢')
+    
+    # ط·آ¹ط«â€ ط·ط›ط¥â€™ط·آ¸ط¸آ¾ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چط·آ¸ط¢آ¹ ط·آ¸أ¢â‚¬آ ط·آ¸أ¢â‚¬ع‘ط·آ·ط¢آ´ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ·ط¢آ´ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ط·آ¸أ¢â‚¬â€چ ط·آ¹ط¢آ©ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ¹ط·â€؛ (Viewer)
+    viewer_role = session.query(models.Role).filter(models.Role.name == 'Viewer').first()
+    role_id = viewer_role.id if viewer_role else 5
+    
+    # ط·آ¸أ¢â‚¬آ ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ·ط¢آ¦ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    hashed_password = security.get_password_hash(password)
+    new_user = models.User(
+        username=username,
+        password_hash=hashed_password,
+        email=None,
+        mobile=phone,
+        full_name=full_name or username,
+        role_id=role_id,
+        is_active=True
+    )
+    
+    session.add(new_user)
+    session.commit()
+    session.refresh(new_user)
+    
+    # Access token ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ·ط¢آ¦ط·ط›ط¥â€™ط·آ¹ط·â€؛
+    access_token = security.create_access_token(
+        str(new_user.username),
+        expires_delta=timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    refresh_token = security.create_refresh_token(str(new_user.username))
+    crud.set_refresh_token(session, new_user, refresh_token)
+    
+    return schemas.MobileRegisterResponse(
+        success=True,
+        message='ط·آ·ط¢آµط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¸ط¸آ¾ ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ·ط¢آ¨ط·ط›ط¥â€™ ط·آ·ط¢آ³ط·ط›أ¢â‚¬â„¢ ط·آ·ط¢آ¨ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ§ ط·آ¹ط¢آ¯ط·ط›ط¥â€™ط·آ·ط¢آ§',
+        user=schemas.UserOut(
+            id=new_user.id,
+            username=new_user.username,
+            email=new_user.email,
+            full_name=new_user.full_name,
+            mobile=new_user.mobile,
+            role=new_user.role or 'Viewer',
+            role_id=new_user.role_id,
+            is_active=new_user.is_active,
+            otp_enabled=getattr(new_user, 'otp_enabled', False),
+            role_obj=None
+        ),
+        access_token=access_token,
+        refresh_token=refresh_token
+    )
+
+
+# ==================== Products API ====================
+
+@app.get('/api/products', response_model=List[schemas.ProductOut])
+def list_products(
+    q: Optional[str] = None,
+    limit: int = 100,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    safe_limit = max(1, min(int(limit or 100), 500))
+    return crud.get_products(session, q=q, limit=safe_limit)
+
+
+@app.post('/api/products', response_model=schemas.ProductOut)
+def create_product(
+    payload: schemas.ProductCreate,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    try:
+        return crud.create_product(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get('/api/products/{product_id}', response_model=schemas.ProductOut)
+def get_product(
+    product_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    product = crud.get_product(session, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail='Product not found')
+    return product
+
+
+@app.patch('/api/products/{product_id}', response_model=schemas.ProductOut)
+def update_product(
+    product_id: str,
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    product = crud.update_product(session, product_id, payload)
+    if not product:
+        raise HTTPException(status_code=404, detail='Product not found')
+    return product
+
+
+@app.delete('/api/products/{product_id}')
+def delete_product(
+    product_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin'])(current)
+    ok = crud.delete_product(session, product_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Product not found')
+    return {'deleted': True}
+
+
+@app.get('/api/products/{product_id}/movement')
+def get_product_movement(
+    product_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    try:
+        data = crud.get_product_movement(session, product_id)
+        if not data:
+            raise HTTPException(status_code=404, detail='Product not found')
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Persons API ====================
+
+@app.get('/api/persons', response_model=List[schemas.PersonOut])
+def list_persons(
+    q: Optional[str] = None,
+    kind: Optional[str] = None,
+    limit: int = 100,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
+    safe_limit = max(1, min(int(limit or 100), 500))
+    return crud.get_persons(session, q=q, kind=kind, limit=safe_limit)
+
+
+@app.post('/api/persons', response_model=schemas.PersonOut)
+def create_person(
+    payload: schemas.PersonCreate,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    try:
+        return crud.create_person(session, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get('/api/persons/{person_id}', response_model=schemas.PersonOut)
+def get_person(
+    person_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
+    person = crud.get_person(session, person_id)
+    if not person:
+        raise HTTPException(status_code=404, detail='Person not found')
+    return person
+
+
+@app.patch('/api/persons/{person_id}', response_model=schemas.PersonOut)
+def update_person(
+    person_id: str,
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin', 'Accountant'])(current)
+    person = crud.update_person(session, person_id, payload)
+    if not person:
+        raise HTTPException(status_code=404, detail='Person not found')
+    return person
+
+
+@app.delete('/api/persons/{person_id}')
+def delete_person(
+    person_id: str,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    require_roles(role_names=['Admin'])(current)
+    ok = crud.delete_person(session, person_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Person not found')
+    return {'deleted': True}
+
+# ...existing code continues...

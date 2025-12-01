@@ -2,6 +2,13 @@ import authService from './auth'
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
+/**
+ * Date format for API:
+ * - Request: Send Shamsi dates as strings (YYYY/MM/DD)
+ * - Response: Server automatically converts to Jalali in API responses
+ * - Compatibility: Use X-Date-Format header if needed (default: 'jalali')
+ */
+
 async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText || 'Request failed'
@@ -35,6 +42,11 @@ export async function apiRequest<T>(
   const response = await authService.fetchWithAuth(path, {
     ...(init || {}),
     method,
+    // Default to Jalali date format in responses
+    headers: {
+      'X-Date-Format': 'jalali',
+      ...(init?.headers || {}),
+    },
   })
   return parseResponse<T>(response)
 }
@@ -44,12 +56,17 @@ export async function apiGet<T>(path: string, init?: RequestInit) {
 }
 
 export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit) {
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
   return apiRequest<T>(path, 'POST', {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    headers: isForm
+      ? {
+          ...(init?.headers || {}),
+        }
+      : {
+          'Content-Type': 'application/json',
+          ...(init?.headers || {}),
+        },
+    body: body !== undefined && !isForm ? JSON.stringify(body) : (body as any),
     ...init,
   })
 }
@@ -65,7 +82,17 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   })
 }
 
+export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit) {
+  return apiRequest<T>(path, 'PUT', {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...init,
+  })
+}
+
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
 }
-

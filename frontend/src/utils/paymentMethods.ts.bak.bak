@@ -1,0 +1,61 @@
+type AccountKind = 'cash' | 'bank' | 'pos'
+
+export type PaymentAccount = {
+  id: string
+  name: string
+  code: string
+  kind: AccountKind
+}
+
+export type PaymentMethodOption = { value: string; label: string }
+
+const baseLabels: Record<string, string> = {
+  cash: 'ط¸â€ ط¸â€ڑط·آ¯ط؛إ’ / ط·آµط¸â€ ط·آ¯ط¸ث†ط¸â€ڑ',
+  bank: 'ط·آ­ط·آ³ط·آ§ط·آ¨ ط·آ¨ط·آ§ط¸â€ ط¹آ©ط؛إ’',
+  pos: 'ط¹آ©ط·آ§ط·آ±ط·ع¾أ¢â‚¬إ’ط·آ®ط¸ث†ط·آ§ط¸â€ ',
+  cheque: 'ط¹â€ ط¹آ©',
+  other: 'ط·آ³ط·آ§ط؛إ’ط·آ±',
+}
+
+const formatAccountLabel = (acc: PaymentAccount) => {
+  const base = baseLabels[acc.kind] || acc.kind
+  return `${base} - ${acc.name}${acc.code ? ` (${acc.code})` : ''}`
+}
+
+export const pickDefaultMethod = (accounts: PaymentAccount[]) => {
+  const cashAcc = accounts.find(acc => acc.kind === 'cash')
+  if (cashAcc) return `${cashAcc.kind}:${cashAcc.code || cashAcc.id}`
+  if (accounts.length > 0) return `${accounts[0].kind}:${accounts[0].code || accounts[0].id}`
+  return 'cash'
+}
+
+export const buildPaymentMethodOptions = (accounts: PaymentAccount[]): PaymentMethodOption[] => {
+  const options: PaymentMethodOption[] = []
+  const seen = new Set<string>()
+
+  accounts.forEach(acc => {
+    const value = `${acc.kind}:${acc.code || acc.id}`
+    if (seen.has(value)) return
+    seen.add(value)
+    options.push({ value, label: formatAccountLabel(acc) })
+  })
+
+  ;['cash', 'bank', 'pos', 'cheque', 'other'].forEach(kind => {
+    if (seen.has(kind)) return
+    options.push({ value: kind, label: baseLabels[kind] || kind })
+  })
+
+  return options
+}
+
+export const resolvePaymentMethodLabel = (method: string | null | undefined, accounts: PaymentAccount[]) => {
+  if (!method) return 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ'
+  if (method.includes(':')) {
+    const [kind, code] = method.split(':', 2)
+    const found = accounts.find(acc => acc.code === code || acc.id === code)
+    const prefix = baseLabels[kind] || kind
+    if (found) return `${prefix} - ${found.name}${found.code ? ` (${found.code})` : ''}`
+    return `${prefix} (${code || 'ط¸â€ ط·آ§ط¸â€¦ط·آ´ط·آ®ط·آµ'})`
+  }
+  return baseLabels[method] || method
+}

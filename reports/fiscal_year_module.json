@@ -1,0 +1,31 @@
+{
+  "summary": "Fiscal year domain, APIs, rules, tests, and UI implemented.",
+  "backend_files": [
+    "backend/app/models.py",
+    "backend/app/accounting/fiscal_service.py",
+    "backend/app/accounting/journal_service.py",
+    "backend/app/core/rule_engine.py",
+    "backend/app/main.py",
+    "backend/app/schemas.py",
+    "backend/app/financial_automation.py",
+    "backend/app/crud.py",
+    "backend/alembic/versions/0014_fiscal_year_upgrade.py"
+  ],
+  "frontend_files": [
+    "copilot/scaffold/frontend/src/FiscalYearAdmin.jsx",
+    "copilot/scaffold/frontend/src/fiscal.css",
+    "copilot/scaffold/frontend/src/main.jsx"
+  ],
+  "new_endpoints": [
+    "GET /api/fiscal-years",
+    "GET /api/fiscal-years/current",
+    "POST /api/fiscal-years",
+    "POST /api/fiscal-years/{id}/activate",
+    "POST /api/fiscal-years/{id}/close",
+    "POST /api/fiscal-years/{id}/lock"
+  ],
+  "tests_added": [
+    "backend/tests/test_fiscal_year_module.py"
+  ],
+  "notes": "Legacy /api/financial-years routes now delegate to the new fiscal year service. Ledger posting is blocked when no open fiscal year exists or when the current year is closed/locked. pytest passes with PYTHONPATH=backend."
+}

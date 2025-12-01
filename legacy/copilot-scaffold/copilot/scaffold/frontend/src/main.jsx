@@ -1,0 +1,26 @@
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import FiscalYearAdmin from './FiscalYearAdmin'
+import SmsSettingsPage from './SmsSettingsPage'
+import './fiscal.css'
+import SmartAssistantWidget from './SmartAssistantWidget'
+import SmartAssistantSettingsPage from './SmartAssistantSettingsPage'
+import './styles/fonts-overrides.css' // Added: global Persian font overrides
+import './styles/persian-font-fix.css' // Added: persistent Persian font fixes
+import './utils/persian-font-watcher.js' // Added: runtime watcher for corrupted chars
+
+function App() {
+  return (
+    <main>
+      <FiscalYearAdmin />
+      <hr style={{ margin: '24px 0' }} />
+      <SmsSettingsPage />
+      <hr style={{ margin: '24px 0' }} />
+      <SmartAssistantWidget />
+      <hr style={{ margin: '24px 0' }} />
+      <SmartAssistantSettingsPage />
+    </main>
+  )
+}
+
+createRoot(document.getElementById('root')).render(<App />)

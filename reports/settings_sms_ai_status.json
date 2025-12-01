@@ -1,0 +1,22 @@
+{
+  "title": "Settings, SMS, Smart Assistant integration",
+  "date": "2025-11-23",
+  "changes": [
+    "Integrated professional settings UI into main frontend with tabs for عمومی/ظاهر/مالی/سال مالی/SMS/دستیار هوشمند/پشتیبانگیری/توسعه.",
+    "Added FiscalYearPanel (ایجاد/فعال/بستن/قفل) wired to /api/fiscal-years endpoints.",
+    "Added SmsSettingsPanel with IPPanel fields (sender, API key mask, threshold, enable) and test send to /api/settings/sms/test.",
+    "Added SmartAssistantSettingsPanel with provider/model/key/toggles and test chat/health to /api/assistant/*.",
+    "Added SmartAssistantWidget to dashboard (چت ساده + آپلود سند برای analyze).",
+    "Fixed frontend API service to handle FormData posts; main frontend build passes."
+  ],
+  "remaining": [
+    "Set environment variables in runtime: IPPANEL_API_KEY (and optionally IPPANEL_BASE_URL), AI_API_KEY (and AI_BASE_URL/AI_MODEL_NAME).",
+    "Ensure backend containers run latest code (docker compose up -d --build).",
+    "Run alembic upgrade head on target DB if not applied yet.",
+    "Optional: polish mojibake text remnants in legacy warnings if seen at runtime, and adjust chunk splitting if needed."
+  ],
+  "tests": [
+    "frontend: npm run build (main frontend) – passed",
+    "backend: pytest -q tests (inside backend container) – passed earlier"
+  ]
+}

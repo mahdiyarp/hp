@@ -2,6 +2,11 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
+import './styles/combined-persian-fonts.css'
+import './styles/classic.css'
+import './utils/persian-font-watcher.js' // runtime watcher for corrupted chars
+// Append-only import for optional auto-fix CSS if present
+try { require('./styles/persian-auto-fix.css'); } catch (e) { /* file may not exist; fine */ }
 import { AuthProvider } from './context/AuthContext'
 import { I18nProvider } from './i18n/I18nContext'
 

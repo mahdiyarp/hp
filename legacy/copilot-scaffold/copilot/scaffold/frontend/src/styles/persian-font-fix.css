@@ -1,0 +1,27 @@
+/* Scaffold copy of Persian font fix for scaffold frontend */
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/Vazirmatn.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  font-family: "Vazirmatn", "IRANSansX", "Yekan", "IranYekan", sans-serif !important;
+  direction: rtl;
+  unicode-bidi: plaintext;
+}
+
+html, body {
+  font-feature-settings: "liga" 1, "clig" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+}
+
+:lang(en) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.ant-typography, .MuiTypography-root, .chart-label { font-family: inherit !important; }
+::placeholder { font-family: inherit !important; }
