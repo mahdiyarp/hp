@@ -334,6 +334,12 @@ def chat(session: Session, payload: schemas.AssistantChatRequest) -> schemas.Ass
 
 
 
+    # Ensure chat tables exist for test engines
+    try:
+        SmartAssistantSession.__table__.create(bind=session.get_bind(), checkfirst=True)
+        SmartAssistantMessage.__table__.create(bind=session.get_bind(), checkfirst=True)
+    except Exception:
+        pass
     sess = None
 
 
