@@ -2,6 +2,34 @@
 
 [![Backend Tests](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml)
 
+## CI and Tests
+
+- Run tests (Windows PowerShell):
+	```powershell
+	python -m venv .venv
+	.\.venv\Scripts\Activate.ps1
+	cd backend
+	python -m pip install -r requirements-dev.txt
+	$env:DATABASE_URL = 'sqlite:///:memory:'
+	python -m pytest -q
+	```
+
+- Run with coverage:
+	```powershell
+	$env:DATABASE_URL = 'sqlite:///:memory:'
+	python -m pytest -q --cov=app --cov-report=term-missing
+	```
+
+- CI outputs:
+	- JUnit: artifact `junit-results-py<version>` contains `pytest.xml`.
+	- Coverage: artifact `coverage-report` contains `coverage.xml` and summary comment on PRs.
+	- PR Annotations: failing tests are annotated directly on pull requests.
+
+- Enforcing required checks (maintainers):
+	1. Settings → Branches → Add rule for `main`.
+	2. Enable "Require status checks to pass" and select the workflow checks named like `Backend Tests / tests (3.10|3.11|3.12)`.
+	3. Save. New PRs to `main` will require green CI before merge.
+
 سیستم جامع حسابداری و مدیریت تراکنش‌های مالی با رابط کاربری فارسی و امکانات کامل.
 
 ## 🚀 راه‌اندازی سریع
