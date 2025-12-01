@@ -1065,6 +1065,8 @@ from app.api.routers import activity as activity_router
 app.include_router(activity_router.router)
 from app.api.routers import tasks as tasks_router
 app.include_router(tasks_router.router)
+from app.api.routers import backups as backups_router
+app.include_router(backups_router.router)
 
 
 
