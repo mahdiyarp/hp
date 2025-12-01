@@ -108,6 +108,34 @@ class PriceHistory(Base):
     effective_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class ProductPrice(Base):
+    __tablename__ = 'product_prices'
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(String(128), ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    price_type = Column(String(32), nullable=False, default='sale')  # sale, purchase, retail, wholesale
+    currency = Column(String(8), nullable=False, default='IRR')
+    amount = Column(Integer, nullable=False)
+    effective_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    product = relationship('Product', backref='prices')
+
+
+class StockItem(Base):
+    __tablename__ = 'stock_items'
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(String(128), ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    location = Column(String(128), nullable=False, default='main')
+    quantity = Column(Integer, nullable=False, default=0)
+    reserved_quantity = Column(Integer, nullable=False, default=0)
+    threshold = Column(Integer, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (UniqueConstraint('product_id', 'location', name='uq_product_location'),)
+
+    product = relationship('Product', backref='stock_items')
+
+
 class Person(Base):
     __tablename__ = 'persons'
     id = Column(String(128), primary_key=True, index=True)
@@ -133,6 +161,40 @@ class PersonActivity(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships (lightweight, no backrefs to keep it simple)
+
+
+class Contact(Base):
+    __tablename__ = 'contacts'
+    id = Column(Integer, primary_key=True, index=True)
+    person_id = Column(String(128), ForeignKey('persons.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    account_id = Column(String(128), ForeignKey('accounts.id'), nullable=True, index=True)
+    email = Column(String(254), nullable=True)
+    phone = Column(String(32), nullable=True)
+    status = Column(String(32), nullable=True, default='active')
+    tags = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    person = relationship('Person', backref='contact_profile', uselist=False)
+    account = relationship('Account', backref='contacts')
+    owner = relationship('User')
+
+
+class CRMActivity(Base):
+    __tablename__ = 'crm_activities'
+    id = Column(Integer, primary_key=True, index=True)
+    contact_id = Column(Integer, ForeignKey('contacts.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = Column(String(255), nullable=True)
+    kind = Column(String(32), nullable=False, default='note')  # note, call, task, meeting
+    content = Column(Text, nullable=False)
+    status = Column(String(32), nullable=False, default='open')
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    created_by = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    contact = relationship('Contact', backref='activities')
+    creator = relationship('User')
 
 
 class Invoice(Base):
@@ -187,6 +249,23 @@ class Payment(Base):
     tracking_code = Column(String(64), nullable=True, index=True)
 
     invoice = relationship('Invoice', backref='payments')
+
+
+class Cheque(Base):
+    __tablename__ = 'cheques'
+    id = Column(Integer, primary_key=True, index=True)
+    payment_id = Column(Integer, ForeignKey('payments.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    cheque_number = Column(String(64), nullable=True, index=True)
+    bank_name = Column(String(128), nullable=True)
+    branch_name = Column(String(128), nullable=True)
+    status = Column(String(32), nullable=False, default='pending')  # pending, approved, rejected, settled
+    issue_date = Column(DateTime(timezone=True), nullable=True)
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    clearing_date = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    payment = relationship('Payment', backref='cheque')
 
 
 class Account(Base):
@@ -474,6 +553,10 @@ class SystemSettings(Base):
     
     # Relationships
     updated_by_user = relationship('User', foreign_keys=[updated_by], backref='updated_settings')
+
+
+# Compatibility alias for singular naming in new modules
+SystemSetting = SystemSettings
 
 
 class DashboardWidget(Base):

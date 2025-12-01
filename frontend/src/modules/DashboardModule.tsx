@@ -104,6 +104,23 @@ interface PriceFeed {
   crypto?: Record<string, { usd: number }> | null
 }
 
+interface RoadmapChecklist {
+  text: string
+  done: boolean
+}
+
+interface RoadmapSectionSummary {
+  title: string
+  bodyText: string
+  checklists: RoadmapChecklist[]
+}
+
+interface RoadmapResponse {
+  title: string
+  sections: RoadmapSectionSummary[]
+  updated_at?: string
+}
+
 export default function DashboardModule({
   smartDate,
   onSmartDateChange,
@@ -124,6 +141,7 @@ export default function DashboardModule({
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
   const [persons, setPersons] = useState<Array<{ id: string; name: string; mobile: string | null }>>([])
+  const [roadmapSummary, setRoadmapSummary] = useState<RoadmapResponse | null>(null)
   type DashboardWidget = {
     id: number
     widget_type: string
@@ -159,6 +177,7 @@ export default function DashboardModule({
         apiGet<PriceFeed>('/api/dashboard/prices'),
         apiGet<Array<{ id: string; name: string; mobile: string | null }>>('/api/persons'),
         apiGet<DashboardWidget[]>('/api/dashboard/widgets'),
+        apiGet<RoadmapResponse>('/api/roadmap'),
       ])
 
       const [
@@ -170,6 +189,9 @@ export default function DashboardModule({
         oldStockRes,
         checksRes,
         pricesRes,
+        personsRes,
+        widgetsRes,
+        roadmapRes,
       ] = results
 
       if (financialRes.status === 'fulfilled') {
@@ -220,18 +242,22 @@ export default function DashboardModule({
         newWarnings.push('نمایش نرخ ارز/رمز ارز ممکن نیست.')
       }
 
-      const personsRes = results[8]
       if (personsRes.status === 'fulfilled') {
         setPersons(personsRes.value)
       } else {
         newWarnings.push('فهرست طرف‌های حساب برای یادآور چک در دسترس نیست.')
       }
 
-      const widgetsRes = results[9]
       if (widgetsRes.status === 'fulfilled') {
         setWidgets(widgetsRes.value)
       } else {
         newWarnings.push('Widgets داشبورد بارگذاری نشد.')
+      }
+
+      if (roadmapRes && roadmapRes.status === 'fulfilled') {
+        setRoadmapSummary(roadmapRes.value)
+      } else {
+        newWarnings.push('نقشه راه سیستم در دسترس نیست.')
       }
 
       if (
@@ -278,6 +304,34 @@ export default function DashboardModule({
     }))
     window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
   }
+
+  const openRoadmapModule = () => {
+    window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'roadmap' } }))
+  }
+
+  const roadmapStats = useMemo(() => {
+    if (!roadmapSummary) return { done: 0, total: 0, percent: 0 }
+    const checklist = roadmapSummary.sections.flatMap(section => section.checklists || [])
+    if (checklist.length === 0) return { done: 0, total: 0, percent: 0 }
+    const done = checklist.filter(item => item.done).length
+    return { done, total: checklist.length, percent: Math.round((done / checklist.length) * 100) }
+  }, [roadmapSummary])
+
+  const roadmapHighlights = useMemo(() => {
+    if (!roadmapSummary) return []
+    return roadmapSummary.sections
+      .filter(section => section.title && section.title !== '---')
+      .slice(0, 3)
+  }, [roadmapSummary])
+
+  const roadmapUpdatedJalali = useMemo(() => {
+    if (!roadmapSummary?.updated_at) return null
+    try {
+      return isoToJalali(roadmapSummary.updated_at)
+    } catch (err) {
+      return null
+    }
+  }, [roadmapSummary])
 
   const findMobileByName = (name: string | null) => {
     if (!name) return null
@@ -732,6 +786,96 @@ export default function DashboardModule({
         </div>
       </section>
 
+      {roadmapHighlights.length > 0 && (
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className={retroPanelPadded}>
+            <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className={retroHeading}>HP Roadmap</p>
+                <h3 className="text-lg font-semibold mt-2">پیشرفت نقشه راه</h3>
+                {roadmapUpdatedJalali && (
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>به‌روزرسانی: {roadmapUpdatedJalali}</p>
+                )}
+              </div>
+              <button className={`${retroButton} text-[11px]`} onClick={openRoadmapModule}>
+                ورود به نقشه راه
+              </button>
+            </header>
+            <div className="space-y-4">
+              <div className="text-sm">
+                {roadmapStats.total > 0 ? (
+                  <p>
+                    {formatNumberFa(roadmapStats.done)} از{' '}
+                    {formatNumberFa(roadmapStats.total)} تسک تکمیل شده است.
+                  </p>
+                ) : (
+                  <p className={retroMuted}>چک‌لیستی برای این نقشه راه ثبت نشده است.</p>
+                )}
+              </div>
+              <div className="h-3 bg-[#e0d8c1] rounded-full overflow-hidden border border-[#bfb69f]">
+                <div
+                  className="h-full bg-[#154b5f] transition-all duration-500"
+                  style={{ width: `${roadmapStats.percent}%` }}
+                ></div>
+              </div>
+              <p className="text-xs text-[#4b3d2d] leading-6">
+                ماژول‌های توسعه‌دهندگان، امنیت و ساختار سازمانی در این نسخه به صورت مرحله‌ای دنبال
+                می‌شوند. برای تخصیص منابع یا بازبینی اولویت‌ها وارد بخش Roadmap شوید.
+              </p>
+            </div>
+          </div>
+
+          <div className={retroPanelPadded}>
+            <header className="mb-3">
+              <p className={retroHeading}>Highlights</p>
+              <h3 className="text-lg font-semibold mt-2">سه گام مهم بعدی</h3>
+            </header>
+            <div className="space-y-3">
+              {roadmapHighlights.map(section => {
+                const total = section.checklists.length
+                const done = section.checklists.filter(item => item.done).length
+                const percent = total > 0 ? Math.round((done / total) * 100) : 0
+                const paragraph =
+                  section.bodyText
+                    ?.split(/\n+/)
+                    .map(part => part.trim())
+                    .find(Boolean) || 'توضیحی ثبت نشده است.'
+                return (
+                  <div
+                    key={section.title}
+                    className="border border-[#c5bca5] bg-[#faf4de] p-3 rounded-sm shadow-inner"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className={`${retroHeading} text-sm`}>{section.title}</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1f2e3b] text-[#f6f1df]">
+                        {percent}% انجام شده
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#4b3d2d] leading-5">{paragraph}</p>
+                    {section.checklists.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-[11px]">
+                        {section.checklists.slice(0, 3).map((item, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full ${
+                                item.done ? 'bg-green-600' : 'bg-yellow-500'
+                              }`}
+                            ></span>
+                            <span className={item.done ? 'line-through opacity-70' : ''}>
+                              {item.text}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div className={retroPanelPadded}>
           <header className="mb-3">
@@ -906,7 +1050,7 @@ export default function DashboardModule({
               <p className={retroHeading}>{t('command_pad')}</p>
               <h3 className="text-lg font-semibold mt-2">عملیات سریع سیستم</h3>
             </header>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-center">
           <button className={`${retroButton} w-full`} onClick={() => onNavigate('sales')}>
             صدور فاکتور جدید
           </button>
@@ -918,6 +1062,9 @@ export default function DashboardModule({
           </button>
           <button className={`${retroButton} w-full`} onClick={() => onNavigate('reports')}>
             گزارش‌های مالی
+          </button>
+          <button className={`${retroButton} w-full`} onClick={openRoadmapModule}>
+            نقشه راه سیستم
           </button>
         </div>
         <p className={`${retroHeading} text-[10px] mt-4 tracking-[0.4em]`}>

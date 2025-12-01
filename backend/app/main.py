@@ -27,10 +27,13 @@ from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, SUPPORTED_PROVIDERS
+from .api import api_router
+from .api.deps import get_current_user, require_roles, require_permissions
 
 DB = db
 
 app = FastAPI(title="hesabpak Backend")
+app.include_router(api_router)
 
 
 # Simple audit middleware: logs each request/response to audit_logs table
@@ -74,25 +77,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except Exception:
             pass
         return response
-
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-
-# app.add_middleware(AuditMiddleware)  # Temporarily disabled due to async issues
-
-
-def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(db.get_db)):
-    try:
-        payload = security.decode_token(token)
-        username = payload.get('sub')
-        if username is None:
-            raise HTTPException(status_code=401, detail='Invalid authentication')
-    except Exception as e:
-        raise HTTPException(status_code=401, detail='Invalid token')
-    user = crud.get_user_by_username(session, username)
-    if not user:
-        raise HTTPException(status_code=401, detail='User not found')
-    return user
 
 
 @app.get('/api/admin/activity', response_model=list[schemas.ActivityLogOut])
@@ -146,50 +130,6 @@ def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, session: Sessio
     except Exception:
         pass
     return a
-
-
-def require_roles(role_ids: List[int] = None, role_names: List[str] = None):
-    """بررسی دسترسی بر اساس role ID یا نام
-    
-    استفاده:
-    - require_roles(role_ids=[1])  # فقط Admin (ID=1)
-    - require_roles(role_names=['Admin'])  # فقط Admin (نام)
-    """
-    def _dependency(current_user: models.User = Depends(get_current_user)):
-        if not current_user.role_id:
-            raise HTTPException(status_code=403, detail='کاربر نقشی ندارد')
-        
-        if role_ids and current_user.role_id not in role_ids:
-            raise HTTPException(status_code=403, detail='شما دسترسی ندارید')
-        
-        if role_names and current_user.role_obj:
-            if current_user.role_obj.name not in role_names:
-                raise HTTPException(status_code=403, detail='شما دسترسی ندارید')
-        
-        return current_user
-    return _dependency
-
-
-def require_permissions(permission_names: List[str]):
-    """بررسی دسترسی بر اساس نام permission
-    
-    استفاده:
-    - require_permissions(['finance_view'])  # مشاهده مالی
-    - require_permissions(['sales_create', 'sales_edit'])  # ایجاد یا ویرایش فروش
-    """
-    def _dependency(current_user: models.User = Depends(get_current_user)):
-        if not current_user.role_id or not current_user.role_obj:
-            raise HTTPException(status_code=403, detail='کاربر نقشی ندارد')
-        
-        user_perm_names = set(p.name for p in (current_user.role_obj.permissions or []))
-        required_perms = set(permission_names)
-        
-        # Check if user has at least one of the required permissions
-        if not user_perm_names & required_perms:
-            raise HTTPException(status_code=403, detail=f'شما دسترسی ندارید. نیاز به یکی از این دسترسی‌ها: {", ".join(permission_names)}')
-        
-        return current_user
-    return _dependency
 
 
 @app.on_event("startup")
@@ -645,124 +585,6 @@ def test_user_sms(user_id: int, session: Session = Depends(db.get_db), current: 
     )
 
 
-@app.post('/api/invoices/manual', response_model=InvoiceOut)
-def create_invoice_manual(payload: InvoiceCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # require at least Cashier
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
-    inv = crud.create_invoice_manual(session, payload)
-    return inv
-
-
-@app.post('/api/invoices/smart')
-def parse_invoice_upload(file: UploadFile = File(...), current: models.User = Depends(get_current_user)):
-    # accept image or PDF and return parsed draft; user will confirm in client
-    try:
-        tmp = tempfile.mkdtemp(prefix='ocr-')
-        fp = f"{tmp}/{file.filename}"
-        with open(fp, 'wb') as f:
-            shutil.copyfileobj(file.file, f)
-        draft = parse_invoice_file(fp)
-        return {'draft': draft}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        try:
-            file.file.close()
-        except Exception:
-            pass
-
-
-@app.post('/api/invoices/from-draft', response_model=InvoiceOut)
-def create_invoice_from_draft(payload: InvoiceCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
-    inv = crud.create_invoice_manual(session, payload)
-    return inv
-
-
-@app.get('/api/invoices', response_model=list[InvoiceOut])
-def list_invoices(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
-    invs = crud.get_invoices(session, q=q)
-    # load items for each
-    out = []
-    for inv in invs:
-        # use the current request DB session to load related items
-        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
-        inv.items = items
-        out.append(inv)
-    return out
-
-
-@app.get('/api/invoices/open-for-payment', response_model=list[InvoiceOut])
-def list_open_invoices(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager'])(current)
-    # Return invoices that are not fully paid (draft or final, and either no payments or payments < total)
-    invs = session.query(models.Invoice).filter(
-        models.Invoice.status.in_(['draft', 'final'])
-    ).order_by(models.Invoice.server_time.desc()).limit(100).all()
-    out = []
-    for inv in invs:
-        items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
-        inv.items = items
-        out.append(inv)
-    return out
-
-
-@app.get('/api/integrations', response_model=list[schemas.IntegrationConfigOut])
-def list_integrations(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
-    return crud.get_integrations(session)
-
-
-@app.post('/api/integrations', response_model=schemas.IntegrationConfigOut)
-def upsert_integration(payload: schemas.IntegrationConfigIn, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin'])(current)
-    i = crud.upsert_integration(session, payload)
-    return i
-
-
-@app.patch('/api/integrations/{iid}/toggle', response_model=schemas.IntegrationConfigOut)
-def toggle_integration(iid: int, enabled: bool, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin'])(current)
-    i = crud.set_integration_enabled(session, iid, enabled)
-    if not i:
-        raise HTTPException(status_code=404, detail='Integration not found')
-    return i
-
-
-@app.post('/api/integrations/{iid}/refresh', response_model=schemas.IntegrationRefreshResult)
-def refresh_integration_endpoint(iid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant'])(current)
-    integ = crud.get_integration(session, iid)
-    if not integ:
-        raise HTTPException(status_code=404, detail='Integration not found')
-    stat = external_search.aggregate_search if integ.provider in ('digikala', 'torob', 'emalls') else None
-    # prefer specialized integrations client
-    from .integrations import refresh_integration as _refresh
-    stat = _refresh(db, iid)
-    # map to schema
-    return {
-        'name': integ.name,
-        'provider': integ.provider,
-        'enabled': integ.enabled,
-        'status': stat.get('status') if isinstance(stat, dict) else str(stat),
-        'sample': stat.get('sample') if isinstance(stat, dict) else None,
-        'last_updated': integ.last_updated,
-    }
-
-
-@app.get('/api/invoices/{invoice_id}', response_model=InvoiceOut)
-def get_invoice(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
-    inv = crud.get_invoice(session, invoice_id)
-    if not inv:
-        raise HTTPException(status_code=404, detail='Invoice not found')
-    # ensure items loaded
-    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
-    inv.items = items
-    return inv
-
-
 @app.get('/api/invoices/{invoice_id}/payments', response_model=list[PaymentOut])
 def get_invoice_payments(invoice_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
@@ -968,54 +790,6 @@ def finalize_invoice(invoice_id: int, payload: dict = None, session: Session = D
     items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == inv.id).all()
     inv.items = items
     return inv
-
-
-@app.post('/api/payments/manual', response_model=schemas.PaymentOut)
-def create_payment_manual(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_permissions(['finance_create'])(current)
-    pay = crud.create_payment_manual(session, payload)
-    return pay
-
-
-@app.post('/api/payments/smart')
-def parse_payment_upload(file: UploadFile = File(...), current: models.User = Depends(get_current_user)):
-    try:
-        tmp = tempfile.mkdtemp(prefix='ocr-')
-        fp = f"{tmp}/{file.filename}"
-        with open(fp, 'wb') as f:
-            shutil.copyfileobj(file.file, f)
-        draft = parse_payment_file(fp)
-        return {'draft': draft}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        try:
-            file.file.close()
-        except Exception:
-            pass
-
-
-@app.post('/api/payments/from-draft', response_model=schemas.PaymentOut)
-def create_payment_from_draft(payload: schemas.PaymentCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_permissions(['finance_create'])(current)
-    pay = crud.create_payment_manual(session, payload)
-    return pay
-
-
-@app.get('/api/payments', response_model=list[schemas.PaymentOut])
-def list_payments(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_permissions(['finance_view'])(current)
-    pays = crud.get_payments(session, q=q)
-    return pays
-
-
-@app.get('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
-def get_payment(payment_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_permissions(['finance_view'])(current)
-    p = crud.get_payment(session, payment_id)
-    if not p:
-        raise HTTPException(status_code=404, detail='Payment not found')
-    return p
 
 
 # ==================== Payment Methods API ====================
@@ -1730,49 +1504,6 @@ def print_invoice_html(invoice_id: int):
     if not os.path.exists(tpl):
         raise HTTPException(status_code=404, detail='template not found')
     return FileResponse(tpl, media_type='text/html')
-
-
-@app.post("/api/persons", response_model=PersonOut)
-def api_create_person(p: PersonCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=["Admin", "Accountant"])(current)
-    person = crud.create_person(session, p)
-    return person
-
-
-@app.get("/api/persons")
-def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
-    return crud.get_persons(session, q=q)
-
-
-# ==================== Person Activities (CRM Notes) ====================
-
-@app.get('/api/persons/{person_id}/activities', response_model=List[PersonActivityOut])
-def list_person_activities_endpoint(person_id: str, limit: Optional[int] = 100, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # Viewers and above can see notes
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
-    return crud.list_person_activities(session, person_id=person_id, limit=int(limit or 100))
-
-
-@app.post('/api/persons/{person_id}/activities', response_model=PersonActivityOut)
-def create_person_activity_endpoint(person_id: str, payload: PersonActivityCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # Allow creating notes for Admin/Accountant/Manager/Salesman
-    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman'])(current)
-    try:
-        act = crud.create_person_activity(session, person_id=person_id, payload=payload, created_by_user_id=getattr(current, 'id', None))
-        return act
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@app.delete('/api/persons/{person_id}/activities/{activity_id}')
-def delete_person_activity_endpoint(person_id: str, activity_id: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    # Restrict deletes to Admin/Manager for now
-    require_roles(role_names=['Admin', 'Manager'])(current)
-    ok = crud.delete_person_activity(session, person_id=person_id, activity_id=activity_id)
-    if not ok:
-        raise HTTPException(status_code=404, detail='Activity not found')
-    return {"ok": True}
 
 
 @app.get('/api/financial/auto-context')

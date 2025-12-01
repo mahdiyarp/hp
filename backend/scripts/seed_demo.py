@@ -2,7 +2,7 @@
 """Seed demo data for Hesabpak: 10 products, 10 persons, 10 invoices, a few payments."""
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import random
 from sqlalchemy.exc import IntegrityError
 
@@ -18,6 +18,21 @@ def seed():
     try:
         print("[SEED] Starting demo data seeding", flush=True)
         
+        # Ensure roles exist
+        print("[SEED] Ensuring default roles", flush=True)
+        admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
+        if not admin_role:
+            admin_role = models.Role(name='Admin', description='System administrator')
+            session.add(admin_role)
+            session.commit()
+            session.refresh(admin_role)
+        viewer_role = session.query(models.Role).filter(models.Role.name == 'Viewer').first()
+        if not viewer_role:
+            viewer_role = models.Role(name='Viewer', description='Read-only user')
+            session.add(viewer_role)
+            session.commit()
+            session.refresh(viewer_role)
+
         # Create admin user if doesn't exist
         print("[SEED] Checking for admin user", flush=True)
         admin = session.query(models.User).filter(models.User.username == 'admin').first()
@@ -27,8 +42,9 @@ def seed():
                 username='admin',
                 email='admin@example.com',
                 full_name='Administrator',
-                hashed_password=get_password_hash('admin'),
+                hashed_password=get_password_hash('admin123'),
                 role='Admin',
+                role_id=admin_role.id,
                 is_active=True
             )
             session.add(admin)
@@ -37,14 +53,30 @@ def seed():
         else:
             print("[SEED] Admin user already exists", flush=True)
 
+        # Create viewer/demo user
+        print("[SEED] Checking for viewer user", flush=True)
+        viewer = session.query(models.User).filter(models.User.username == 'viewer').first()
+        if not viewer:
+            viewer = models.User(
+                username='viewer',
+                email='viewer@hesabpak.local',
+                full_name='Viewer Demo',
+                hashed_password=get_password_hash('viewer123'),
+                role='Viewer',
+                role_id=viewer_role.id,
+                is_active=True
+            )
+            session.add(viewer)
+            session.commit()
+            print("[SEED] Created viewer user", flush=True)
+        else:
+            print("[SEED] Viewer user already exists", flush=True)
+
         # Create developer user if doesn't exist
         print("[SEED] Checking for developer user", flush=True)
         developer = session.query(models.User).filter(models.User.username == 'developer').first()
         if not developer:
             print("[SEED] Developer user not found, creating", flush=True)
-            # Get Admin role (should be ID 1 based on migrations)
-            admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
-            role_id = admin_role.id if admin_role else 1
             developer = models.User(
                 username='developer',
                 email='developer@hesabpak.local',
@@ -52,7 +84,7 @@ def seed():
                 mobile='09123506545',
                 hashed_password=get_password_hash('09123506545'),
                 role='Admin',
-                role_id=role_id,
+                role_id=admin_role.id,
                 is_active=True
             )
             session.add(developer)
@@ -109,6 +141,36 @@ def seed():
         
         print(f"[SEED] Total persons: {len(persons)}", flush=True)
 
+        # Ensure contacts exist for each person
+        print("[SEED] Linking contacts", flush=True)
+        for per in persons:
+            contact = session.query(models.Contact).filter(models.Contact.person_id == per.id).first()
+            if not contact:
+                contact = models.Contact(
+                    person_id=per.id,
+                    email=f"{per.name.replace(' ', '').lower()}@demo.local",
+                    phone=per.mobile,
+                    status='active',
+                    tags='demo,seed'
+                )
+                session.add(contact)
+        session.commit()
+
+        # Seed a simple CRM activity for the first contact
+        first_contact = session.query(models.Contact).first()
+        if first_contact:
+            activity_exists = session.query(models.CRMActivity).filter(models.CRMActivity.contact_id == first_contact.id).first()
+            if not activity_exists:
+                session.add(models.CRMActivity(
+                    contact_id=first_contact.id,
+                    title='تماس اولیه',
+                    kind='call',
+                    content='معرفی سیستم حساب‌پاک و هماهنگی دمو.',
+                    status='open',
+                    due_date=datetime.now(timezone.utc) + timedelta(days=2)
+                ))
+                session.commit()
+
         # Create 10 invoices
         print("[SEED] Creating invoices", flush=True)
         if products and persons:
@@ -164,6 +226,63 @@ def seed():
             print(f"[SEED] Created payment {i}: {p.id}", flush=True)
             crud.finalize_payment(session, p.id)
             print(f"[SEED] Finalized payment {i}", flush=True)
+
+        # Create cheque-based outgoing payments
+        print("[SEED] Creating cheque payments", flush=True)
+        for i in range(1, 4):
+            if not persons:
+                break
+            pay_payload = schemas.PaymentCreate(
+                direction='out',
+                mode='manual',
+                party_id=persons[0].id,
+                party_name=persons[0].name,
+                method='cheque',
+                amount=random.randint(50000, 150000),
+                note='Demo cheque payment',
+                due_date=datetime.now(timezone.utc) + timedelta(days=15 + i)
+            )
+            cheque_payment = crud.create_payment_manual(session, pay_payload)
+            crud.finalize_payment(session, cheque_payment.id)
+            session.add(models.Cheque(
+                payment_id=cheque_payment.id,
+                cheque_number=f'CHK-{i:03d}',
+                bank_name='Tejarat',
+                branch_name='Vanak',
+                status='pending',
+                issue_date=datetime.now(timezone.utc),
+                due_date=datetime.now(timezone.utc) + timedelta(days=15 + i)
+            ))
+            session.commit()
+            print(f"[SEED] Created cheque payment {cheque_payment.id}", flush=True)
+
+        # Seed product stock and prices
+        print("[SEED] Creating stock items & prices", flush=True)
+        for prod in products:
+            stock = session.query(models.StockItem).filter(
+                models.StockItem.product_id == prod.id,
+                models.StockItem.location == 'main'
+            ).first()
+            if not stock:
+                session.add(models.StockItem(
+                    product_id=prod.id,
+                    location='main',
+                    quantity=random.randint(5, 30),
+                    reserved_quantity=0,
+                    threshold=5
+                ))
+            price = session.query(models.ProductPrice).filter(
+                models.ProductPrice.product_id == prod.id,
+                models.ProductPrice.price_type == 'sale'
+            ).first()
+            if not price:
+                session.add(models.ProductPrice(
+                    product_id=prod.id,
+                    price_type='sale',
+                    currency='IRR',
+                    amount=random.randint(20000, 80000)
+                ))
+        session.commit()
 
         print('[SEED] Seeding completed successfully', flush=True)
     except Exception as e:

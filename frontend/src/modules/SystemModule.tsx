@@ -75,6 +75,16 @@ interface SystemSetting {
   updated_at: string
 }
 
+interface BlockchainEntry {
+  id: number
+  entity_type: string
+  entity_id: string
+  action: string
+  timestamp: string
+  current_hash: string
+  previous_hash: string | null
+}
+
 export default function SystemModule({ smartDate, onSmartDateChange, sync }: ModuleComponentProps) {
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
@@ -123,6 +133,14 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [pmError, setPmError] = useState<string | null>(null)
   const [editingPmId, setEditingPmId] = useState<number | null>(null)
   const [draftPm, setDraftPm] = useState<Partial<PaymentMethod>>({ enabled: true, order: 100 })
+  const [blockchainEntries, setBlockchainEntries] = useState<BlockchainEntry[]>([])
+  const [chainStatus, setChainStatus] = useState<'unknown' | 'valid' | 'invalid'>('unknown')
+  const [chainMessage, setChainMessage] = useState<string | null>(null)
+  const [chainLoading, setChainLoading] = useState(false)
+  const [chainEntityType, setChainEntityType] = useState<string>('')
+  const [chainEntityId, setChainEntityId] = useState<string>('')
+  const [entityCatalog, setEntityCatalog] = useState<Array<{ entity_type: string; entity_id: string }>>([])
+  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
@@ -206,6 +224,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       } catch (err) {
         // ignore — this endpoint may not exist or user may not have a value
       }
+      try {
+        await refreshBlockchainEntries()
+      } catch (err) {
+        console.error(err)
+        warn.push('دریافت وضعیت بلاک‌چین ممکن نشد.')
+      }
     } catch (err) {
       console.error(err)
       setError('بارگذاری بخش تنظیمات با مشکل مواجه شد.')
@@ -227,6 +251,114 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     } finally {
       setPmLoading(false)
     }
+  }
+
+  async function refreshBlockchainEntries(limit = 30, captureCatalog = true) {
+    const response = await apiGet<{ entries?: BlockchainEntry[]; count?: number }>(
+      `/api/blockchain/entries?limit=${limit}`,
+    )
+    const list = response?.entries ?? []
+    setBlockchainEntries(list)
+    setSelectedEntryId(list[0]?.id ?? null)
+    if (captureCatalog) {
+      const catalogMap = new Map<string, { entity_type: string; entity_id: string }>()
+      list.forEach(entry => {
+        const key = `${entry.entity_type}::${entry.entity_id}`
+        if (!catalogMap.has(key)) {
+          catalogMap.set(key, { entity_type: entry.entity_type, entity_id: entry.entity_id })
+        }
+      })
+      setEntityCatalog(Array.from(catalogMap.values()))
+    }
+    if (list.length > 0) {
+      setChainEntityType(list[0].entity_type)
+      setChainEntityId(list[0].entity_id)
+    } else {
+      setChainEntityType('')
+      setChainEntityId('')
+    }
+    setChainStatus('unknown')
+    setChainMessage(null)
+  }
+
+  async function loadChainForEntity(entityType: string, entityId: string) {
+    setChainEntityType(entityType)
+    setChainEntityId(entityId)
+    const query = `entity_type=${encodeURIComponent(entityType)}&entity_id=${encodeURIComponent(entityId)}`
+    const response = await apiGet<{ entries?: BlockchainEntry[] }>(`/api/blockchain/entries?${query}`)
+    const list = response.entries ?? []
+    setBlockchainEntries(list)
+    setSelectedEntryId(list[0]?.id ?? null)
+    setChainStatus('unknown')
+    setChainMessage(null)
+  }
+
+  async function verifyChainIntegrity() {
+    if (!chainEntityType || !chainEntityId) {
+      setChainMessage('ابتدا یک موجودیت را انتخاب کنید.')
+      setChainStatus('unknown')
+      return
+    }
+    setChainLoading(true)
+    try {
+      const query = `entity_type=${encodeURIComponent(chainEntityType)}&entity_id=${encodeURIComponent(chainEntityId)}`
+      const result = await apiPost<{ is_valid: boolean; message: string; entries_checked: number }>(
+        `/api/blockchain/verify?${query}`,
+        {},
+      )
+      setChainStatus(result.is_valid ? 'valid' : 'invalid')
+      setChainMessage(
+        result.is_valid
+          ? `زنجیره معتبر است. تعداد رکورد بررسی شده: ${result.entries_checked}`
+          : result.message,
+      )
+    } catch (err: any) {
+      setChainStatus('invalid')
+      setChainMessage(err?.message || 'بررسی زنجیره ناموفق بود.')
+    } finally {
+      setChainLoading(false)
+    }
+  }
+
+  async function downloadProof() {
+    if (!chainEntityType || !chainEntityId || !selectedEntryId) {
+      setChainMessage('ابتدا موجودیت و رکورد را انتخاب کنید.')
+      return
+    }
+    try {
+      const query = `entity_type=${encodeURIComponent(chainEntityType)}&entity_id=${encodeURIComponent(chainEntityId)}&entry_id=${selectedEntryId}`
+      const proof = await apiGet<Record<string, unknown>>(`/api/blockchain/proof?${query}`)
+      const blob = new Blob([JSON.stringify(proof, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `hp-proof-${chainEntityType}-${chainEntityId}-${selectedEntryId}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      setChainMessage('دریافت مرکل پروف ناموفق بود.')
+    }
+  }
+
+  const exportCurrentChain = () => {
+    if (blockchainEntries.length === 0) {
+      setChainMessage('زنجیره‌ای برای خروجی وجود ندارد.')
+      return
+    }
+    const payload = {
+      exported_at: new Date().toISOString(),
+      entity_type: chainEntityType || null,
+      entity_id: chainEntityId || null,
+      entries: blockchainEntries,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hp-blockchain-${chainEntityType || 'all'}-${chainEntityId || 'recent'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   async function createPaymentMethod() {
@@ -766,6 +898,125 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             <p className="p-4 text-xs text-[#7a6b4f]">روشی ثبت نشده است.</p>
           )}
         </div>
+      </section>
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p className={retroHeading}>Blockchain Ledger</p>
+            <h3 className="text-lg font-semibold mt-2">زنجیره هش تراکنش‌ها</h3>
+            <p className={`text-xs ${retroMuted} mt-2`}>
+              آخرین رکوردها برای همگام‌سازی با دفتر کل و پرداخت‌ها
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className={retroButton} onClick={() => refreshBlockchainEntries(50, true)}>
+              بروزرسانی
+            </button>
+            <button className={retroButton} onClick={verifyChainIntegrity} disabled={chainLoading}>
+              {chainLoading ? 'در حال بررسی...' : 'بررسی صحت'}
+            </button>
+            <button className={retroButton} onClick={downloadProof}>
+              دانلود مرکل‌پروف
+            </button>
+            <button className={retroButton} onClick={exportCurrentChain}>
+              خروجی JSON زنجیره
+            </button>
+          </div>
+        </header>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 text-sm">
+          <div className="flex items-center gap-3">
+            <span
+              className={`${retroBadge} ${
+                chainStatus === 'valid'
+                  ? 'bg-[#e7f4e7] text-[#1c4d1c]'
+                  : chainStatus === 'invalid'
+                  ? 'bg-[#f9e6e6] text-[#7a1f1f]'
+                  : ''
+            }`}
+            >
+              {chainStatus === 'valid'
+                ? 'زنجیره معتبر'
+                : chainStatus === 'invalid'
+                  ? 'زنجیره نامعتبر'
+                  : 'وضعیت نامشخص'}
+            </span>
+            {chainMessage && <span className={retroMuted}>{chainMessage}</span>}
+          </div>
+          {entityCatalog.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-xs">
+              <select
+                className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1"
+                value={
+                  chainEntityType && chainEntityId ? `${chainEntityType}::${chainEntityId}` : ''
+                }
+                onChange={e => {
+                  const value = e.target.value
+                  if (!value) {
+                    void refreshBlockchainEntries(50, true)
+                    return
+                  }
+                  const [type, id] = value.split('::')
+                  void loadChainForEntity(type, id)
+                }}
+              >
+                <option value="">نمایش همه موجودیت‌ها</option>
+                {entityCatalog.map(ent => (
+                  <option key={`${ent.entity_type}::${ent.entity_id}`} value={`${ent.entity_type}::${ent.entity_id}`}>
+                    {ent.entity_type} #{ent.entity_id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+        {blockchainEntries.length > 0 ? (
+          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+            <thead>
+              <tr>
+                <th className={retroTableHeader}>انتخاب</th>
+                <th className={retroTableHeader}>#</th>
+                <th className={retroTableHeader}>موجودیت</th>
+                <th className={retroTableHeader}>عملیات</th>
+                <th className={retroTableHeader}>شناسه</th>
+                <th className={retroTableHeader}>زمان</th>
+                <th className={retroTableHeader}>هش</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blockchainEntries.slice().reverse().map(entry => (
+                <tr key={entry.id} className="border-b border-[#d9cfb6]">
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="radio"
+                      checked={selectedEntryId === entry.id}
+                      onChange={() => {
+                        setSelectedEntryId(entry.id)
+                        setChainEntityType(entry.entity_type)
+                        setChainEntityId(entry.entity_id)
+                      }}
+                      name="blockchain-entry"
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-center">{entry.id}</td>
+                  <td className="px-3 py-2">{entry.entity_type}</td>
+                  <td className="px-3 py-2">{entry.action}</td>
+                  <td className="px-3 py-2">{entry.entity_id}</td>
+                  <td className="px-3 py-2 text-left">
+                    {entry.timestamp ? isoToJalali(entry.timestamp) : '---'}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-[10px] break-all">
+                    {entry.current_hash.slice(0, 24)}...
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-xs text-[#7a6b4f]">
+            رکوردی یافت نشد یا دسترسی شما محدود است.
+          </p>
+        )}
       </section>
 
       <section className={`${retroPanelPadded} space-y-4`}>

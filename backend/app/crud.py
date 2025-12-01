@@ -289,6 +289,42 @@ def authenticate_user(session: Session, username: str, password: str):
     return user
 
 
+def create_user_with_role(
+    session: Session,
+    username: str,
+    password: str,
+    full_name: Optional[str] = None,
+    email: Optional[str] = None,
+    mobile: Optional[str] = None,
+    role_id: Optional[int] = None,
+) -> models.User:
+    from .security import get_password_hash
+
+    role_name = 'Viewer'
+    assigned_role_id = role_id
+    if role_id:
+        role = session.query(models.Role).filter(models.Role.id == role_id).first()
+        if not role:
+            raise ValueError('نقش انتخابی یافت نشد')
+        role_name = role.name
+        assigned_role_id = role.id
+
+    user = models.User(
+        username=username,
+        hashed_password=get_password_hash(password),
+        full_name=full_name,
+        email=email,
+        mobile=mobile,
+        role=role_name,
+        role_id=assigned_role_id,
+        is_active=True,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
 def set_refresh_token(session: Session, user: models.User, refresh_token: str):
     from .security import get_password_hash
     user.refresh_token_hash = get_password_hash(refresh_token)
@@ -632,6 +668,7 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         amount=int(p.amount),
         reference=p.reference,
         invoice_id=p.invoice_id,
+        due_date=p.due_date,
         client_time=client_time,
         server_time=server_time,
         status='draft',
@@ -681,6 +718,31 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         from .activity_logger import log_activity
         log_activity(session, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
     except Exception:
+        pass
+    # Auto-create cheque record when method is cheque (by key or flag)
+    try:
+        is_cheque_method = False
+        if p.method:
+            m = None
+            try:
+                m = session.query(models.PaymentMethod).filter(models.PaymentMethod.key == p.method).first()
+            except Exception:
+                m = None
+            if (m and getattr(m, 'is_cheque', False)) or (p.method or '').lower() == 'cheque':
+                is_cheque_method = True
+        if is_cheque_method:
+            # Create cheque only if none exists yet
+            existing = session.query(models.Cheque).filter(models.Cheque.payment_id == pay.id).first()
+            if not existing:
+                ch = models.Cheque(
+                    payment_id=pay.id,
+                    status='pending',
+                    due_date=p.due_date,
+                )
+                session.add(ch)
+                session.commit()
+    except Exception:
+        # Don't fail the payment creation on cheque side-effects
         pass
     return pay
 

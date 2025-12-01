@@ -42,7 +42,9 @@ class UserCreate(BaseModel):
     password: str
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+    mobile: Optional[str] = None
     role_id: Optional[int] = None  # New field for role assignment
+    role: Optional[str] = None
 
 
 class UserOut(BaseModel):
@@ -80,6 +82,10 @@ class Token(BaseModel):
 class TokenPayload(BaseModel):
     sub: str
     exp: int
+
+
+class TokenRefreshRequest(BaseModel):
+    refresh_token: str
 
 
 class OTPSetupResponse(BaseModel):
@@ -299,6 +305,63 @@ class PaymentOut(PaymentBase):
     server_time: datetime
     status: str
     tracking_code: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+
+# ==================== Cheques ====================
+
+class ChequeCreate(BaseModel):
+    payment_id: int
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    status: Optional[str] = None
+    issue_date: Optional[datetime] = None
+    issue_date_jalali: Optional[str] = None
+    due_date: Optional[datetime] = None
+    due_date_jalali: Optional[str] = None
+    clearing_date: Optional[datetime] = None
+
+
+class ChequeUpdate(BaseModel):
+    cheque_number: Optional[str] = None
+    bank_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    status: Optional[str] = None
+    issue_date: Optional[datetime] = None
+    issue_date_jalali: Optional[str] = None
+    due_date: Optional[datetime] = None
+    due_date_jalali: Optional[str] = None
+    clearing_date: Optional[datetime] = None
+
+
+class ChequePaymentMini(BaseModel):
+    id: int
+    payment_number: Optional[str]
+    party_name: Optional[str]
+    amount: int
+
+    class Config:
+        orm_mode = True
+
+
+class ChequeOut(BaseModel):
+    id: int
+    payment_id: int
+    cheque_number: Optional[str]
+    bank_name: Optional[str]
+    branch_name: Optional[str]
+    status: str
+    issue_date: Optional[datetime]
+    due_date: Optional[datetime]
+    clearing_date: Optional[datetime]
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+    payment: Optional[ChequePaymentMini]
+    due_date_jalali: Optional[str] = None
+    issue_date_jalali: Optional[str] = None
 
     class Config:
         orm_mode = True

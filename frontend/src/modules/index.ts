@@ -7,6 +7,7 @@ import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import CustomerGroupsModule from './CustomerGroupsModule'
 import IccShopModule from './IccShopModule'
+import RoadmapModule from './RoadmapModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -16,6 +17,13 @@ export const modules: ModuleDefinition[] = [
     description: 'نمایش خلاصه و معمّای خوی معاملات و تحلیل‌های سریع',
     component: DashboardModule,
     badge: 'DASHBOARD',
+  },
+  {
+    id: 'roadmap',
+    label: 'نقشه راه',
+    description: 'وضعیت فازهای توسعه، اولویت‌ها و چک‌لیست‌ها',
+    component: RoadmapModule,
+    badge: 'PLAN',
   },
   {
     id: 'customer-groups',
