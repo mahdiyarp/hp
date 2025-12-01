@@ -1170,24 +1170,33 @@ def report_pnl(session: Session, start: Optional[datetime] = None, end: Optional
 
 
 def report_person_turnover(session: Session, party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[datetime] = None, end: Optional[datetime] = None):
-    # Sum invoices and payments for a person
+    """Compute per-person turnover based on finalized invoices.
+
+    Returns keys expected by UI:
+    - total_sale: sum of sale invoices
+    - total_purchase: sum of purchase invoices
+    - net: sale - purchase
+    """
     inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
-    pay_q = session.query(models.Payment).filter(models.Payment.status == 'posted')
     if start:
         inv_q = inv_q.filter(models.Invoice.server_time >= start)
-        pay_q = pay_q.filter(models.Payment.server_time >= start)
     if end:
         inv_q = inv_q.filter(models.Invoice.server_time <= end)
-        pay_q = pay_q.filter(models.Payment.server_time <= end)
     if party_id:
         inv_q = inv_q.filter(models.Invoice.party_id == party_id)
-        pay_q = pay_q.filter(models.Payment.party_id == party_id)
     if party_name:
         inv_q = inv_q.filter(models.Invoice.party_name.ilike(f"%{party_name}%"))
-        pay_q = pay_q.filter(models.Payment.party_name.ilike(f"%{party_name}%"))
-    invoices_total = sum(i.total or 0 for i in inv_q.all())
-    payments_total = sum(p.amount or 0 for p in pay_q.all())
-    return {'party_id': party_id, 'party_name': party_name, 'invoices_total': int(invoices_total), 'payments_total': int(payments_total)}
+
+    sales_total = sum(i.total or 0 for i in inv_q.filter(models.Invoice.invoice_type == 'sale').all())
+    purchases_total = sum(i.total or 0 for i in inv_q.filter(models.Invoice.invoice_type == 'purchase').all())
+    net = int(sales_total) - int(purchases_total)
+    return {
+        'party_id': party_id,
+        'party_name': party_name,
+        'total_sale': int(sales_total),
+        'total_purchase': int(purchases_total),
+        'net': int(net),
+    }
 
 
 def report_stock_valuation(session: Session):
