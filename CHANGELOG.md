@@ -2,6 +2,24 @@
 
 All notable changes to this project should be documented in this file.
 
+## 1.0.0 - 2025-12-02
+
+Highlights:
+- Backend health endpoints `/api/health` and `/api/health/db` with DB readiness check (SQLAlchemy 2.0 safe).
+- start.bat startup hardened: health polling, logging to `logs/latest.log`, compose mode selection.
+- Backend Docker: normalize `entrypoint.sh` line endings to avoid exec errors.
+- Frontend Docker: serve prebuilt `dist/` via nginx to avoid Rollup native module issues inside containers.
+- Documentation: added `RELEASE_NOTES.md` and `PRODUCTION_DEPLOY.md` with step-by-step commands.
+
+Verification:
+- `GET /api/health` => `{ status: "ok", db: true, ... }`
+- `GET /api/assistant/health` => `{ status: "ok" }`
+- Frontend responds `200` at `http://localhost:3000`.
+
+Upgrade notes:
+- Build `frontend/dist/` locally before `docker compose build`.
+- Ensure `backend/.env` has `DATABASE_URL`, `SECRET_KEY`, JWT expirations, and `REDIS_URL`.
+
 ## Unreleased
 
 - 2025-12-02: **Phase 1-5 Product Completion**
