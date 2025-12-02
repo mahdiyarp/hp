@@ -1,4 +1,10 @@
 {
+  "name": "hesabpak",
+  "private": true,
+  "scripts": {
+    "ui:smoke": "cd frontend && npx playwright test tests/playwright --reporter=list",
+    "ui:headless": "node ./scripts/headless_test.js"
+  },
   "dependencies": {
     "grapesjs": "^0.22.14"
   }

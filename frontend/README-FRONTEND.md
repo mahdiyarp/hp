@@ -19,7 +19,7 @@ This will:
 
 - If the browser starts downloading the HTML file instead of rendering it:
   - Ensure `nginx.conf` is present in the image (container) at `/etc/nginx/conf.d/default.conf` and that `index.html` is in `/usr/share/nginx/html`.
-  - Check Content-Type via network panel — HTML should be `text/html` not `application/octet-stream`.
+  - Check Content-Type via network panel ï¿½ HTML should be `text/html` not `application/octet-stream`.
   - Ensure `try_files $uri $uri/ /index.html;` is in the `location / {}` block.
 
 - Font problems ("Failed to decode downloaded font" / OTS parsing errors):
@@ -47,6 +47,28 @@ BACKEND_URL=http://localhost:8000 npm run dev
 ```
 
 The Vite dev server runs on port 3000 by default (configured in `vite.config.ts`). It proxies `/api` to the backend address.
+
+## UI smoke validation
+
+Headless checks using Playwright are included:
+
+```powershell
+# Install browsers once
+cd frontend
+cmd /c npx --yes playwright install chromium
+
+# Run visual/RTL/font checks (starts Vite dev server automatically)
+cd ..
+cmd /c npm run iranYekan-check
+
+# Optional: run the Docker-targeted headless smoke (uses http://localhost:3000)
+set URL=http://localhost:3000
+node .\scripts\headless_test.js
+```
+
+Artifacts:
+- Playwright screenshots/logs in `frontend/screenshots` and `frontend/font-diagnostics.log`.
+- Headless script logs/screenshot in `C:\workspace\logs` on Windows.
 
 ## Healthchecks & readiness
 
