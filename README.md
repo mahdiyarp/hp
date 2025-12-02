@@ -1,6 +1,8 @@
 # HesabPak - سیستم حسابداری فارسی 💰
 
 [![Backend Tests](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml/badge.svg)](https://github.com/mahdiyarp/hp/actions/workflows/backend-tests.yml)
+[![UI Smoke](https://github.com/mahdiyarp/hp/actions/workflows/ui-smoke.yml/badge.svg)](https://github.com/mahdiyarp/hp/actions/workflows/ui-smoke.yml)
+[![Release](https://github.com/mahdiyarp/hp/actions/workflows/release.yml/badge.svg)](https://github.com/mahdiyarp/hp/actions/workflows/release.yml)
 
 ## CI and Tests
 
