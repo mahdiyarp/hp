@@ -117,7 +117,7 @@ const Invoices: React.FC = () => {
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="text-left">
+            <tr className="text-right">
               <th className="px-3 py-2">شماره</th>
               <th className="px-3 py-2">مشتری</th>
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('amount')}>مبلغ کل</th>
@@ -148,7 +148,7 @@ const Invoices: React.FC = () => {
               ))
             ) : (
               <tr>
-                <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={3}>
+                <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={7}>
                   {loading ? 'در حال بارگذاری...' : 'موردی یافت نشد'}
                 </td>
               </tr>
@@ -206,23 +206,24 @@ function actionMenu(row: any, reload: () => Promise<void>) {
   const id = row.id || row.code || row.number
   const goEdit = () => { if (id) window.location.hash = `invoice-edit:${id}` }
   const goView = () => { if (id) window.open(`#invoice-view:${id}`, '_blank') }
-  const doDuplicate = async () => { if (!id) return; const r = await fetch(`/api/invoices/${id}/duplicate`, { method: 'POST' }); if (r.ok) { await reload(); } }
+  const doDuplicate = async (e: any) => { e?.stopPropagation(); if (!id) return; const r = await fetch(`/api/invoices/${id}/duplicate`, { method: 'POST' }); if (r.ok) { await reload(); } }
   const goAddPayment = () => { if (id) window.location.hash = `payment-new:${id}` }
-  const doChangeStatus = async () => {
+  const doChangeStatus = async (e: any) => {
+    e?.stopPropagation()
     if (!id) return
     const status = prompt('وضعیت جدید را وارد کنید (draft, issued, viewed, paid, cancelled, overdue):', 'issued')
     if (!status) return
     const r = await fetch(`/api/invoices/${id}/status/${status}`, { method: 'POST' })
-    if (r.ok) { await reload() } else { alert('تغییر وضعیت ناموفق بود') }
+    if (r.ok) { await reload() }
   }
   const openPdf = () => { if (id) window.open(`/api/invoices/${id}/pdf`, '_blank') }
-  const shareLink = async () => { if (!id) return; const link = `${location.origin}/#invoice-view:${id}`; await navigator.clipboard.writeText(link); alert('لینک در کلیپ‌بورد کپی شد') }
-  const doDelete = async () => { if (!id) return; if (!confirm('حذف فاکتور؟')) return; const r = await fetch(`/api/invoices/${id}`, { method: 'DELETE' }); if (r.ok) { await reload() } else { alert('حذف ناموفق بود') } }
+  const shareLink = async () => { if (!id) return; const link = `${location.origin}/#invoice-view:${id}`; await navigator.clipboard.writeText(link) }
+  const doDelete = async (e: any) => { e?.stopPropagation(); if (!id) return; if (!window.confirm('حذف فاکتور؟')) return; const r = await fetch(`/api/invoices/${id}`, { method: 'DELETE' }); if (r.ok) { await reload() } }
 
   return (
     <details className="relative">
       <summary className="hp-button">اقدامات</summary>
-      <div className="absolute z-10 mt-1 bg-white border rounded shadow min-w-[10rem]">
+      <div className="absolute z-20 mt-1 bg-white border rounded shadow min-w-[10rem]">
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goEdit}>🖊 ویرایش</button>
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goView}>📄 مشاهده</button>
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={doDuplicate}>📥 تکثیر</button>

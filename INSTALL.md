@@ -1,56 +1,213 @@
-# HesabPak Installation and Setup Guide
+# HesabPak Installation Guide v1.0.0
 
-## Quick Installation
+## Quick Start (5 minutes)
 
-### Windows
+### Prerequisites
+- Docker Desktop 20.10+ OR
+- Python 3.11+ and Node.js 20+
 
-1. **Download and Run Installer**
-   ```cmd
-   # Open Command Prompt (cmd) as Administrator
-   # Run this command:
-   curl -O https://raw.githubusercontent.com/mahdiyarp/hp/1/install.bat && install.bat
-   ```
+---
 
-   Or manually:
-   - Clone the repo: `git clone https://github.com/mahdiyarp/hp.git`
-   - Navigate to folder: `cd hp`
-   - Run: `install.bat`
+## Option 1: Docker Production (Recommended)
 
-2. **Requirements**
-   - Windows 10/11 (64-bit)
-   - Git: https://git-scm.com/download/win
-   - Docker Desktop: https://www.docker.com/products/docker-desktop
-
-3. **After Installation**
-   - Desktop shortcut "HesabPak.lnk" will be created
-   - Or run: `start.bat` from the installation folder
-
-### Linux/Mac
-
+### Step 1: Clone Repository
 ```bash
-# Download and run installer
-curl -O https://raw.githubusercontent.com/mahdiyarp/hp/1/install.sh && chmod +x install.sh && ./install.sh
-
-# Or manually
 git clone https://github.com/mahdiyarp/hp.git
 cd hp
-chmod +x install.sh && ./install.sh
 ```
 
-**Requirements:**
-- Docker: https://docs.docker.com/engine/install/
-- Docker Compose (usually included with Docker)
-- Git
+### Step 2: Configure Environment
+```bash
+# Copy production environment template
+cp .env.production .env
 
-## Access the Application
+# ⚠️  CRITICAL: Edit .env and change these values:
+# - DB_PASSWORD (use strong random password)
+# - SECRET_KEY (generate: openssl rand -hex 32)
+# - ALLOWED_ORIGINS (add your domain)
+```
 
-Once running:
+### Step 3: Start Production Stack
+```bash
+# Build and start all services
+docker-compose -f docker-compose.production.yml up -d
 
-- **Web Interface**: http://localhost:3000
-- **API Documentation**: http://localhost:8000/docs
-- **Default Credentials**:
-  - Username: `developer`
-  - Password: `09123506545`
+# Check status
+docker-compose -f docker-compose.production.yml ps
+
+# View logs
+docker-compose -f docker-compose.production.yml logs -f
+```
+
+### Step 4: Initialize Database
+```bash
+# Run migrations
+docker-compose -f docker-compose.production.yml exec backend alembic upgrade head
+
+# Create admin user
+docker-compose -f docker-compose.production.yml exec backend python -c "from app.db import get_db; from app.models import User; from app.security import get_password_hash; db=next(get_db()); u=User(username='admin',hashed_password=get_password_hash('admin123'),is_active=True); db.add(u); db.commit(); print('Admin created')"
+```
+
+### Step 5: Access Application
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Default Login**: admin / admin123 (change immediately!)
+
+---
+
+## Option 2: Windows Portable (No Docker Required)
+
+### Step 1: Download Release
+Download latest release from: https://github.com/mahdiyarp/hp/releases
+
+### Step 2: Extract and Run
+```cmd
+# Extract hesabpak-v1.0.0-windows-portable.zip
+# Double-click start.bat
+```
+
+Application opens automatically at http://localhost:3000
+
+### Step 3: Stop Application
+```cmd
+# Double-click stop.bat or close terminal window
+```
+
+---
+
+## Option 3: Manual Installation (Development)
+
+### Backend Setup
+
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Run migrations
+alembic upgrade head
+
+# Start backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Development mode
+npm run dev
+
+# Production build
+npm run build
+npm run preview
+```
+
+---
+
+## Post-Installation Configuration
+
+### 1. Enable HTTPS (Production Only)
+
+#### Option A: Let's Encrypt (Automated)
+```bash
+# Install certbot
+sudo apt-get install certbot
+
+# Generate certificate
+sudo certbot certonly --standalone -d yourdomain.com
+
+# Copy to Docker volume
+sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem ./infra/nginx/certs/
+sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem ./infra/nginx/certs/
+
+# Generate dhparam (one-time, takes 5-10 minutes)
+openssl dhparam -out ./infra/nginx/dhparam.pem 2048
+
+# Uncomment HTTPS lines in infra/nginx/nginx.conf
+# Restart nginx
+docker-compose -f docker-compose.production.yml restart nginx
+```
+
+#### Option B: Self-Signed Certificate (Testing)
+```bash
+mkdir -p ./infra/nginx/certs
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ./infra/nginx/certs/privkey.pem \
+  -out ./infra/nginx/certs/fullchain.pem \
+  -subj "/CN=localhost"
+```
+
+### 2. Configure Automated Backups
+
+Backups run automatically at 2 AM daily with 30-day retention.
+
+#### Enable Backup Encryption (Recommended)
+```bash
+# Generate encryption key
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+# Add to .env.production
+BACKUP_ENCRYPTION_KEY=<your-generated-key>
+
+# Restart backup scheduler
+docker-compose -f docker-compose.production.yml restart backup_scheduler
+```
+
+#### Manual Backup
+```bash
+docker-compose -f docker-compose.production.yml exec backend python scripts/backup_scheduler.py
+```
+
+#### Restore from Backup
+```bash
+# List backups
+ls -lh backups/
+
+# Restore (replace with your backup filename)
+gunzip -c backups/hesabpak_backup_20251202_020000.sql.gz | \
+docker-compose -f docker-compose.production.yml exec -T db psql -U postgres -d hesabpak
+```
+
+### 3. Email and SMS Configuration (Optional)
+
+Edit `backend/.env.production`:
+
+```bash
+# Email (Gmail example)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=noreply@hesabpak.local
+
+# SMS (Kavenegar example)
+SMS_PROVIDER=kavenegar
+SMS_API_KEY=your-api-key
+SMS_SENDER=10008663
+```
+
+Restart backend:
+```bash
+docker-compose -f docker-compose.production.yml restart backend
+```
+
+---
 
 ## Common Commands
 
@@ -96,22 +253,67 @@ docker compose up -d --build
 
 ## Troubleshooting
 
-### Docker not starting
-- Ensure Docker Desktop is installed and running
-- On Windows, check Hyper-V is enabled
-- On Linux, ensure Docker daemon is running: `sudo systemctl start docker`
+### Database Connection Failed
+```bash
+# Check if database is running
+docker-compose -f docker-compose.production.yml ps
 
-### Port already in use
-- Change ports in `docker-compose.yml`
-- Or stop other services using ports 3000 and 8000
+# View database logs
+docker-compose -f docker-compose.production.yml logs db
 
-### Database connection error
-- Ensure database container is running: `docker compose ps`
-- Check logs: `docker compose logs db`
+# Verify DATABASE_URL in .env.production
+cat backend/.env.production | grep DATABASE_URL
+```
 
-### Frontend not loading
-- Check frontend container: `docker compose logs frontend`
-- Ensure port 3000 is accessible
+### Frontend Can't Reach Backend (CORS Errors)
+```bash
+# Check ALLOWED_ORIGINS includes your domain
+cat backend/.env.production | grep ALLOWED_ORIGINS
+
+# Should include: http://localhost:3000,https://yourdomain.com
+
+# Restart backend after changes
+docker-compose -f docker-compose.production.yml restart backend
+```
+
+### Port Already in Use
+```bash
+# Change ports in .env.production
+BACKEND_PORT=8001
+FRONTEND_PORT=3001
+
+# Recreate containers
+docker-compose -f docker-compose.production.yml down
+docker-compose -f docker-compose.production.yml up -d
+```
+
+### Permission Denied (Linux)
+```bash
+sudo chown -R $USER:$USER ./
+chmod +x backend/entrypoint.sh
+chmod +x backend/scripts/*.py
+```
+
+### Docker Build Fails
+```bash
+# Clean Docker cache
+docker system prune -a
+
+# Rebuild without cache
+docker-compose -f docker-compose.production.yml build --no-cache
+```
+
+### SSL Certificate Issues
+```bash
+# Verify certificate files exist
+ls -la infra/nginx/certs/
+
+# Check nginx logs
+docker-compose -f docker-compose.production.yml logs nginx
+
+# Test SSL configuration
+openssl s_client -connect yourdomain.com:443 -servername yourdomain.com
+```
 
 ## Development
 
@@ -137,20 +339,86 @@ docker compose -f docker-compose.yml up -d --build
 - Build tool: Vite
 - Styling: Tailwind CSS
 
-## Support
+---
 
-For issues and questions:
-- GitHub Issues: https://github.com/mahdiyarp/hp/issues
-- Developer: mahdiyarp
-- Contact: 09123506545
+## Upgrade Instructions
 
-## License
+### Docker Production
+```bash
+# Pull latest changes
+git pull origin main
 
-See LICENSE file for details.
+# Stop services
+docker-compose -f docker-compose.production.yml down
+
+# Rebuild images
+docker-compose -f docker-compose.production.yml build --no-cache
+
+# Start services
+docker-compose -f docker-compose.production.yml up -d
+
+# Run migrations
+docker-compose -f docker-compose.production.yml exec backend alembic upgrade head
+```
+
+### Manual Installation
+```bash
+# Pull latest changes
+git pull origin main
+
+# Backend
+cd backend
+pip install -r requirements.txt
+alembic upgrade head
+
+# Frontend
+cd ../frontend
+npm install
+npm run build
+```
 
 ---
 
-**Application ID**: hp\a010124pp
-**Current Branch**: 1
-**Last Updated**: 2025-11-14
+## Performance Optimization
+
+### PostgreSQL Tuning (for production)
+Already configured in `docker-compose.production.yml`:
+- `shared_buffers=256MB`
+- `effective_cache_size=1GB`
+- `work_mem=4MB`
+
+For high-traffic deployments, adjust in docker-compose file.
+
+### Redis Cache
+Configured with:
+- AOF persistence
+- 256MB max memory
+- LRU eviction policy
+
+### Nginx Rate Limiting
+- API endpoints: 10 req/s (burst 20)
+- General traffic: 50 req/s (burst 100)
+
+---
+
+## Security Checklist
+
+- [ ] Changed `SECRET_KEY` in `.env.production`
+- [ ] Changed `DB_PASSWORD` to strong random password
+- [ ] Updated `ALLOWED_ORIGINS` with production domain
+- [ ] Enabled HTTPS with valid certificate
+- [ ] Generated and set `BACKUP_ENCRYPTION_KEY`
+- [ ] Changed default admin password
+- [ ] Configured firewall rules (ports 80, 443 only)
+- [ ] Enabled automated backups
+- [ ] Set up monitoring/logging
+
+---
+
+## Support
+
+- **Documentation**: https://github.com/mahdiyarp/hp/wiki
+- **Issues**: https://github.com/mahdiyarp/hp/issues
+- **Version**: 1.0.0
+- **Release Date**: December 2, 2025
 

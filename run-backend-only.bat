@@ -13,8 +13,14 @@ echo   HesabPak - Backend Only (FastAPI)
 echo ================================================
 echo.
 
-set PYTHON_PATH=C:\Users\Mahdi\AppData\Local\Programs\Python\Python311
-set REPO_PATH=C:\Users\Mahdi\source\repos\mahdiyarp\hp
+REM Resolve repo path relative to this script
+set REPO_PATH=%~dp0
+set REPO_PATH=%REPO_PATH:~0,-1%
+
+REM Prefer venv Python if available
+set PYTHON_EXE=
+if exist "%REPO_PATH%\venv\Scripts\python.exe" set PYTHON_EXE="%REPO_PATH%\venv\Scripts\python.exe"
+if "%PYTHON_EXE%"=="" set PYTHON_EXE=python
 
 REM Check PostgreSQL
 echo [1/2] Checking PostgreSQL...
@@ -49,6 +55,6 @@ echo ================================================
 echo.
 
 cd /d "%REPO_PATH%\backend"
-%PYTHON_PATH%\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+%PYTHON_EXE% -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 pause

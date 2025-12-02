@@ -197,7 +197,7 @@ from .activity_logger import log_activity
 
 
 
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 
 
 
@@ -1092,6 +1092,34 @@ app.include_router(reports_router)
 
 
 
+
+
+# -------------------------------------------------
+# Basic Health Endpoints (for Docker/ops readiness)
+# -------------------------------------------------
+
+from sqlalchemy import text
+
+@app.get("/api/health")
+def api_health(request: Request, session: Session = Depends(db.get_db)):
+    try:
+        # lightweight DB ping
+        session.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return JSONResponse({
+        "status": "ok" if db_ok else "degraded",
+        "db": db_ok,
+        "time": datetime.utcnow().isoformat() + "Z",
+        "service": "backend"
+    })
+
+
+@app.get("/api/health/db")
+def api_health_db(session: Session = Depends(db.get_db)):
+    session.execute(text("SELECT 1"))
+    return {"db": True}
 
 
 

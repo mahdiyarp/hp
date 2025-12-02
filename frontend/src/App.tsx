@@ -45,6 +45,24 @@ function useHashRoute(defaultRoute: RouteKey = 'dashboard') {
 
 const App: React.FC = () => {
 	const { route, navigate } = useHashRoute('dashboard')
+	const [hash, setHash] = React.useState(window.location.hash)
+	
+	// Track hash changes
+	React.useEffect(() => {
+		const onHashChange = () => setHash(window.location.hash)
+		window.addEventListener('hashchange', onHashChange)
+		return () => window.removeEventListener('hashchange', onHashChange)
+	}, [])
+	
+	// Scroll lock for editor overlays
+	React.useEffect(() => {
+		const isEditor = hash.includes('edit') || hash.includes('new') || hash.includes('payment') || hash.includes('task')
+		if (isEditor) {
+			document.body.style.overflow = 'hidden'
+			return () => { document.body.style.overflow = '' }
+		}
+	}, [hash])
+	
 	return (
 		<div className="min-h-screen flex flex-col">
 			{/* Header */}
@@ -102,73 +120,73 @@ const App: React.FC = () => {
 
 						{/* Editor overlays based on hash */}
 						{String(window.location.hash||'').startsWith('#invoice-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='invoices'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<InvoiceEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#invoice-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='invoices'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<InvoiceEditor mode="create" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'').startsWith('#contact-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='contacts'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ContactEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#contact-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='contacts'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ContactEditor mode="create" />
 								</div>
 							</div>
 						)}
 
 						{String(window.location.hash||'').startsWith('#product-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='products'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ProductEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#product-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='products'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ProductEditor mode="create" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'').startsWith('#person-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='persons'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PersonEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#person-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-3xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='persons'}}>
+								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PersonEditor mode="create" />
 								</div>
 							</div>
 						)}
 
 						{String(window.location.hash||'').startsWith('#task-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-2xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='tasks'}}>
+								<div className="bg-white max-w-2xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<TaskEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#task-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-2xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='tasks'}}>
+								<div className="bg-white max-w-2xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<TaskEditor mode="create" />
 								</div>
 							</div>
@@ -176,8 +194,8 @@ const App: React.FC = () => {
 
 						{/* Payment editor */}
 						{String(window.location.hash||'').startsWith('#payment') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-								<div className="bg-white max-w-xl w-full rounded shadow-lg">
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='payments'}}>
+								<div className="bg-white max-w-xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PaymentEditor />
 								</div>
 							</div>

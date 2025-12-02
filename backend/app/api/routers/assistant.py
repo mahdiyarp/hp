@@ -36,10 +36,7 @@ def _admin(user: models.User):
 
 
     if not user or (getattr(user, "role", "") not in ["Admin"] and getattr(user, "role_id", None) not in [1]):
-
-
-
-        raise HTTPException(status_code=403, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ² ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
+        raise HTTPException(status_code=403, detail="دسترسی مدیران است.")
 
 
 
@@ -230,14 +227,8 @@ def put_settings(payload: Dict[str, Any] = Body(...), session: Session = Depends
 
 
 @router.get("/health")
-
-
-
-def health(session: Session = Depends(db.get_db), current: models.User = Depends(lambda: models.User())):
-
-
-
-    _admin(current)
+def health(session: Session = Depends(db.get_db)):
+    return {"status": "ok", "service": "assistant"}
 
 
 

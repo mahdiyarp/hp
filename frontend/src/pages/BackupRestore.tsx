@@ -85,8 +85,8 @@ const BackupRestore: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left">
-                <th className="px-3 py-2">نام فایل</th>
+              <tr className="text-right">
+                <th className="px-3 py-2">شناسه</th>
                 <th className="px-3 py-2">نوع</th>
                 <th className="px-3 py-2">تاریخ</th>
                 <th className="px-3 py-2">حجم</th>

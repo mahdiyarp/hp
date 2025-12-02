@@ -70,11 +70,17 @@ html[dir='rtl'] {
   letter-spacing: 0.05em;
   box-shadow: var(--shadow-low);
   transition: transform 120ms ease, box-shadow 120ms ease;
+  cursor: pointer;
 }
 
-.hp-button:hover {
+.hp-button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: var(--shadow-high);
+}
+
+.hp-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .hp-button.secondary {

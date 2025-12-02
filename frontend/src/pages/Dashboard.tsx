@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
         <div className="mt-3">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="text-left">
+              <tr className="text-right">
                 <th className="px-3 py-2">زمان</th>
                 <th className="px-3 py-2">کاربر</th>
                 <th className="px-3 py-2">اقدام</th>

@@ -10,10 +10,10 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path='.env')
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'changeme-secret')
+SECRET_KEY = os.getenv('SECRET_KEY', 'changeme-secret-PLEASE-CHANGE-IN-PRODUCTION')
 ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '15'))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', '30'))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '60'))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv('REFRESH_TOKEN_EXPIRE_DAYS', '7'))
 
 # Use a PBKDF2-based scheme to avoid optional bcrypt native backend issues in some containers.
 # PBKDF2-SHA256 is widely supported and doesn't require the bcrypt C-extension.

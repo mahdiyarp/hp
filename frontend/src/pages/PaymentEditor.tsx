@@ -62,11 +62,22 @@ export default function PaymentEditor() {
     close();
   };
 
+  React.useEffect(() => {
+    if (!location.hash.startsWith('#payment')) return
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    document.addEventListener('keydown', handleEscape)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [])
+
   if (!location.hash.startsWith('#payment')) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded shadow w-full max-w-xl p-4 space-y-3">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={close}>
+      <div className="bg-white rounded shadow w-full max-w-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-bold">{pid ? 'ویرایش پرداخت' : 'افزودن پرداخت'}</h2>
           <button onClick={close}>✕</button>

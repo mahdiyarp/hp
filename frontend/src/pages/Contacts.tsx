@@ -52,8 +52,8 @@ const Contacts: React.FC = () => {
       <div className="overflow-x-auto mt-3">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="text-left">
-              <th className="px-3 py-2">نام</th>
+            <tr className="text-right">
+              <th className="px-3 py-2">شناسه</th>
               <th className="px-3 py-2">تلفن</th>
               <th className="px-3 py-2">ایمیل</th>
               <th className="px-3 py-2">شرکت</th>

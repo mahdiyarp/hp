@@ -107,11 +107,12 @@ const Products: React.FC = () => {
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="text-left">
+            <tr className="text-right">
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('name')}>نام</th>
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('sku')}>کد</th>
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('price')}>قیمت</th>
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('stock')}>موجودی</th>
+              <th className="px-3 py-2">عملیات</th>
             </tr>
           </thead>
           <tbody>
@@ -121,12 +122,13 @@ const Products: React.FC = () => {
                   <td className="px-3 py-2">{p.name || '-'}</td>
                   <td className="px-3 py-2">{p.sku || '-'}</td>
                   <td className="px-3 py-2">{p.price ?? 0}</td>
-                  <td className="px-3 py-2">{p.stock ?? 0} <button className="hp-button secondary ml-2" onClick={()=>{ window.location.hash = `product-edit:${p.id}` }}>ویرایش</button></td>
+                  <td className="px-3 py-2">{p.stock ?? 0}</td>
+                  <td className="px-3 py-2"><button className="hp-button secondary" onClick={()=>{ window.location.hash = `product-edit:${p.id}` }}>ویرایش</button></td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={4}>
+                <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={5}>
                   {loading ? 'در حال بارگذاری...' : 'موردی یافت نشد'}
                 </td>
               </tr>
