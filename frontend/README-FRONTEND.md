@@ -78,6 +78,33 @@ Artifacts:
 - Playwright artifacts under `frontend/playwright-report` and `frontend/tests/playwright/test-results`.
 - Additional screenshots/logs in `frontend/screenshots` and `frontend/font-diagnostics.log`.
 
+### پایداری اجرا (Windows) و انتظارهای قطعی
+
+- برای جلوگیری از خطاهای ناشی از کش سراسری مرورگرها، مرورگرهای Playwright را به‌صورت محلی نصب کنید:
+
+```powershell
+$env:PLAYWRIGHT_BROWSERS_PATH='0'
+npx @playwright/test install --with-deps
+```
+
+- برای Smoke پایدار، از انتظارهای قطعی استفاده شده است (به‌جای `networkidle`). توابع کمکی در `tests/playwright/utils/waits.ts` قرار دارند:
+  - `waitForVisible(page, selector)`
+  - `waitForCount(locator, count)`
+  - `waitForText(page, selector, text)`
+
+- اجرای کامل دود (Smoke) و مشاهده گزارش:
+
+```powershell
+Push-Location "C:\Users\Mahdi\source\repos\mahdiyarp\09-05\frontend"
+$env:PLAYWRIGHT_BROWSERS_PATH='0'
+npx.cmd @playwright/test install --with-deps
+npx.cmd @playwright/test test tests/playwright/smoke-basic.spec.js tests/playwright/smoke-modules.spec.js tests/playwright/smoke-selectors.spec.js --config tests/playwright/playwright.config.js --reporter=list,html
+npx.cmd @playwright/test show-report --port=0
+Pop-Location
+```
+
+نکته: اگر ترمینال VS Code گاهی با کد «-1» خارج شد، گزارش همچنان روی پورتی تصادفی سرو می‌شود؛ در صورت نیاز دوباره `show-report` را اجرا کنید.
+
 ## Healthchecks & readiness
 
 The frontend container includes a healthcheck that curls `/` to verify the site is serving. Backend has no healthcheck here; consider adding one if needed.
