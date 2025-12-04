@@ -2,8 +2,8 @@ const path = require('path');
 /** @type {import('@playwright/test').PlaywrightTestConfig} */
 module.exports = {
   testDir: './',
-  testMatch: 'smoke-*.spec.js',
-  testIgnore: ['**/*.ts', '**/font-visual-check.spec.js', '**/smoke-modules.spec.js'],
+  testMatch: /.*\.spec\.js$/,
+  testIgnore: ['**/*.ts'],
   workers: 1,
   timeout: 120000,
   globalSetup: require.resolve('./setup/global-setup.js'),
