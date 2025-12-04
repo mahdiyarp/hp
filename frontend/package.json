@@ -21,6 +21,7 @@
     "test": "npm run iranYekan-check",
     "test:smoke": "npx @playwright/test test frontend/tests/playwright --reporter=list",
     "test:visual": "npx @playwright/test test frontend/tests/playwright --reporter=html",
+    "preui:smoke": "npx @playwright/test install --with-deps",
     "ui:smoke": "npx @playwright/test test --config tests/playwright/playwright.config.js --reporter=list,html",
     "ui:visual": "npx @playwright/test test --config tests/playwright/playwright.config.js --reporter=html",
     "ui:interaction": "npx @playwright/test test --config tests/playwright/playwright.config.js --grep @interaction --reporter=list",
