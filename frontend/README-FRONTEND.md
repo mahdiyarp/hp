@@ -50,16 +50,24 @@ The Vite dev server runs on port 3000 by default (configured in `vite.config.ts`
 
 ## UI smoke validation
 
-Headless checks using Playwright are included:
+Headless checks using Playwright are included. We use `@playwright/test` as the single CLI:
 
 ```powershell
-# Install browsers once
-cd frontend
-cmd /c npx --yes playwright install chromium
+# From repo root (Windows PowerShell)
 
-# Run visual/RTL/font checks (starts Vite dev server automatically)
-cd ..
-cmd /c npm run iranYekan-check
+# 1) Install browsers locally for this project
+cd frontend
+npx @playwright/test install --with-deps
+
+# 2) Run the smoke with Vite webServer (list + html reporters)
+npx @playwright/test test --config tests/playwright/playwright.config.js --reporter list,html
+
+# 3) Open the latest HTML report
+npx @playwright/test show-report --port=0
+
+# Or just use npm scripts
+npm run ui:smoke
+npm run pw:show-report
 
 # Optional: run the Docker-targeted headless smoke (uses http://localhost:3000)
 set URL=http://localhost:3000
@@ -67,8 +75,8 @@ node .\scripts\headless_test.js
 ```
 
 Artifacts:
-- Playwright screenshots/logs in `frontend/screenshots` and `frontend/font-diagnostics.log`.
-- Headless script logs/screenshot in `C:\workspace\logs` on Windows.
+- Playwright artifacts under `frontend/playwright-report` and `frontend/tests/playwright/test-results`.
+- Additional screenshots/logs in `frontend/screenshots` and `frontend/font-diagnostics.log`.
 
 ## Healthchecks & readiness
 
