@@ -1,7 +1,7 @@
-const { test } = require('@playwright/test');
+const { test, expect } = require('@playwright/test');
 
 // Diagnostic-only: do not fail the suite
-test('modules layout diagnostics (no-op)', async ({ page }) => {
+test('modules layout diagnostics (soft checks)', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' }).catch(() => {});
   await page.waitForSelector('#root, body', { timeout: 10000 }).catch(() => {});
   const diag = await page.evaluate(() => {
@@ -15,4 +15,8 @@ test('modules layout diagnostics (no-op)', async ({ page }) => {
     } catch { return { nav: false, aside: false, cards: 0 }; }
   });
   console.log('[modules-diag]', diag);
+  // Soft expectations for stability in smoke
+  await expect.soft(page.locator('nav')).toHaveCount(1);
+  await expect.soft(page.locator('aside')).toHaveCount(1);
+  await expect.soft(page.locator('.hp-card')).toHaveCount(diag.cards);
 });
