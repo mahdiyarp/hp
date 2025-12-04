@@ -1,5 +1,6 @@
 import DashboardModule from './DashboardModule'
-import SalesModule from './SalesModule'
+import InvoicesModule from './InvoicesModule'
+import SaleOrdersModule from './SaleOrdersModule'
 import FinanceModule from './FinanceModule'
 import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
@@ -8,6 +9,10 @@ import SystemModule from './SystemModule'
 import CustomerGroupsModule from './CustomerGroupsModule'
 import IccShopModule from './IccShopModule'
 import RoadmapModule from './RoadmapModule'
+import AIModule from './AIModule'
+import DeveloperModule from './DeveloperModule'
+import PageBuilderModule from './PageBuilderModule'
+import SearchModule from './SearchModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -19,66 +24,95 @@ export const modules: ModuleDefinition[] = [
     badge: 'DASHBOARD',
   },
   {
-    id: 'roadmap',
-    label: 'نقشه راه',
-    description: 'وضعیت فازهای توسعه، اولویت‌ها و چک‌لیست‌ها',
-    component: RoadmapModule,
-    badge: 'PLAN',
+    id: 'invoices',
+    label: 'فاکتورها',
+    description: 'مدیریت فاکتورهای فروش و خرید',
+    component: InvoicesModule,
+    badge: 'INVOICES',
   },
   {
-    id: 'customer-groups',
-    label: 'گروه‌های مشتری',
-    description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
-    component: CustomerGroupsModule,
-    badge: 'GROUPS',
+    id: 'sale-orders',
+    label: 'سفارشات فروش',
+    description: 'مدیریت سفارشات فروش',
+    component: SaleOrdersModule,
+    badge: 'ORDERS',
   },
   {
-    id: 'icc-shop',
-    label: 'ICC Shop',
-    description: 'یکپارچه‌سازی ساختار سازمانی ICC',
-    component: IccShopModule,
-    badge: 'ICC',
+    id: 'finance',
+    label: 'مالی',
+    description: 'پایش جریان‌های نقدی، چک‌ها و حساب‌ها',
+    component: FinanceModule,
+    badge: 'FINANCE',
+  },
+  {
+    id: 'inventory',
+    label: 'انبار',
+    description: 'مدیریت موجودی و کالاها',
+    component: InventoryModule,
+    badge: 'INVENTORY',
+  },
+  {
+    id: 'crm',
+    label: 'CRM',
+    description: 'مدیریت مشتریان، فعالیت‌ها و گروه‌ها',
+    component: PeopleModule,
+    badge: 'CRM',
   },
   {
     id: 'reports',
-    label: 'گزارش‌ها و تحلیل‌ها',
-    description: 'سود و زیان، تراز نقدی و ارزش موجودی',
+    label: 'گزارش‌ها',
+    description: 'گزارش‌های مالی و تحلیلی',
     component: ReportsModule,
     badge: 'REPORTS',
   },
   {
-    id: 'sales',
-    label: 'فروش و اسناد',
-    description: 'مدیریت فاکتورهای فروش و خرید، همراه با فیلترهای پیشرفته',
-    component: SalesModule,
-    badge: 'SALES',
-  },
-  {
-    id: 'finance',
-    label: 'دریافت و پرداخت',
-    description: 'پایش جریان‌های نقدی، چک‌ها و تراز حساب‌ها',
-    component: FinanceModule,
-    badge: 'TREASURY',
-  },
-  {
-    id: 'inventory',
-    label: 'انبار و کالا',
-    description: 'سفارش‌گذاری، مدیریت موجودی و گروه‌بندی کالاها',
-    component: InventoryModule,
-    badge: 'STOCK',
-  },
-  {
-    id: 'people',
-    label: 'طرف‌های حساب',
-    description: 'مدیریت مشتریان، تأمین‌کنندگان و مخاطبین سیستم',
-    component: PeopleModule,
-    badge: 'RELATIONS',
-  },
-  {
-    id: 'settings',
-    label: 'تنظیمات سیستم',
-    description: 'تاریخ هوشمند، بکاپ‌ها، یکپارچه‌سازی و لاگ‌ها',
+    id: 'system',
+    label: 'سیستم',
+    description: 'تنظیمات، یکپارچه‌سازی و ابزارهای سیستمی',
     component: SystemModule,
     badge: 'SYSTEM',
+  },
+  {
+    id: 'ai',
+    label: 'هوش مصنوعی',
+    description: 'ابزارهای هوش مصنوعی و تحلیلگر',
+    component: AIModule,
+    badge: 'AI',
+  },
+  {
+    id: 'developer',
+    label: 'توسعه‌دهنده',
+    description: 'ابزارهای توسعه‌دهندگان و API Key',
+    component: DeveloperModule,
+    badge: 'DEV',
+  },
+  {
+    id: 'page-builder',
+    label: 'سازنده صفحات',
+    description: 'مدیریت و ساخت صفحات سفارشی',
+    component: PageBuilderModule,
+    badge: 'BUILDER',
+  },
+
+  {
+    id: 'search',
+    label: 'جستجو',
+    description: 'جستجوی پیشرفته در سیستم',
+    component: SearchModule,
+    badge: 'SEARCH',
+  },
+  {
+    id: 'icc-shop',
+    label: 'فروشگاه ICC',
+    description: 'مدیریت محصولات و دسته‌بندی‌های فروشگاه ICC',
+    component: IccShopModule,
+    badge: 'ICC',
+  },
+  {
+    id: 'roadmap',
+    label: 'نقشه راه',
+    description: 'مشاهده نقشه راه و برنامه‌های آینده',
+    component: RoadmapModule,
+    badge: 'ROADMAP',
   },
 ]

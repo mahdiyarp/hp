@@ -1,19 +1,32 @@
 import jalaali from 'jalaali-js'
 
 // Persian month names (short)
-export const PERSIAN_MONTHS = [
-  'ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¹ط¢آ¾',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
-  'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±',
-  'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±',
-  'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ±',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ±',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ',
-  'ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
+export const PERSIAN_MONTHS = [
+
+  'فروردین',
+
+  'اردیبهشت',
+
+  'خرداد',
+
+  'تیر',
+
+  'مرداد',
+
+  'شهریور',
+
+  'مهر',
+
+  'آبان',
+
+  'آذر',
+
+  'دی',
+
+  'بهمن',
+
+  'اسفند',
+
 ]
 
 export function currentJalaliYear(): number {
@@ -32,19 +45,45 @@ function toISOUtcFromJalali(jy: number, jm: number, jd: number): string {
   return dt.toISOString()
 }
 
-export function normalizeJalaliDigits(input: string): string {
-  // replace Arabic-Indic and Eastern Arabic digits with ASCII
-  const persianDigits = 'ط·آ·ط·â€؛ط·آ¢ط¢آ°ط·آ·ط·â€؛ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¢ط¢آ²ط·آ·ط·â€؛ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¢ط¢آ´ط·آ·ط·â€؛ط·آ¢ط¢آµط·آ·ط·â€؛ط·آ¢ط¢آ¶ط·آ·ط·â€؛ط·آ¢ط¢آ·ط·آ·ط·â€؛ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¢ط¢آ¹'
-  const arabicDigits = 'ط·آ·ط¢آ¸ط·آ¢ط¢آ ط·آ·ط¢آ¸ط·آ·ط¥â€™ط·آ·ط¢آ¸ط·آ¢ط¢آ¢ط·آ·ط¢آ¸ط·آ¢ط¢آ£ط·آ·ط¢آ¸ط·آ¢ط¢آ¤ط·آ·ط¢آ¸ط·آ¢ط¢آ¥ط·آ·ط¢آ¸ط·آ¢ط¢آ¦ط·آ·ط¢آ¸ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ¢ط¢آ©'
-  let out = ''
-  for (const ch of input) {
-    const p = persianDigits.indexOf(ch)
-    if (p >= 0) { out += String(p); continue }
-    const a = arabicDigits.indexOf(ch)
-    if (a >= 0) { out += String(a); continue }
-    out += ch
-  }
-  return out
+export function normalizeJalaliDigits(input: string): string {
+
+
+  // replace Arabic-Indic and Eastern Arabic digits with ASCII
+
+
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹'
+
+
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩'
+
+
+  let out = ''
+
+
+  for (const ch of input) {
+
+
+    const p = persianDigits.indexOf(ch)
+
+
+    if (p >= 0) { out += String(p); continue }
+
+
+    const a = arabicDigits.indexOf(ch)
+
+
+    if (a >= 0) { out += String(a); continue }
+
+
+    out += ch
+
+
+  }
+
+
+  return out
+
+
 }
 
 export type ParseResult = { iso: string; jalali: string } | null

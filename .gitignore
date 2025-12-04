@@ -31,6 +31,7 @@ logs/
 
 # Local databases
 hp_local.db
+test.db
 *.sqlite
 *.sqlite3
 

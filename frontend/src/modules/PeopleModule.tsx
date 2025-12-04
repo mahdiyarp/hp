@@ -11,6 +11,12 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import PeopleList from '../components/people/PeopleList'
+import PersonForm from '../components/people/PersonForm'
+import PersonLedger from '../components/people/PersonLedger'
+
+// ... (interfaces remain the same)
+
 
 interface Person {
   id: string

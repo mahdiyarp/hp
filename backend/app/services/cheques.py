@@ -4,17 +4,11 @@ from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session, joinedload
 
 from .. import models, schemas
-
-try:
-    import jdatetime  # type: ignore
-except Exception:  # pragma: no cover
-    jdatetime = None
+import jdatetime
 
 
 def _parse_jalali_to_gregorian(date_str: Optional[str]) -> Optional[datetime]:
     if not date_str:
-        return None
-    if jdatetime is None:
         return None
     try:
         # Accept formats like 1403-09-10 or 1403/09/10

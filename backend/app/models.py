@@ -42,7 +42,7 @@ class User(Base):
     full_name = Column(String(254), nullable=True)
     mobile = Column(String(32), nullable=True, index=True)  # phone number for SMS login
     hashed_password = Column(String(512), nullable=False)
-    role = Column(String(50), nullable=False, default='Viewer')  # Legacy field for backwards compatibility
+    role = Column(String(50), nullable=False, default='Viewer')  # DEPRECATED: Use role_id and role_obj instead. Kept for backwards compatibility.
     role_id = Column(Integer, ForeignKey('roles.id'), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
     refresh_token_hash = Column(String(512), nullable=True)
@@ -138,7 +138,8 @@ class StockItem(Base):
 
 class Person(Base):
     __tablename__ = 'persons'
-    id = Column(String(128), primary_key=True, index=True)
+    id = Column(String(128), primary_key=True, index=True) # Hash-based ID, potentially a Verifiable Credential ID
+    did = Column(String(256), nullable=True, unique=True, index=True) # Decentralized Identifier (DID) for the person
     name = Column(String(512), nullable=False)
     name_norm = Column(String(512), nullable=False, index=True)
     # Allow code to be nullable for tests and for systems that don't require a code.
@@ -213,6 +214,9 @@ class Invoice(Base):
     total = Column(Integer, nullable=True)
     tracking_code = Column(String(64), nullable=True, index=True)
     note = Column(Text, nullable=True)
+    fiscal_year_id = Column(Integer, ForeignKey('financial_years.id'), nullable=True, index=True)
+
+    fiscal_year = relationship('FinancialYear')
 
 
 class InvoiceItem(Base):
@@ -247,8 +251,11 @@ class Payment(Base):
     status = Column(String(32), nullable=False, default='draft')
     note = Column(Text, nullable=True)
     tracking_code = Column(String(64), nullable=True, index=True)
+    fiscal_year_id = Column(Integer, ForeignKey('financial_years.id'), nullable=True, index=True)
 
     invoice = relationship('Invoice', backref='payments')
+    fiscal_year = relationship('FinancialYear')
+
 
 
 class Cheque(Base):
@@ -292,6 +299,9 @@ class LedgerEntry(Base):
     party_name = Column(String(512), nullable=True)
     description = Column(Text, nullable=True)
     tracking_code = Column(String(64), nullable=True, index=True)
+    fiscal_year_id = Column(Integer, ForeignKey('financial_years.id'), nullable=True, index=True)
+
+    fiscal_year = relationship('FinancialYear')
 
 
 class AIReport(Base):
@@ -345,13 +355,25 @@ class Backup(Base):
 class FinancialYear(Base):
     __tablename__ = 'financial_years'
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(128), nullable=False, unique=True)
+    # Legacy/alternate naming used across code and tests
+    name = Column(String(128), nullable=True, unique=True)
+    title = Column(String(128), nullable=True, unique=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)
+    # Dual status flags for backward compatibility with different modules
     is_closed = Column(Boolean, nullable=False, default=False)
+    is_current = Column(Boolean, nullable=False, default=False)
+    status = Column(String(32), nullable=True, default='open')
     closed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     opening_balances = Column(Text, nullable=True)  # JSON: account -> amount
+
+    # Backward-compat: some services expect an `is_locked` flag; map to `is_closed`.
+    def is_locked(self) -> bool:
+        try:
+            return bool(self.is_closed)
+        except Exception:
+            return False
 
 
 class UserSmsConfig(Base):
@@ -621,8 +643,10 @@ class SaleOrder(Base):
     note = Column(Text, nullable=True)
     tracking_code = Column(String(64), nullable=True, index=True)
     invoice_id = Column(Integer, ForeignKey('invoices.id'), nullable=True, index=True)
+    fiscal_year_id = Column(Integer, ForeignKey('financial_years.id'), nullable=True, index=True)
 
     invoice = relationship('Invoice', backref='sale_order')
+    fiscal_year = relationship('FinancialYear')
 
 
 class SaleOrderItem(Base):

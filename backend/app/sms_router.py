@@ -1,113 +1,452 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from app import db, models, schemas
-from app.services import sms_service
-from app.settings.models import SmsTemplate
-
-router = APIRouter(prefix="/api", tags=["sms"])
-
-
-def _get_current_user():
-    from app.main import get_current_user as gcu
-    return gcu()
-
-
-def _ensure_admin(user: models.User):
-    if not user or (getattr(user, "role", "") not in ["Admin"] and getattr(user, "role_id", None) not in [1]):
-        raise HTTPException(status_code=403, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ² ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
-
-
-@router.get("/settings/sms", response_model=schemas.SmsSettingsOut)
-def get_sms_settings(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    settings = sms_service.get_settings(session)
-    data = sms_service.mask_settings(settings)
-    return schemas.SmsSettingsOut(**data)
-
-
-@router.put("/settings/sms", response_model=schemas.SmsSettingsOut)
-def put_sms_settings(payload: schemas.SmsSettingsIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    data = payload.dict(exclude_unset=True)
-    sms_service.save_settings(session, data)
-    settings = sms_service.get_settings(session)
-    return schemas.SmsSettingsOut(**sms_service.mask_settings(settings))
-
-
-@router.post("/settings/sms/test")
-def test_sms(payload: schemas.SmsTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    if not payload.to:
-        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
-    if payload.template_code:
-        log = sms_service.send_event(session, payload.template_code, payload.to, payload.context or {})
-    else:
-        log = sms_service.send_text(session, [payload.to], payload.message or "ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾", meta={"event_code": "sms_test"})
-    return {"status": log.status, "log_id": log.id, "error": log.error_message}
-
-
-@router.get("/settings/sms/templates", response_model=list[schemas.SmsTemplateOut])
-def list_sms_templates(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    tmpls = session.query(SmsTemplate).order_by(SmsTemplate.code.asc()).all()
-    return tmpls
-
-
-@router.post("/settings/sms/templates", response_model=schemas.SmsTemplateOut)
-def create_sms_template(payload: schemas.SmsTemplateIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    existing = session.query(SmsTemplate).filter(SmsTemplate.code == payload.code).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
-    tmpl = SmsTemplate(
-        code=payload.code,
-        pattern_id=payload.pattern_id,
-        text=payload.text,
-        is_active=payload.is_active,
-        description=payload.description,
-    )
-    session.add(tmpl)
-    session.commit()
-    session.refresh(tmpl)
-    return tmpl
-
-
-@router.put("/settings/sms/templates/{template_id}", response_model=schemas.SmsTemplateOut)
-def update_sms_template(template_id: int, payload: schemas.SmsTemplateIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    tmpl = session.query(SmsTemplate).filter(SmsTemplate.id == template_id).first()
-    if not tmpl:
-        raise HTTPException(status_code=404, detail="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.")
-    tmpl.pattern_id = payload.pattern_id
-    tmpl.text = payload.text
-    tmpl.is_active = payload.is_active
-    tmpl.description = payload.description
-    session.add(tmpl)
-    session.commit()
-    session.refresh(tmpl)
-    return tmpl
-
-
-@router.post("/settings/sms/templates/test")
-def test_sms_template(payload: schemas.SmsTemplateTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    tmpl = session.query(SmsTemplate).filter(SmsTemplate.code == payload.template_code).first()
-    if not tmpl:
-        raise HTTPException(status_code=404, detail="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.")
-    log = sms_service.send_event(session, payload.template_code, payload.to, payload.context or {})
-    return {"status": log.status, "log_id": log.id, "error": log.error_message}
-
-
-@router.get("/sms/health")
-def sms_health(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    return sms_service.health(session)
-
-
-@router.post("/sms/test")
-def sms_test(payload: schemas.SmsTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
-    _ensure_admin(current)
-    if not payload.to:
-        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
-    log = sms_service.send_text(session, [payload.to], payload.message or "ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾", meta={"event_code": "sms_test"})
-    return {"status": log.status, "log_id": log.id, "error": log.error_message}
+from fastapi import APIRouter, Depends, HTTPException
+
+
+
+from sqlalchemy.orm import Session
+
+
+
+from app import db, models, schemas
+
+
+
+from app.services import sms_service
+
+
+
+from app.settings.models import SmsTemplate
+
+
+
+
+
+
+
+router = APIRouter(prefix="", tags=["sms"])
+
+
+
+
+
+
+
+
+
+
+
+def _get_current_user():
+
+
+
+    from app.main import get_current_user as gcu
+
+
+
+    return gcu()
+
+
+
+
+
+
+
+
+
+
+
+def _ensure_admin(user: models.User):
+
+
+
+    if not user or (getattr(user, "role", "") not in ["Admin"] and getattr(user, "role_id", None) not in [1]):
+
+
+
+        raise HTTPException(status_code=403, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ² ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
+
+
+
+
+
+
+
+
+
+
+
+@router.get("/settings/sms", response_model=schemas.SmsSettingsOut)
+
+
+
+def get_sms_settings(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    settings = sms_service.get_settings(session)
+
+
+
+    data = sms_service.mask_settings(settings)
+
+
+
+    return schemas.SmsSettingsOut(**data)
+
+
+
+
+
+
+
+
+
+
+
+@router.put("/settings/sms", response_model=schemas.SmsSettingsOut)
+
+
+
+def put_sms_settings(payload: schemas.SmsSettingsIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    data = payload.dict(exclude_unset=True)
+
+
+
+    sms_service.save_settings(session, data)
+
+
+
+    settings = sms_service.get_settings(session)
+
+
+
+    return schemas.SmsSettingsOut(**sms_service.mask_settings(settings))
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/settings/sms/test")
+
+
+
+def test_sms(payload: schemas.SmsTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    if not payload.to:
+
+
+
+        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
+
+
+
+    if payload.template_code:
+
+
+
+        log = sms_service.send_event(session, payload.template_code, payload.to, payload.context or {})
+
+
+
+    else:
+
+
+
+        log = sms_service.send_text(session, [payload.to], payload.message or "ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾", meta={"event_code": "sms_test"})
+
+
+
+    return {"status": log.status, "log_id": log.id, "error": log.error_message}
+
+
+
+
+
+
+
+
+
+
+
+@router.get("/settings/sms/templates", response_model=list[schemas.SmsTemplateOut])
+
+
+
+def list_sms_templates(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    tmpls = session.query(SmsTemplate).order_by(SmsTemplate.code.asc()).all()
+
+
+
+    return tmpls
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/settings/sms/templates", response_model=schemas.SmsTemplateOut)
+
+
+
+def create_sms_template(payload: schemas.SmsTemplateIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    existing = session.query(SmsTemplate).filter(SmsTemplate.code == payload.code).first()
+
+
+
+    if existing:
+
+
+
+        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
+
+
+
+    tmpl = SmsTemplate(
+
+
+
+        code=payload.code,
+
+
+
+        pattern_id=payload.pattern_id,
+
+
+
+        text=payload.text,
+
+
+
+        is_active=payload.is_active,
+
+
+
+        description=payload.description,
+
+
+
+    )
+
+
+
+    session.add(tmpl)
+
+
+
+    session.commit()
+
+
+
+    session.refresh(tmpl)
+
+
+
+    return tmpl
+
+
+
+
+
+
+
+
+
+
+
+@router.put("/settings/sms/templates/{template_id}", response_model=schemas.SmsTemplateOut)
+
+
+
+def update_sms_template(template_id: int, payload: schemas.SmsTemplateIn, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    tmpl = session.query(SmsTemplate).filter(SmsTemplate.id == template_id).first()
+
+
+
+    if not tmpl:
+
+
+
+        raise HTTPException(status_code=404, detail="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.")
+
+
+
+    tmpl.pattern_id = payload.pattern_id
+
+
+
+    tmpl.text = payload.text
+
+
+
+    tmpl.is_active = payload.is_active
+
+
+
+    tmpl.description = payload.description
+
+
+
+    session.add(tmpl)
+
+
+
+    session.commit()
+
+
+
+    session.refresh(tmpl)
+
+
+
+    return tmpl
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/settings/sms/templates/test")
+
+
+
+def test_sms_template(payload: schemas.SmsTemplateTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    tmpl = session.query(SmsTemplate).filter(SmsTemplate.code == payload.template_code).first()
+
+
+
+    if not tmpl:
+
+
+
+        raise HTTPException(status_code=404, detail="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.")
+
+
+
+    log = sms_service.send_event(session, payload.template_code, payload.to, payload.context or {})
+
+
+
+    return {"status": log.status, "log_id": log.id, "error": log.error_message}
+
+
+
+
+
+
+
+
+
+
+
+@router.get("/sms/health")
+
+
+
+def sms_health(session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    return sms_service.health(session)
+
+
+
+
+
+
+
+
+
+
+
+@router.post("/sms/test")
+
+
+
+def sms_test(payload: schemas.SmsTestRequest, session: Session = Depends(db.get_db), current: models.User = Depends(_get_current_user)):
+
+
+
+    _ensure_admin(current)
+
+
+
+    if not payload.to:
+
+
+
+        raise HTTPException(status_code=400, detail="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾.")
+
+
+
+    log = sms_service.send_text(session, [payload.to], payload.message or "ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾", meta={"event_code": "sms_test"})
+
+
+
+    return {"status": log.status, "log_id": log.id, "error": log.error_message}
+
+
+

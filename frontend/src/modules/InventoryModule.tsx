@@ -697,7 +697,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                   <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
                     <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</p>
                     <p className="text-2xl font-semibold text-blue-700">
-                      {formatNumberFa(movementData.product.current_stock)} {movementData.product.unit || 'ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ¯'}
+                      {formatNumberFa(movementData.product.current_stock)} {movementData.product.unit || 'عدد'}
                     </p>
                   </div>
                   <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">

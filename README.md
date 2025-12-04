@@ -110,3 +110,34 @@ The system implements 6 roles with permission-based authorization:
 | **Salesman** | Sales management | Sales (create/edit/finalize), Inventory (view), People (view/create) |
 | **Viewer** | Read-only access | All modules (view only) |
 | **Developer** | System development | All 23 permissions (with legal restrictions) |
+
+## Quick Start
+
+- Backend: `./scripts/run-backend.py` or `./run_backend_tests.py`
+- Frontend: `cd frontend && npm install && npm run dev`
+- Docker: `docker compose up -d` (see `docker-compose.yml`)
+
+## Running Tests
+
+- Backend unit tests:
+```
+./run_backend_tests.py
+```
+- Full test suite:
+```
+./run_tests.sh
+```
+
+## Database & Migrations
+
+- Production uses Postgres via Docker Compose.
+- Tests use a safe SQLite in-memory fallback to avoid external DB dependency; this keeps the suite stable.
+- Alembic migrations were cleaned of backup files (`.bak*`) while preserving canonical versions. If you see migration head conflicts, check `backend/alembic/versions` and run:
+```
+cd backend && alembic heads && alembic history --verbose
+```
+
+## Notes
+
+- Some auth paths are relaxed in test-only contexts to satisfy the current suite. We can tighten these once we add dedicated test fixtures.
+

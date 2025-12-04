@@ -1,3 +1,44 @@
+
+
+import os
+import json
+import threading
+from typing import Any, Dict
+
+
+def _publish_to_redis(channel: str, data: Dict[str, Any]):
+    try:
+        import redis
+        url = os.environ.get('REDIS_URL')
+        if not url:
+            return
+        r = redis.from_url(url)
+        r.publish(channel, json.dumps(data, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def _call_webhook(url: str, payload: Dict[str, Any]):
+    try:
+        import requests
+        requests.post(url, json=payload, timeout=2)
+    except Exception:
+        pass
+
+
+def notify_person_sync(person_id: str, info: Dict[str, Any]):
+    """Notify external systems that a person record needs syncing.
+
+    Publishes a message to Redis channel 'person_sync' and POSTs to optional webhook.
+    Runs in background threads to avoid blocking the request flow.
+    """
+    payload = {"person_id": person_id, "info": info or {}}
+    # Redis publish
+    threading.Thread(target=_publish_to_redis, args=("person_sync", payload), daemon=True).start()
+    # Webhook
+    hook = os.environ.get('PERSON_SYNC_WEBHOOK')
+    if hook:
+        threading.Thread(target=_call_webhook, args=(hook, payload), daemon=True).start()
 from . import models, schemas
 import secrets
 from sqlalchemy.orm import Session
@@ -395,8 +436,28 @@ def create_invoice_manual(session: Session, inv: schemas.InvoiceCreate) -> model
     # create invoice record without invoice_number, then set number using id
     server_time = datetime.now(timezone.utc)
     client_time = inv.client_time or server_time
+    # Normalize client_time if provided as Shamsi string
+    try:
+        if isinstance(inv.client_time, str):
+            if inv.client_calendar == 'jalali':
+                from .utils.date import to_gregorian
+                client_time = to_gregorian(inv.client_time)
+            else:
+                # Try parse ISO-like string
+                from datetime import datetime as _dt
+                client_time = _dt.fromisoformat(inv.client_time)
+    except Exception:
+        # Fallback to server_time on parse failure
+        client_time = server_time
     # tracking code generation
     tracking_code = f"TRC-{int(server_time.timestamp())}-{secrets.token_hex(3).upper()}"
+    
+    fiscal_year_id = inv.fiscal_year_id
+    if not fiscal_year_id:
+        current_fiscal_year = get_current_fiscal_year(session)
+        if current_fiscal_year:
+            fiscal_year_id = current_fiscal_year.id
+
     invoice = models.Invoice(
         invoice_type=inv.invoice_type,
         mode=inv.mode or 'manual',
@@ -407,6 +468,7 @@ def create_invoice_manual(session: Session, inv: schemas.InvoiceCreate) -> model
         status='draft',
         tracking_code=tracking_code,
         note=inv.note,
+        fiscal_year_id=fiscal_year_id,
     )
     session.add(invoice)
     session.commit()
@@ -592,7 +654,11 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
         raise
     except Exception as e:
         session.rollback()
-        print(f"Finalize invoice error: {e}")
+        try:
+            import logging
+            logging.getLogger(__name__).exception("Finalize invoice error")
+        except Exception:
+            pass
         raise
 
     session.refresh(inv)
@@ -624,7 +690,11 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
                                 description=f'Purchase Invoice {inv.invoice_number}',
                                 tracking_code=inv.tracking_code)
     except Exception as e:
-        print(f"Ledger creation error: {e}")
+        try:
+            import logging
+            logging.getLogger(__name__).error("Ledger creation error: %s", e)
+        except Exception:
+            pass
         pass
     
     try:
@@ -670,6 +740,12 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
                 p.tracking_code = invoice.tracking_code
         if not p.tracking_code:
             p.tracking_code = f"TRC-{int(server_time.timestamp())}-{secrets.token_hex(3).upper()}"
+
+    fiscal_year_id = p.fiscal_year_id
+    if not fiscal_year_id:
+        current_fiscal_year = get_current_fiscal_year(session)
+        if current_fiscal_year:
+            fiscal_year_id = current_fiscal_year.id
     
     pay = models.Payment(
         direction=p.direction,
@@ -685,7 +761,8 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         server_time=server_time,
         status='draft',
         note=p.note,
-            tracking_code=p.tracking_code,
+        tracking_code=p.tracking_code,
+        fiscal_year_id=fiscal_year_id,
     )
     session.add(pay)
     session.commit()
@@ -780,8 +857,6 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
         pay.client_time = client_time
     pay.server_time = datetime.now(timezone.utc)
     session.add(pay)
-    session.commit()
-    session.refresh(pay)
     
     # Create ledger entry depending on direction/method (table-driven when available)
     try:
@@ -823,8 +898,13 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
                                 description=f'Payment {pay.payment_number}',
                                 tracking_code=pay.tracking_code)
     except Exception as e:
-        print(f"Ledger creation error: {e}")
-        pass
+        try:
+            import logging
+            logging.getLogger(__name__).error("Ledger creation error: %s", e)
+        except Exception:
+            pass
+        session.rollback()
+        raise e
     
     try:
         from .activity_logger import log_activity
@@ -844,6 +924,8 @@ def finalize_payment(session: Session, payment_id: int, client_time: Optional[da
     except Exception:
         pass
     
+    session.commit()
+    session.refresh(pay)
     return pay
 
 
@@ -904,7 +986,13 @@ def delete_payment_method(session: Session, pm_id: int) -> bool:
     return True
 
 
-def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optional[str], debit_account: str, credit_account: str, amount: int, party_id: Optional[str] = None, party_name: Optional[str] = None, description: Optional[str] = None, tracking_code: Optional[str] = None) -> models.LedgerEntry:
+def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optional[str], debit_account: str, credit_account: str, amount: int, party_id: Optional[str] = None, party_name: Optional[str] = None, description: Optional[str] = None, tracking_code: Optional[str] = None, fiscal_year_id: Optional[int] = None) -> models.LedgerEntry:
+    
+    if not fiscal_year_id:
+        current_fiscal_year = get_current_fiscal_year(session)
+        if current_fiscal_year:
+            fiscal_year_id = current_fiscal_year.id
+
     le = models.LedgerEntry(
         ref_type=ref_type,
         ref_id=ref_id,
@@ -915,11 +1003,35 @@ def create_ledger_entry(session: Session, ref_type: Optional[str], ref_id: Optio
         party_name=party_name,
         description=description,
         tracking_code=tracking_code,
+        fiscal_year_id=fiscal_year_id,
     )
     session.add(le)
-    session.commit()
-    session.refresh(le)
     return le
+
+
+def create_blockchain_entry(session: Session, entry_in: schemas.BlockchainEntryCreate) -> models.BlockchainEntry:
+    # Ensure previous_hash is provided for a new entry to maintain the chain
+    # In a real system, you'd fetch the latest hash from the chain if not provided.
+    # For now, we'll allow None for the very first entry.
+    
+    # Calculate data_hash if not provided (though schema expects it)
+    # For a robust system, the data_hash would be computed from a canonical representation of the entity data
+    # that this blockchain entry is about. For this CRUD, we expect it in the schema.
+
+    db_entry = models.BlockchainEntry(
+        entity_type=entry_in.entity_type,
+        entity_id=entry_in.entity_id,
+        action=entry_in.action,
+        data_hash=entry_in.data_hash,
+        previous_hash=entry_in.previous_hash,
+        merkle_root=entry_in.merkle_root,
+        user_id=entry_in.user_id,
+        timestamp=entry_in.timestamp if entry_in.timestamp else datetime.now(timezone.utc)
+    )
+    session.add(db_entry)
+    session.commit()
+    session.refresh(db_entry)
+    return db_entry
 
 
 def create_ai_report(session: Session, summary: str, findings: str) -> models.AIReport:
@@ -1099,47 +1211,60 @@ def close_financial_year(session: Session, fy_id: int, create_rollover: bool = T
         return None
     if fy.is_closed:
         return fy
-    # determine period end: use fy.end_date or now
+
+    start = fy.start_date
     end = fy.end_date if fy.end_date else datetime.now(timezone.utc)
-    # compute balances per account: debit - credit
+    
+    # compute balances per account for the given fiscal year: debit - credit
     accounts = {}
-    entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.entry_date <= end).all()
+    entries = session.query(models.LedgerEntry).filter(
+        models.LedgerEntry.entry_date >= start,
+        models.LedgerEntry.entry_date <= end
+    ).all()
+
     for e in entries:
         accounts.setdefault(e.debit_account, 0)
         accounts.setdefault(e.credit_account, 0)
         try:
             amt = int(e.amount or 0)
-        except Exception:
+        except (ValueError, TypeError):
             amt = 0
         accounts[e.debit_account] += amt
         accounts[e.credit_account] -= amt
+    
     # create closing entries moving net to RetainedEarnings
     rollover = {}
-    for acct, bal in accounts.items():
-        if acct == 'RetainedEarnings' or bal == 0:
-            continue
-        # if positive balance (debit), credit the account and debit RetainedEarnings
-        try:
+    if create_rollover:
+        for acct, bal in accounts.items():
+            if acct == 'RetainedEarnings' or bal == 0:
+                continue
+            
+            # if positive balance (debit), credit the account and debit RetainedEarnings
             if bal > 0:
                 create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account='RetainedEarnings', credit_account=acct, amount=int(bal), description=f'Closing {acct} for FY {fy.name}')
-            else:
-                # negative balance (credit), debit the account and credit RetainedEarnings
+            else: # negative balance (credit), debit the account and credit RetainedEarnings
                 create_ledger_entry(session, ref_type='closing', ref_id=str(fy.id), debit_account=acct, credit_account='RetainedEarnings', amount=int(abs(bal)), description=f'Closing {acct} for FY {fy.name}')
             rollover[acct] = int(bal)
-        except Exception:
-            pass
+
     # mark closed
     fy.is_closed = True
     fy.closed_at = datetime.now(timezone.utc)
     fy.opening_balances = json.dumps(rollover, ensure_ascii=False)
     session.add(fy)
-    session.commit()
-    session.refresh(fy)
+    
     try:
         from .activity_logger import log_activity
         log_activity(session, None, f"بستن سال مالی {fy.name}", path=f"/api/financial-years/{fy.id}/close", method='POST', status_code=200, detail={'closed_by': closed_by})
     except Exception:
         pass
+
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+        
+    session.refresh(fy)
     return fy
 
 
@@ -2262,6 +2387,13 @@ def create_sale_order(session: Session, payload: 'schemas.SaleOrderCreate') -> m
     server_time = datetime.now(timezone.utc)
     client_time = payload.client_time or server_time
     tracking_code = f"TRC-{int(server_time.timestamp())}-{secrets.token_hex(3).upper()}"
+    
+    fiscal_year_id = payload.fiscal_year_id
+    if not fiscal_year_id:
+        current_fiscal_year = get_current_fiscal_year(session)
+        if current_fiscal_year:
+            fiscal_year_id = current_fiscal_year.id
+
     so = models.SaleOrder(
         party_id=payload.party_id,
         party_name=payload.party_name,
@@ -2271,6 +2403,7 @@ def create_sale_order(session: Session, payload: 'schemas.SaleOrderCreate') -> m
         currency=payload.currency or 'IRR',
         note=payload.note,
         tracking_code=tracking_code,
+        fiscal_year_id=fiscal_year_id,
     )
     session.add(so)
     session.commit()
@@ -2394,3 +2527,7 @@ def finalize_sale_order(session: Session, so_id: int, client_time: Optional[date
         except Exception:
             pass
         return so
+
+def get_current_fiscal_year(session: Session) -> Optional[models.FinancialYear]:
+    """Get the current active fiscal year."""
+    return session.query(models.FinancialYear).filter(models.FinancialYear.is_current == True).first()

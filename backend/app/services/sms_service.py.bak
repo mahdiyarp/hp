@@ -1,164 +1,0 @@
-import json
-import os
-import re
-import requests
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Sequence
-
-from sqlalchemy.orm import Session
-
-from app.settings.models import SmsSettings, SmsTemplate, SmsLog
-
-SMS_EVENTS = {
-    "user_signup": "ط·آ·ط¢آ«ط·آ·ط¢آ¨ط·آ·ط¹آ¾ط£آ¢أ¢â€ڑآ¬ط¥â€™ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ¦ ط·آ¹ط¢آ©ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¢آ¨ط·آ·ط¢آ±",
-    "journal_created": "ط·آ·ط¢آ«ط·آ·ط¢آ¨ط·آ·ط¹آ¾ ط·آ·ط¢آ³ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¯ ط·آ·ط¢آ¬ط·آ·ط¢آ¯ط·ط›ط¥â€™ط·آ·ط¢آ¯",
-    "payment_received": "ط·آ·ط¢آ¯ط·آ·ط¢آ±ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ¸ط¸آ¾ط·آ·ط¹آ¾ ط·آ¸ط«â€ ط·آ·ط¢آ¬ط·آ¸أ¢â‚¬طŒ",
-    "cheque_new": "ط·آ¹أ¢â‚¬آ ط·آ¹ط¢آ© ط·آ·ط¢آ¬ط·آ·ط¢آ¯ط·ط›ط¥â€™ط·آ·ط¢آ¯",
-    "cheque_due_soon": "ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ·ط¢آ¹ط·آ·ط¢آ¯ ط·آ¹أ¢â‚¬آ ط·آ¹ط¢آ© ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ²ط·آ·ط¢آ¯ط·ط›ط¥â€™ط·آ¹ط¢آ©",
-    "cheque_overdue": "ط·آ¹أ¢â‚¬آ ط·آ¹ط¢آ© ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ¹ط·آ¸ط«â€ ط·آ¸أ¢â‚¬ع‘",
-    "cheque_paid": "ط·آ¹أ¢â‚¬آ ط·آ¹ط¢آ© ط·آ¸ط¢آ¾ط·آ·ط¢آ±ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ®ط·آ·ط¹آ¾ ط·آ·ط¢آ´ط·آ·ط¢آ¯",
-    "password_reset": "ط·آ·ط¢آ¨ط·آ·ط¢آ§ط·آ·ط¢آ²ط·ط›ط¥â€™ط·آ·ط¢آ§ط·آ·ط¢آ¨ط·ط›ط¥â€™ ط·آ·ط¢آ±ط·آ¸أ¢â‚¬آ¦ط·آ·ط¢آ²",
-}
-
-
-def _mask_key(key: Optional[str]) -> Optional[str]:
-    if not key:
-        return None
-    return "****" + key[-4:]
-
-
-def get_settings(session: Session) -> SmsSettings:
-    settings = session.query(SmsSettings).order_by(SmsSettings.id.asc()).first()
-    if not settings:
-        settings = SmsSettings()
-        session.add(settings)
-        session.commit()
-        session.refresh(settings)
-    return settings
-
-
-def save_settings(session: Session, payload: Dict[str, Any]) -> SmsSettings:
-    settings = get_settings(session)
-    for field in ["provider", "base_url", "default_sender", "enabled", "low_credit_threshold"]:
-        if field in payload:
-            setattr(settings, field, payload[field])
-    if "api_key" in payload and payload["api_key"]:
-        settings.api_key_masked = _mask_key(payload["api_key"])
-    settings.updated_at = datetime.now(timezone.utc)
-    session.add(settings)
-    session.commit()
-    session.refresh(settings)
-    return settings
-
-
-def _get_api_key(settings: SmsSettings) -> Optional[str]:
-    env_key = os.getenv("IPPANEL_API_KEY")
-    if env_key:
-        return env_key.strip()
-    return None
-
-
-def _http_post(url: str, headers: Dict[str, str], json_payload: Dict[str, Any]) -> Dict[str, Any]:
-    resp = requests.post(url, headers=headers, json=json_payload, timeout=5)
-    resp.raise_for_status()
-    try:
-        return resp.json()
-    except Exception:
-        return {"raw": resp.text}
-
-
-def _render_template(text: str, context: Dict[str, Any]) -> str:
-    rendered = text
-    for k, v in context.items():
-        rendered = rendered.replace(f"{{{k}}}", str(v))
-    return rendered
-
-
-def _log(session: Session, event_code: str, recipient: str, body_preview: str, status: str, provider_id: Optional[str] = None, error: Optional[str] = None, meta: Optional[Dict[str, Any]] = None) -> SmsLog:
-    log = SmsLog(
-        event_code=event_code,
-        recipient=recipient,
-        body_preview=body_preview[:500] if body_preview else None,
-        provider_message_id=provider_id,
-        status=status,
-        error_message=error,
-        meta=json.dumps(meta or {}, ensure_ascii=False) if meta else None,
-        created_at=datetime.now(timezone.utc),
-    )
-    session.add(log)
-    session.commit()
-    session.refresh(log)
-    return log
-
-
-def send_text(session: Session, to: Sequence[str], message: str, sender: Optional[str] = None, meta: Optional[Dict[str, Any]] = None) -> SmsLog:
-    settings = get_settings(session)
-    api_key = _get_api_key(settings)
-    if not api_key or not settings.enabled:
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), message, "skipped", None, "sms disabled or missing api key", meta)
-
-    url = (settings.base_url or "https://edge.ippanel.com/v1").rstrip("/") + "/sms/send"
-    headers = {"Authorization": api_key, "Content-Type": "application/json"}
-    payload = {"recipient": list(to), "message": message, "sender": sender or settings.default_sender}
-    try:
-        resp = _http_post(url, headers, payload)
-        provider_id = resp.get("message_id") or resp.get("bulk_id") or resp.get("data", {}).get("message_id")
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), message, "sent", provider_id, None, meta)
-    except Exception as exc:
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), message, "failed", None, str(exc), meta)
-
-
-def send_pattern(session: Session, to: Sequence[str], pattern_id: str, params: Dict[str, Any], sender: Optional[str] = None, meta: Optional[Dict[str, Any]] = None) -> SmsLog:
-    settings = get_settings(session)
-    api_key = _get_api_key(settings)
-    if not api_key or not settings.enabled:
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), str(params), "skipped", None, "sms disabled or missing api key", meta)
-
-    url = (settings.base_url or "https://edge.ippanel.com/v1").rstrip("/") + "/sms/pattern/normal/send"
-    headers = {"Authorization": api_key, "Content-Type": "application/json"}
-    payload = {"recipient": list(to), "code": pattern_id, "sender": sender or settings.default_sender, "variable": params}
-    try:
-        resp = _http_post(url, headers, payload)
-        provider_id = resp.get("message_id") or resp.get("bulk_id") or resp.get("data", {}).get("message_id")
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), json.dumps(params, ensure_ascii=False), "sent", provider_id, None, meta)
-    except Exception as exc:
-        return _log(session, meta.get("event_code") if meta else None, ",".join(to), json.dumps(params, ensure_ascii=False), "failed", None, str(exc), meta)
-
-
-def send_event(session: Session, event_code: str, to: str, context: Dict[str, Any]) -> SmsLog:
-    tmpl = session.query(SmsTemplate).filter(SmsTemplate.code == event_code).first()
-    meta = {"event_code": event_code}
-    if not tmpl or not tmpl.is_active:
-        return _log(session, event_code, to, "", "skipped", None, "template inactive or missing", meta)
-    if tmpl.pattern_id:
-        return send_pattern(session, [to], tmpl.pattern_id, context, meta=meta)
-    body = _render_template(tmpl.text or "", context)
-    return send_text(session, [to], body, meta=meta)
-
-
-def health(session: Session) -> Dict[str, Any]:
-    settings = get_settings(session)
-    api_key = _get_api_key(settings)
-    if not api_key:
-        return {"status": "error", "message": "ط·آ¹ط¢آ©ط·آ¸أ¢â‚¬â€چط·ط›ط¥â€™ط·آ·ط¢آ¯ API ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ¸ط·ط›ط¥â€™ط·آ¸أ¢â‚¬آ¦ ط·آ¸أ¢â‚¬آ ط·آ·ط¢آ´ط·آ·ط¢آ¯ط·آ¸أ¢â‚¬طŒ ط·آ·ط¢آ§ط·آ·ط¢آ³ط·آ·ط¹آ¾."}
-    url = (settings.base_url or "https://edge.ippanel.com/v1").rstrip("/") + "/user/me"
-    headers = {"Authorization": api_key}
-    try:
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code != 200:
-            return {"status": "error", "message": f"ط·آ·ط¢آ®ط·آ·ط¢آ·ط·آ·ط¢آ§ ط·آ·ط¢آ¯ط·آ·ط¢آ± ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ·ط¹آ¾ط·آ·ط¢آ¨ط·آ·ط¢آ§ط·آ·ط¢آ·: {resp.status_code}"}
-        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-        return {"status": "ok", "provider": settings.provider, "masked_api_key": settings.api_key_masked, "data": data}
-    except Exception as exc:
-        return {"status": "error", "message": str(exc)}
-
-
-def mask_settings(settings: SmsSettings) -> Dict[str, Any]:
-    return {
-        "provider": settings.provider,
-        "base_url": settings.base_url,
-        "default_sender": settings.default_sender,
-        "enabled": settings.enabled,
-        "low_credit_threshold": settings.low_credit_threshold,
-        "api_key_masked": settings.api_key_masked,
-    }

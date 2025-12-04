@@ -1,18 +1,0 @@
-import React from 'react'
-import ReportFilters from './ReportFilters'
-import ReportViewer from './ReportViewer'
-
-export default function ReportsModule() {
-  return (
-    <div className="space-y-6" dir="rtl">
-      <header className="p-4 border-b">
-        <h2 className="text-xl font-semibold">ع¯ط²ط§ط±ط´â€Œظ‡ط§</h2>
-        <p className="text-sm text-[#7a6b4f]">ط¯ط§ط´ط¨ظˆط±ط¯ ع¯ط²ط§ط±ط´â€Œظ‡ط§طŒ ظپ?ظ„طھط±ظ‡ط§ ظˆ طµط§ط¯ط±ط§طھ</p>
-      </header>
-      <div className="p-4">
-        <ReportFilters />
-        <ReportViewer />
-      </div>
-    </div>
-  )
-}

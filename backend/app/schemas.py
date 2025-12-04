@@ -50,10 +50,10 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: int
     username: str
-    email: Optional[str] = None
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     mobile: Optional[str] = None
-    role: str
+
     role_id: Optional[int]
     is_active: bool
     otp_enabled: bool
@@ -153,20 +153,19 @@ class TimeSync(TimeSyncBase):
 class ProductBase(BaseModel):
     name: str
     unit: Optional[str] = None
-    group: Optional[str] = None
-    description: Optional[str] = None
-    code: Optional[str] = None
+    code: str
 
 
 class ProductCreate(ProductBase):
-    pass
+    group: Optional[str] = None
+    description: Optional[str] = None
 
 
 class ProductOut(ProductBase):
     id: str
     code: str
     created_at: datetime
-    inventory: Optional[int] = 0
+    inventory: int = 0
     last_purchase_price: Optional[int] = None  # آخرین قیمت خرید
     avg_purchase_price: Optional[int] = None   # میانگین قیمت خرید
     last_sale_price: Optional[int] = None      # آخرین قیمت فروش
@@ -230,6 +229,7 @@ class PersonBase(BaseModel):
     mobile: Optional[str] = None
     description: Optional[str] = None
     code: Optional[str] = None
+    did: Optional[str] = None # Decentralized Identifier (DID) for the person
 
 
 class PersonCreate(PersonBase):
@@ -238,7 +238,8 @@ class PersonCreate(PersonBase):
 
 class PersonOut(PersonBase):
     id: str
-    code: str
+    code: Optional[str]
+    did: Optional[str] # Decentralized Identifier (DID) for the person
     created_at: datetime
 
     class Config:
@@ -248,8 +249,7 @@ class PersonOut(PersonBase):
 class AccountBase(BaseModel):
     name: str
     kind: Literal['cash', 'bank', 'pos']
-    details: Optional[Any] = None
-    code: Optional[str] = None
+    code: str
 
 
 class AccountCreate(AccountBase):
@@ -279,6 +279,7 @@ class InvoiceItemCreate(InvoiceItemBase):
 
 class InvoiceItemOut(InvoiceItemBase):
     id: int
+    total: int
 
     class Config:
         orm_mode = True
@@ -289,10 +290,11 @@ class InvoiceCreate(BaseModel):
     mode: Optional[str] = 'manual'
     party_id: Optional[str] = None
     party_name: Optional[str] = None
-    client_time: Optional[datetime] = None
+    client_time: Optional[Any] = None
     client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     items: List[InvoiceItemCreate]
     note: Optional[str] = None
+    fiscal_year_id: Optional[int] = None
 
 
 class InvoiceOut(BaseModel):
@@ -311,6 +313,8 @@ class InvoiceOut(BaseModel):
     items: List[InvoiceItemOut]
     related_payments: Optional[List[int]] = None
     tracking_code: Optional[str] = None
+    fiscal_year_id: Optional[int] = None
+
 
     class Config:
         orm_mode = True
@@ -325,11 +329,12 @@ class PaymentBase(BaseModel):
     amount: int
     reference: Optional[str] = None
     invoice_id: Optional[int] = None
-    due_date: Optional[datetime] = None
-    client_time: Optional[datetime] = None
+    due_date: Optional[Any] = None
+    client_time: Optional[Any] = None
     client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     note: Optional[str] = None
     tracking_code: Optional[str] = None
+    fiscal_year_id: Optional[int] = None
 
 
 class PaymentCreate(PaymentBase):
@@ -342,6 +347,8 @@ class PaymentOut(PaymentBase):
     server_time: datetime
     status: str
     tracking_code: Optional[str] = None
+    fiscal_year_id: Optional[int] = None
+
 
     class Config:
         orm_mode = True
@@ -394,10 +401,229 @@ class ChequeOut(BaseModel):
     issue_date: Optional[datetime]
     due_date: Optional[datetime]
     clearing_date: Optional[datetime]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
     payment: Optional[ChequePaymentMini]
     due_date_jalali: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+# ==================== Sales Orders ====================
+
+class SaleOrderItemBase(BaseModel):
+    description: str
+    quantity: int = 1
+    unit: Optional[str] = None
+    unit_price: int
+    product_id: Optional[str] = None
+    discount: Optional[int] = None
+    tax_rate: Optional[int] = None
+
+
+class SaleOrderItemCreate(SaleOrderItemBase):
+    total: Optional[int] = None
+
+
+class SaleOrderItemOut(SaleOrderItemBase):
+    id: int
+    total: int
+
+    class Config:
+        orm_mode = True
+
+
+class SaleOrderCreate(BaseModel):
+    party_id: Optional[str] = None
+    party_name: Optional[str] = None
+    client_time: Optional[datetime] = None
+    client_calendar: Optional[Literal['gregorian', 'jalali']] = None
+    currency: Optional[str] = 'IRR'
+    items: List[SaleOrderItemCreate] = []
+    note: Optional[str] = None
+    fiscal_year_id: Optional[int] = None
+
+
+class SaleOrderOut(BaseModel):
+    id: int
+    order_number: Optional[str]
+    status: str
+    party_id: Optional[str]
+    party_name: Optional[str]
+    client_time: Optional[datetime]
+    server_time: datetime
+    subtotal: Optional[int]
+    discount: Optional[int]
+    tax: Optional[int]
+    shipping: Optional[int]
+    total: Optional[int]
+    currency: str
+    note: Optional[str]
+    tracking_code: Optional[str]
+    invoice_id: Optional[int]
+    items: List[SaleOrderItemOut] = []
+    fiscal_year_id: Optional[int] = None
+
+
+    class Config:
+        orm_mode = True
+
+# ==================== System Settings & Activity Log ====================
+
+class SystemSettingOut(BaseModel):
+    id: int
+    key: str
+    value: Optional[str] = None
+    setting_type: str
+    display_name: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    is_secret: bool = False
+    updated_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class FiscalYearOut(BaseModel):
+    id: int
+    name: str
+    start_date: datetime
+    end_date: Optional[datetime] = None
+    is_closed: bool
+    closed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ActivityLogOut(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    path: str
+    method: str
+    status_code: Optional[int] = None
+    detail: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
+
+# ==================== SMS Settings ====================
+
+class SmsSettingsIn(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    default_sender: Optional[str] = None
+    enabled: Optional[bool] = None
+    low_credit_threshold: Optional[int] = None
+
+
+class SmsSettingsOut(BaseModel):
+    provider: str
+    base_url: Optional[str] = None
+    api_key_masked: Optional[str] = None
+    default_sender: Optional[str] = None
+    enabled: bool
+    low_credit_threshold: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+
+# ==================== Assistant ====================
+
+class AssistantSettingsIn(BaseModel):
+    provider: Optional[str] = None
+    model_name: Optional[str] = None
+    api_key: Optional[str] = None
+    enabled: Optional[bool] = None
+    language: Optional[str] = None
+    enable_doc_understanding: Optional[bool] = None
+    enable_journal_suggestions: Optional[bool] = None
+
+
+class AssistantSettingsOut(BaseModel):
+    provider: str
+    model_name: Optional[str] = None
+    api_key_masked: Optional[str] = None
+    enabled: bool
+    language: Optional[str] = None
+    enable_doc_understanding: Optional[bool] = None
+    enable_journal_suggestions: Optional[bool] = None
+
+    class Config:
+        orm_mode = True
+
+
+class AssistantChatRequest(BaseModel):
+    message: str
+    mode: Optional[str] = 'general'
+    session_id: Optional[int] = None
+
+
+class AssistantChatResponse(BaseModel):
+    reply: str
+    session_id: Optional[int] = None
+    mode: Optional[str] = None
+
+
+class DocumentAnalysisResult(BaseModel):
+    doc_type: Optional[str] = None
+    filename: Optional[str] = None
+    content_type: Optional[str] = None
+    text_preview: Optional[str] = None
+    language: Optional[str] = None
+    tokens: Optional[int] = None
+    meta: Optional[Any] = None
+
+
+class JournalSuggestion(BaseModel):
+    title: str
+    body: Optional[str] = None
+    suggested_account: Optional[str] = None
+    amount: Optional[int] = None
+    tags: Optional[List[str]] = None
+
+
+class SmsTestRequest(BaseModel):
+    to: str
+    message: Optional[str] = None
+    template_code: Optional[str] = None
+    context: Optional[dict] = None
+
+
+class SmsTemplateIn(BaseModel):
+    code: str
+    pattern_id: Optional[str] = None
+    text: Optional[str] = None
+    is_active: Optional[bool] = True
+    description: Optional[str] = None
+
+
+class SmsTemplateOut(BaseModel):
+    id: int
+    code: str
+    pattern_id: Optional[str] = None
+    text: Optional[str] = None
+    is_active: bool
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class SmsTemplateTestRequest(BaseModel):
+    template_code: str
+    to: str
+    context: Optional[dict] = None
     issue_date_jalali: Optional[str] = None
 
     class Config:
@@ -415,9 +641,25 @@ class LedgerEntryOut(BaseModel):
     party_id: Optional[str]
     party_name: Optional[str]
     description: Optional[str]
+    tracking_code: Optional[str]
+    fiscal_year_id: Optional[int] = None
 
     class Config:
         orm_mode = True
+
+
+class LedgerEntryCreate(BaseModel):
+    ref_type: Optional[str]
+    ref_id: Optional[str]
+    debit_account: str
+    credit_account: str
+    amount: int
+    party_id: Optional[str]
+    party_name: Optional[str]
+    description: Optional[str]
+    tracking_code: Optional[str]
+    fiscal_year_id: Optional[int] = None
+
 
 
 class PnLReport(BaseModel):
@@ -448,14 +690,14 @@ class CashBalanceReport(BaseModel):
     balance: int
 
 
-class ActivityLogOut(BaseModel):
+class AuditLogOut(BaseModel):
     id: int
     user_id: Optional[int]
     path: str
-    method: Optional[str]
+    method: str
     status_code: Optional[int]
     detail: Optional[str]
-    created_at: Optional[datetime]
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -467,7 +709,7 @@ class ActivityLogUpdate(BaseModel):
 
 class AIReportOut(BaseModel):
     id: int
-    report_date: Optional[datetime]
+    report_date: datetime
     summary: Optional[str]
     findings: Optional[str]
     status: str
@@ -563,9 +805,10 @@ class BackupOut(BaseModel):
     file_path: str
     kind: str
     created_by: Optional[int]
-    created_at: Optional[datetime]
+    created_at: datetime
     size_bytes: Optional[int]
     note: Optional[str]
+    metadata_json: Optional[str]
 
     class Config:
         orm_mode = True
@@ -580,9 +823,11 @@ class FinancialYearIn(BaseModel):
 class FinancialYearOut(BaseModel):
     id: int
     name: str
+    title: Optional[str]
     start_date: datetime
     end_date: Optional[datetime]
     is_closed: bool
+    is_current: bool
     closed_at: Optional[datetime]
     opening_balances: Optional[str]
 
@@ -590,9 +835,27 @@ class FinancialYearOut(BaseModel):
         orm_mode = True
 
 
+class FinancialYearCreate(BaseModel):
+    name: str
+    title: Optional[str]
+    start_date: datetime
+    end_date: Optional[datetime] = None
+
+
+class FinancialYearUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    is_current: Optional[bool] = None
+    is_closed: Optional[bool] = None
+
+
+
+
 # SMS Configuration schemas
 class UserSmsConfigCreate(BaseModel):
-    api_key: str  # IPPanel API key (will be encrypted)
+    api_key: Optional[str] = None
     sender_name: Optional[str] = None
     provider: str = 'ippanel'
     enabled: bool = False
@@ -708,7 +971,7 @@ class DeveloperApiKeyOut(BaseModel):
     description: Optional[str]
     enabled: bool
     rate_limit_per_minute: int
-    endpoints: Optional[str]
+    endpoints: Optional[List[str]]
     last_used_at: Optional[datetime]
     created_at: datetime
     expires_at: Optional[datetime]
@@ -773,6 +1036,35 @@ class BlockchainProof(BaseModel):
     chain_message: str
     total_entries_in_chain: int
     entry_position: int
+
+
+# ==================== Blockchain Entry Schemas (NeuroChainX Core Ledger) ====================
+
+class BlockchainEntryCreate(BaseModel):
+    entity_type: str
+    entity_id: str
+    action: str
+    data_hash: str
+    previous_hash: Optional[str] = None
+    merkle_root: Optional[str] = None
+    user_id: Optional[int] = None
+    timestamp: Optional[datetime] = None
+
+
+class BlockchainEntryOut(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: str
+    action: str
+    data_hash: str
+    previous_hash: Optional[str]
+    merkle_root: Optional[str]
+    user_id: Optional[int]
+    timestamp: datetime
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
 
 
 class CustomerGroupMemberOut(BaseModel):
@@ -947,7 +1239,7 @@ class IccExtensionOut(BaseModel):
 
 
 # System Settings schemas
-class SystemSettingOut(BaseModel):
+class SystemSettingsOut(BaseModel):
     id: int
     key: str
     value: Optional[str]
@@ -958,6 +1250,7 @@ class SystemSettingOut(BaseModel):
     is_secret: bool
     created_at: datetime
     updated_at: datetime
+    updated_by: Optional[int]
     
     class Config:
         orm_mode = True
@@ -1117,24 +1410,33 @@ class SaleOrderCreate(BaseModel):
     currency: Optional[str] = 'IRR'
 
 
-class SaleOrderOut(BaseModel):
-    id: int
-    order_number: Optional[str]
-    status: str
-    party_id: Optional[str]
-    party_name: Optional[str]
-    client_time: Optional[datetime]
-    server_time: datetime
-    subtotal: Optional[int]
-    discount: Optional[int]
-    tax: Optional[int]
-    shipping: Optional[int]
-    total: Optional[int]
-    currency: str
-    note: Optional[str]
-    tracking_code: Optional[str]
-    invoice_id: Optional[int]
-    items: List[SaleOrderItemOut] = []
-
     class Config:
         orm_mode = True
+
+
+# ==================== Identity Claims ====================
+
+from uuid import UUID
+from typing import Dict, Any
+
+class IdentityClaimRequest(BaseModel):
+    issuer_id: str
+    subject_id: str
+    claim_type: str
+    claim_data: Dict[str, Any]
+
+class IdentityClaimResponse(BaseModel):
+    claim_id: UUID
+    issuer_id: str
+    subject_id: str
+    claim_type: str
+    claim_data: Dict[str, Any]
+    issued_at: datetime
+    signature: str
+
+class ClaimVerificationRequest(BaseModel):
+    claim_body: IdentityClaimResponse
+
+class ClaimVerificationResponse(BaseModel):
+    is_valid: bool
+    reason: Optional[str]

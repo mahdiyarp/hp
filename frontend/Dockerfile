@@ -8,7 +8,7 @@ COPY tsconfig.json tsconfig.json
 COPY vite.config.ts vite.config.ts
 COPY postcss.config.cjs postcss.config.cjs
 COPY tailwind.config.cjs tailwind.config.cjs
-RUN if [ -f package-lock.json ]; then npm ci --silent; else echo "[INFO] package-lock.json missing -> using npm install" && npm install --silent; fi
+RUN if [ -f package-lock.json ]; then npm ci --silent --legacy-peer-deps; else echo "[INFO] package-lock.json missing -> using npm install" && npm install --silent --legacy-peer-deps; fi
 
 # Copy source and build
 COPY . .

@@ -40,25 +40,172 @@ def call_chat(
         raise AIClientError(str(exc))
 
 
-def call_vision(
-    file_bytes: bytes,
-    filename: str,
-    instructions: str,
-    language: str = "fa",
-    base_url: Optional[str] = None,
-    api_key: Optional[str] = None,
-) -> Dict[str, Any]:
-    # For now, mimic vision via text endpoint with base64 or simple prompt note.
-    base = base_url or os.getenv("AI_BASE_URL") or "https://api.openai.com/v1"
-    url = base.rstrip("/") + "/chat/completions"
-    prompt = f"ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ({filename}) ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  {language}: {instructions}"
-    payload = {
-        "model": os.getenv("AI_MODEL_NAME") or "gpt-4.1",
-        "messages": [{"role": "user", "content": prompt}],
-    }
-    try:
-        resp = requests.post(url, json=payload, headers=_default_headers(api_key or os.getenv("AI_API_KEY")), timeout=10)
-        resp.raise_for_status()
-        return resp.json()
-    except Exception as exc:
+def call_vision(
+
+
+
+    file_bytes: bytes,
+
+
+
+    filename: str,
+
+
+
+    instructions: str,
+
+
+
+    language: str = "fa",
+
+
+
+    base_url: Optional[str] = None,
+
+
+
+    api_key: Optional[str] = None,
+
+
+
+) -> Dict[str, Any]:
+
+
+
+    import base64
+
+
+
+    base = base_url or os.getenv("AI_BASE_URL") or "https://api.openai.com/v1"
+
+
+
+    url = base.rstrip("/") + "/chat/completions"
+
+
+
+
+
+
+
+    base64_image = base64.b64encode(file_bytes).decode('utf-8')
+
+
+
+
+
+
+
+    prompt = f"Analyze the attached image ({filename}) and follow these instructions in {language}: {instructions}"
+
+
+
+
+
+
+
+    payload = {
+
+
+
+        "model": os.getenv("AI_VISION_MODEL_NAME") or "gpt-4-vision-preview",
+
+
+
+        "messages": [
+
+
+
+            {
+
+
+
+                "role": "user",
+
+
+
+                "content": [
+
+
+
+                    {
+
+
+
+                        "type": "text",
+
+
+
+                        "text": prompt
+
+
+
+                    },
+
+
+
+                    {
+
+
+
+                        "type": "image_url",
+
+
+
+                        "image_url": {
+
+
+
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+
+
+
+                        }
+
+
+
+                    }
+
+
+
+                ]
+
+
+
+            }
+
+
+
+        ],
+
+
+
+        "max_tokens": 2000
+
+
+
+    }
+
+
+
+    try:
+
+
+
+        resp = requests.post(url, json=payload, headers=_default_headers(api_key or os.getenv("AI_API_KEY")), timeout=30)
+
+
+
+        resp.raise_for_status()
+
+
+
+        return resp.json()
+
+
+
+    except Exception as exc:
+
+
+
         raise AIClientError(str(exc))

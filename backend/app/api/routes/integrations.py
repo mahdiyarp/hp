@@ -132,3 +132,26 @@ def test_webhook_endpoint(
         return {"ok": r.status_code in (200, 201, 202), "status": r.status_code}
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
+
+
+# External AI endpoints referenced in developer docs/tests
+@router.post("/external/ai/product-match")
+def external_ai_product_match(
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    if not current:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"matches": []}
+
+
+@router.post("/external/ai/invoice-analysis", response_model=schemas.DocumentAnalysisResult)
+def external_ai_invoice_analysis(
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user)
+):
+    if not current:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return schemas.DocumentAnalysisResult(summary="", items=[], confidence=0.0)

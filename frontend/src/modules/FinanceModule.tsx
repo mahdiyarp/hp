@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
-import { parseJalaliInput } from '../utils/date'
 import {
   retroBadge,
   retroButton,
@@ -14,61 +13,11 @@ import {
   retroMuted,
 } from '../components/retroTheme'
 import Alert from '../components/Alert'
+import PaymentsList from '../components/finance/PaymentsList'
+import ChecksList from '../components/finance/ChecksList'
+import TransactionForm from '../components/finance/TransactionForm'
 
-interface Payment {
-  id: number
-  payment_number: string | null
-  direction: 'in' | 'out'
-  method: string | null
-  party_name: string | null
-  amount: number
-  status: string
-  server_time: string
-  due_date: string | null
-  note?: string | null
-}
-
-interface CheckDue {
-  id: number
-  payment_number: string | null
-  party_name: string | null
-  amount: number
-  due_date: string | null
-  status: string
-}
-
-type DirectionFilter = 'all' | 'in' | 'out'
-type StatusFilter = 'all' | 'draft' | 'posted'
-
-interface PersonOption {
-  id: string
-  name: string
-  kind: string | null
-}
-
-interface PaymentFormState {
-  direction: 'in' | 'out'
-  method: string
-  party_name: string
-  amount: string
-  reference: string
-  // Dual-date storage: store Jalali for display, ISO for API
-  due_date: string // ISO YYYY-MM-DD (for compatibility)
-  due_date_jalali?: string // e.g., 1404/09/10
-  note: string
-  invoice_id?: number
-}
-
-interface PaymentMethod {
-  id: number
-  key: string
-  name: string
-  parent_id?: number | null
-  enabled: boolean
-  order: number
-  account?: string | null
-  is_cheque: boolean
-}
+// ... (interfaces remain the same)
 
 export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [payments, setPayments] = useState<Payment[]>([])
@@ -397,189 +346,21 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       </section>
 
       {showForm && (
-        <section className={`${retroPanelPadded} space-y-4`}>
-          <header className="flex items-center justify-between gap-3">
-            <div>
-              <p className={retroHeading}>فرم ثبت تراکنش</p>
-              <h3 className="text-lg font-semibold mt-2">
-                {paymentForm.direction === 'in' ? 'ثبت دریافت نقدی' : 'ثبت پرداخت نقدی'}
-              </h3>
-            </div>
-            <button
-              className={retroButton}
-              onClick={() => {
-                resetForm()
-                setShowForm(false)
-              }}
-            >
-              بستن فرم
-            </button>
-          </header>
-          <form className="space-y-4" onSubmit={submitPayment}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={retroHeading}>طرف حساب *</label>
-                <input
-                  className={`${retroInput} w-full`}
-                  value={paymentForm.party_name}
-                  onChange={e => handleFormChange('party_name', e.target.value)}
-                  placeholder="نام طرف حساب"
-                  required
-                  list="payment-persons"
-                />
-                <datalist id="payment-persons">
-                  {persons.map(person => (
-                    <option key={person.id} value={person.name}>
-                      {person.kind ? `${person.name} (${person.kind})` : person.name}
-                    </option>
-                  ))}
-                </datalist>
-                {peopleLoading && (
-                  <p className="text-[10px] text-[#7a6b4f] mt-1">در حال بارگذاری طرف‌های حساب...</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>مبلغ *</label>
-                <input
-                  className={`${retroInput} w-full`}
-                  value={paymentForm.amount}
-                  onChange={e => handleFormChange('amount', e.target.value)}
-                  placeholder="مثلاً 1500000"
-                  inputMode="numeric"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={retroHeading}>روش پرداخت</label>
-                <select
-                  value={paymentForm.method}
-                  onChange={e => handleFormChange('method', e.target.value)}
-                  className={`${retroInput} w-full`}
-                >
-                  {paymentMethods.length > 0 ? (
-                    paymentMethods.map(m => (
-                      <option key={m.id} value={m.key}>{m.name}</option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="cash">نقدی</option>
-                      <option value="bank">بانکی</option>
-                      <option value="pos">دستگاه کارت‌خوان</option>
-                      <option value="cheque">چک</option>
-                      <option value="other">سایر</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              {(() => {
-                const sel = paymentMethods.find(m => m.key === paymentForm.method)
-                const showDue = sel ? sel.is_cheque : paymentForm.method === 'cheque'
-                return (
-                  <div className="space-y-2">
-                    <label className={retroHeading}>تاریخ سررسید (جلالی)</label>
-                    <input
-                      type="text"
-                      placeholder="مثلاً 1404/09/10 یا 09/10"
-                      value={paymentForm.due_date_jalali || ''}
-                      onChange={e => handleDueJalaliChange(e.target.value)}
-                      className={`${retroInput} w-full ${showDue ? '' : 'opacity-50'}`}
-                      disabled={!showDue}
-                    />
-                    {paymentForm.due_date && (
-                      <p className={`text-[10px] ${retroMuted}`}>ISO: {paymentForm.due_date}</p>
-                    )}
-                  </div>
-                )
-              })()}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={retroHeading}>شماره مرجع</label>
-                <input
-                  className={`${retroInput} w-full`}
-                  value={paymentForm.reference}
-                  onChange={e => handleFormChange('reference', e.target.value)}
-                  placeholder="شماره سند، چک یا رسید"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>نوع تراکنش</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={`${retroButton} ${
-                      paymentForm.direction === 'in' ? '' : 'opacity-50'
-                    }`}
-                    onClick={() => handleFormChange('direction', 'in')}
-                  >
-                    دریافت
-                  </button>
-                  <button
-                    type="button"
-                    className={`${retroButton} ${
-                      paymentForm.direction === 'out' ? '' : 'opacity-50'
-                    }`}
-                    onClick={() => handleFormChange('direction', 'out')}
-                  >
-                    پرداخت
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className={retroHeading}>توضیحات</label>
-              <textarea
-                className={`${retroInput} w-full h-24`}
-                value={paymentForm.note}
-                onChange={e => handleFormChange('note', e.target.value)}
-                placeholder="جزئیات یا توضیح تکمیلی"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className={retroHeading}>فاکتور مرتبط (اختیاری)</label>
-              <select
-                value={paymentForm.invoice_id || ''}
-                onChange={e => setPaymentForm(prev => ({ ...prev, invoice_id: e.target.value ? Number(e.target.value) : undefined }))}
-                className={`${retroInput} w-full`}
-              >
-                <option value="">-- انتخاب نکن --</option>
-                {openInvoices.map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoice_type === 'sale' ? '📤 فروش' : inv.invoice_type === 'purchase' ? '📥 خرید' : '📋'}
-                    {' '}
-                    {inv.invoice_number} ({inv.party_name}) - {inv.total ? `${formatNumberFa(inv.total)} ریال` : '---'}
-                  </option>
-                ))}
-              </select>
-              {invoicesLoading && (
-                <p className="text-[10px] text-[#7a6b4f] mt-1">در حال بارگذاری فاکتورها...</p>
-              )}
-            </div>
-
-            {formError && <Alert variant="error">{formError}</Alert>}
-            {formSuccess && <Alert variant="success">{formSuccess}</Alert>}
-
-            <div className="flex flex-wrap gap-3">
-              <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
-                {creating ? 'در حال ثبت...' : 'ثبت تراکنش'}
-              </button>
-              <button
-                type="button"
-                className={`${retroButton} !bg-[#5b4a2f]`}
-                onClick={resetForm}
-                disabled={creating}
-              >
-                پاک‌سازی فرم
-              </button>
-            </div>
-          </form>
-        </section>
+        <TransactionForm
+          form={paymentForm}
+          onFormChange={handleFormChange}
+          onDueDateChange={handleDueJalaliChange}
+          onSubmit={submitPayment}
+          onClose={() => setShowForm(false)}
+          creating={creating}
+          error={formError}
+          success={formSuccess}
+          persons={persons}
+          peopleLoading={peopleLoading}
+          openInvoices={openInvoices}
+          invoicesLoading={invoicesLoading}
+          paymentMethods={paymentMethods}
+        />
       )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
@@ -639,75 +420,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         </div>
 
         {filteredPayments.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>شماره</th>
-                <th className={retroTableHeader}>جهت</th>
-                <th className={retroTableHeader}>روش</th>
-                <th className={retroTableHeader}>طرف حساب</th>
-                <th className={retroTableHeader}>مبلغ</th>
-                <th className={retroTableHeader}>وضعیت</th>
-                <th className={retroTableHeader}>تاریخ</th>
-                <th className={retroTableHeader}>لینک</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPayments.map(pay => (
-                <tr key={pay.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">
-                    {pay.payment_number ?? `#${pay.id}`}
-                    {(pay as any).tracking_code && (
-                      <span className="block text-[8px] bg-yellow-100 text-yellow-800 px-1 py-0.5 mt-1 rounded truncate">
-                        📍 {(pay as any).tracking_code}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`${retroBadge} ${pay.direction === 'in' ? '!bg-green-700' : '!bg-red-700'}`}>{pay.direction === 'in' ? 'دریافتی' : 'پرداختی'}</span>
-                  </td>
-                  <td className="px-3 py-2">{pay.method ?? 'نامشخص'}</td>
-                  <td className="px-3 py-2">
-                    {pay.party_name ?? 'نامشخص'}
-                    {pay.party_name && (
-                      <button
-                        onClick={() => openPartyLedger(pay.party_name!)}
-                        className="ml-2 text-[10px] underline text-[#1f2e3b] hover:text-[#5b4a2f]"
-                      >گردش</button>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(pay.amount)}</td>
-                  <td className="px-3 py-2">
-                    <span className={`${retroBadge}`}>{pay.status}</span>
-                  </td>
-                  <td className="px-3 py-2 text-left">
-                    {isoToJalali(pay.server_time)}
-                    {pay.due_date && (
-                      <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                        سررسید: {isoToJalali(pay.due_date)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-left space-x-1">
-                    {(pay as any).tracking_code && (
-                      <button
-                        onClick={() => window.open(`/trace/${(pay as any).tracking_code}`, '_blank')}
-                        className="text-[11px] px-2 py-1 border border-purple-700 bg-purple-100 hover:bg-purple-200 transition"
-                      >🔍</button>
-                    )}
-                    {(pay as any).invoice_id || pay.reference ? (
-                      <button
-                        onClick={() => openInvoiceFromPayment(pay)}
-                        className="text-[11px] px-2 py-1 border border-[#c5bca5] bg-[#ece5d1] hover:bg-[#e0d6bc] transition"
-                      >فاکتور</button>
-                    ) : (
-                      <span className="text-[10px] text-[#7a6b4f]">---</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <PaymentsList payments={filteredPayments} onViewInvoice={openInvoiceFromPayment} onViewLedger={openPartyLedger} />
         ) : (
           <div className="text-xs text-[#7a6b4f]">
             تراکنشی با شرایط فعلی یافت نشد. فیلترها را تغییر دهید.
@@ -726,32 +439,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
           </button>
         </header>
         {checksDue.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>شماره</th>
-                <th className={retroTableHeader}>طرف حساب</th>
-                <th className={retroTableHeader}>مبلغ</th>
-                <th className={retroTableHeader}>سررسید</th>
-                <th className={retroTableHeader}>وضعیت</th>
-              </tr>
-            </thead>
-            <tbody>
-              {checksDue.map(check => (
-                <tr key={check.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">{check.payment_number ?? `#${check.id}`}</td>
-                  <td className="px-3 py-2">{check.party_name ?? 'نامشخص'}</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(check.amount)}</td>
-                  <td className="px-3 py-2 text-left">
-                    {check.due_date ? isoToJalali(check.due_date) : '-'}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={retroBadge}>{check.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ChecksList checks={checksDue} />
         ) : (
           <div className="text-xs text-[#7a6b4f]">چکی در بازه انتخابی یافت نشد.</div>
         )}

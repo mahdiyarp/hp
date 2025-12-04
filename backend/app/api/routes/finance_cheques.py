@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ... import db, models, schemas
 from ...services import cheques as cheques_service
 from ..deps import get_current_user, require_permissions, require_roles
+import jdatetime
 
 router = APIRouter(prefix="/cheques", tags=["Finance - Cheques"])
 
@@ -25,16 +26,12 @@ def list_cheques(
     rows = cheques_service.list_cheques(session, status, start, end, near_due_days, overdue, limit)
     # enrich with jalali strings in response
     out: List[schemas.ChequeOut] = []
-    try:
-        import jdatetime  # type: ignore
-    except Exception:
-        jdatetime = None
+
     for ch in rows:
         item = schemas.ChequeOut.from_orm(ch)
         # attach minimal payment
         if ch.payment:
             item.payment = schemas.ChequePaymentMini.from_orm(ch.payment)
-        if jdatetime:
             if ch.due_date:
                 d = ch.due_date.astimezone().date() if hasattr(ch.due_date, 'astimezone') else ch.due_date
                 try:
@@ -62,14 +59,10 @@ def get_cheque(
     ch = cheques_service.get_cheque(session, cheque_id)
     if not ch:
         raise HTTPException(status_code=404, detail="Cheque not found")
-    try:
-        import jdatetime  # type: ignore
-    except Exception:
-        jdatetime = None
+
     item = schemas.ChequeOut.from_orm(ch)
     if ch.payment:
         item.payment = schemas.ChequePaymentMini.from_orm(ch.payment)
-    if jdatetime:
         if ch.due_date:
             d = ch.due_date.astimezone().date() if hasattr(ch.due_date, 'astimezone') else ch.due_date
             try:
