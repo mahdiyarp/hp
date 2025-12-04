@@ -17,12 +17,13 @@ try {
     Write-Host "[UI] Found existing node_modules; skipping npm ci."
   }
 
-  Write-Host "[UI] Installing Playwright browsers..."
-  cmd /c npx --yes @playwright/test install
+  Write-Host "[UI] Installing Playwright browsers (@playwright/test)..."
+  cmd /c npx --yes @playwright/test install --with-deps
 
-  Write-Host "[UI] Running Playwright smoke tests (smoke-basic only)..."
-  # Run only the stable minimal smoke spec to avoid flaky tests
-  cmd /c npx --yes @playwright/test test tests/playwright/smoke-basic.spec.js --config tests/playwright/playwright.config.js --reporter=list,html
+  Write-Host "[UI] Running Playwright smoke tests (full smoke dir)..."
+  # Run with explicit config; list+html reporters; project-local browsers
+  $env:PLAYWRIGHT_BROWSERS_PATH = '0'
+  cmd /c npx --yes @playwright/test test --config tests/playwright/playwright.config.js --reporter=list,html
   $pwExit = $LASTEXITCODE
   
   # Archive artifacts
