@@ -73,10 +73,15 @@ try {
 
 # Start backend in background
 Write-Host "[Dev] Starting backend (uvicorn) in background..."
-$backendJob = Start-Job -Name "hp-backend" -InitializationScript { Set-Location $using:PSScriptRoot } -ScriptBlock {
-  Push-Location "$using:PSScriptRoot\..\backend"
+$env:PY_CMD = $python
+$env:DEV_LOG_DEST = $dest
+$backendJob = Start-Job -Name "hp-backend" -InitializationScript { Set-Location $PSScriptRoot } -ScriptBlock {
+  $scriptRoot = $PSScriptRoot
+  $py = $env:PY_CMD
+  $logDest = $env:DEV_LOG_DEST
+  Push-Location (Join-Path $scriptRoot "..\backend")
   try {
-    & $using:python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 *>&1 | Tee-Object -FilePath (Join-Path $using:dest 'backend.log')
+    & $py -m uvicorn app.main:app --host 127.0.0.1 --port 8000 *>&1 | Tee-Object -FilePath (Join-Path $logDest 'backend.log')
   } finally { Pop-Location }
 }
 
