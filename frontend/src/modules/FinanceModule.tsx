@@ -114,6 +114,7 @@ interface Payment {
 
 
   due_date: string | null
+  reference?: string | null
 
 
 
@@ -1552,7 +1553,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
 
 
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadData()}>
+            <button className={`${retroButton} !bg-[#1f2e3b]`} type="button" onClick={() => loadData()}>
 
 
 
@@ -2967,7 +2968,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
 
 
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+          <table className="hp-table w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
 
 
 
@@ -3371,7 +3372,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
 
 
-          <button className={`${retroButton} text-[11px]`} onClick={loadData}>
+          <button className={`${retroButton} text-[11px]`} type="button" onClick={() => loadData()}>
 
 
 
@@ -3396,7 +3397,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
 
 
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+          <table className="hp-table w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
 
 
 
@@ -3661,7 +3662,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
 
 
 
-              <button className={`${retroButton} text-[11px]`} onClick={() => setShowLedger(false)}>ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ </button>
+              <button className={`${retroButton} text-[11px]`} type="button" onClick={() => setShowLedger(false)}>ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ </button>
 
 
 

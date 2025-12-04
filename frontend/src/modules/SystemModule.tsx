@@ -1721,7 +1721,7 @@ export default function SystemModule(_: ModuleComponentProps) {
 
 
 
-            <table className="w-full text-sm">
+            <table className="hp-table w-full text-sm">
 
 
 
@@ -2328,7 +2328,7 @@ export default function SystemModule(_: ModuleComponentProps) {
 
 
 
-              <table className="w-full text-sm" style={{ fontFamily: 'Yekan' }}>
+              <table className="hp-table w-full text-sm" style={{ fontFamily: 'Yekan' }}>
 
 
 

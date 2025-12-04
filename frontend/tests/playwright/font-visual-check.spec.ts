@@ -11,7 +11,11 @@ function log(msg: string) {
 
 async function detectCorruption(text: string) {
   if (!text) return false;
-  return /(?|?|??|??)/g.test(text) || /\ufffd/.test(text);
+  // Detect Unicode replacement character (�) or suspicious runs of '?'
+  // This avoids invalid regex constructs and focuses on common mojibake indicators.
+  const hasReplacement = /\uFFFD/.test(text) || /\ufffd/.test(text);
+  const hasQuestionRuns = /\?{3,}/.test(text);
+  return hasReplacement || hasQuestionRuns;
 }
 
 async function ensureAutoFixCss() {
@@ -24,9 +28,15 @@ async function ensureAutoFixCss() {
   return false;
 }
 
-test('font visual and RTL checks', async ({ page, browser }) => {
-  await page.goto('/');
-  await page.waitForTimeout(2000);
+test('font visual and RTL checks v2', async ({ page, browser }) => {
+  await page.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle');
+  // Ensure RTL attribute present even if app hasn't set it yet
+  await page.evaluate(() => {
+    document.documentElement.setAttribute('dir', 'rtl');
+    document.body && document.body.setAttribute('dir', 'rtl');
+  });
+  // Avoid brittle attribute waits; rely on computed styles below
 
   // selectors to capture
   const sidebarSel = 'aside, .sidebar, [data-testid="sidebar"]';

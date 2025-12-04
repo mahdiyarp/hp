@@ -1,204 +1,112 @@
-// Re-export everything from the clean translations module to avoid encoding issues.
-export * from './translations.clean'
+// Clean translations file (fully replaced to remove prior encoding corruption)
+// Defines Persian (fa) and English (en) translations used across the app.
 
-  session_expired: 'ظ†ط´ط³طھ ط´ظ…ط§ ظ…ظ†ظ‚ط¶غŒ ط´ط¯ظ‡ ط§ط³طھ',
+export interface Translations { [key: string]: string }
 
+export const fa: Translations = {
+  app_name: 'حساب‌پاک',
+  loading: 'در حال بارگذاری...',
+  error: 'خطا',
+  success: 'موفق',
+  warning: 'هشدار',
+  cancel: 'انصراف',
+  save: 'ذخیره',
+  edit: 'ویرایش',
+  delete: 'حذف',
+  close: 'بستن',
+  back: 'بازگشت',
+  remove: 'حذف',
+  are_you_sure: 'مطمئن هستید؟',
+  please_fill_required_fields: 'لطفاً فیلدهای لازم را پر کنید',
+  dashboard: 'داشبورد',
+  dashboard_desc: 'نمای کلی وضعیت سیستم و کسب‌وکار',
+  smart_date: 'تاریخ هوشمند',
+  fiscal_year: 'سال مالی',
+  today: 'امروز',
+  this_month: 'این ماه',
+  last_seven_days: '۷ روز گذشته',
+  invoices: 'فاکتورها',
+  payments: 'پرداخت‌ها',
+  receipts: 'دریافت‌ها',
+  inventory: 'انبار',
+  people: 'اشخاص',
+  reports: 'گزارش‌ها',
+  settings: 'تنظیمات',
+  login: 'ورود',
+  logout: 'خروج',
+  username: 'نام کاربری',
+  password: 'رمز عبور',
+  remember_me: 'مرا به خاطر بسپار',
+  otp_code: 'کد یک‌بارمصرف',
+  phone_login: 'ورود با تلفن',
+  mobile_number: 'شماره موبایل',
+  invalid_credentials: 'نام کاربری یا رمز عبور اشتباه است',
+  currency: 'ارز',
+  irr: 'ریال',
+  usd: 'دلار آمریکا',
+  aed: 'درهم امارات',
+  auto_convert: 'تبدیل خودکار',
+  language: 'زبان',
+  persian: 'فارسی',
+  english: 'انگلیسی'
 }
 
-
-// Language: English
-
-export const en = {
-
-  // General
-
+export const en: Translations = {
   app_name: 'HesabPak',
-
   loading: 'Loading...',
-
   error: 'Error',
-
   success: 'Success',
-
   warning: 'Warning',
-
   cancel: 'Cancel',
-
   save: 'Save',
-
   edit: 'Edit',
-
   delete: 'Delete',
-
   close: 'Close',
-
   back: 'Back',
-
   remove: 'Remove',
-
   are_you_sure: 'Are you sure?',
-
   please_fill_required_fields: 'Please fill required fields',
-
-
-  // Dashboard
-
   dashboard: 'Dashboard',
-
-  dashboard_desc: 'Overview and quick analysis of transactions',
-
-  smart_date: 'Smart Date',
-
-  fiscal_year: 'Fiscal Year',
-
+  dashboard_desc: 'Overview of system and business status',
+  smart_date: 'Smart date',
+  fiscal_year: 'Fiscal year',
   today: 'Today',
-
   this_month: 'This Month',
-
   last_seven_days: 'Last 7 Days',
-
-
-  // Navigation
-
   invoices: 'Invoices',
-
   payments: 'Payments',
-
   receipts: 'Receipts',
-
   inventory: 'Inventory',
-
   people: 'Parties',
-
   reports: 'Reports',
-
   settings: 'Settings',
-
-
-  // Auth
-
   login: 'Login',
-
   logout: 'Logout',
-
   username: 'Username',
-
   password: 'Password',
-
   remember_me: 'Remember me',
-
   otp_code: 'One-time code',
-
   phone_login: 'Login with phone',
-
   mobile_number: 'Mobile number',
-
   invalid_credentials: 'Invalid username or password',
-
-
-  // Currency
-
   currency: 'Currency',
-
   irr: 'Iranian Rial',
-
   usd: 'US Dollar',
-
   aed: 'UAE Dirham',
-
   auto_convert: 'Auto convert',
-
-
-  // Language
-
   language: 'Language',
-
   persian: 'Persian',
-
-  english: 'English',
-
-  arabic: 'Arabic',
-
-  kurdish: 'Kurdish',
-
+  english: 'English'
 }
-
-
-// Language: Arabic (placeholder uses English to avoid encoding issues)
-
-export const ar = {
-
-  ...en,
-
-}
-
-
-// Language: Kurdish (placeholder uses English to avoid encoding issues)
-
-export const ku = {
-
-  ...en,
-
-}
-
 
 export type TranslationKey = keyof typeof fa
-
-
-export const translations = {
-
-  fa,
-
-  en,
-
-  ar,
-
-  ku,
-
-} as const
-
-
-export type LanguageCode = keyof typeof translations
+export const translations = { fa, en } as const
 export type LanguageCode = keyof typeof translations
 
-
-
-  app_name: 'ط·آ·ط¢آ­ط·آ·ط¢آ³ط·آ·ط¢آ§ط·آ·ط¢آ¨ط£آ¢أ¢â€ڑآ¬ط¥â€™ط·آ¸ط¢آ¾ط·آ·ط¢آ§ط·آ¹ط¢آ©',
-
-
-
-  loading: 'ط·آ·ط¢آ¯ط·آ·ط¢آ± ط·آ·ط¢آ­ط·آ·ط¢آ§ط·آ¸أ¢â‚¬â€چ ط·آ·ط¢آ¨ط·آ·ط¢آ§ط·آ·ط¢آ±ط·آ¹ط¢آ¯ط·آ·ط¢آ°ط·آ·ط¢آ§ط·آ·ط¢آ±ط·ط›ط¥â€™...',
-
-
-
-  error: 'ط·آ·ط¢آ®ط·آ·ط¢آ·ط·آ·ط¢آ§',
-
-
-
-  success: 'ط·آ¸أ¢â‚¬آ¦ط·آ¸ط«â€ ط·آ¸ط¸آ¾ط·آ¸أ¢â‚¬ع‘',
-
-
-
-  warning: 'ط·آ¸أ¢â‚¬طŒط·آ·ط¢آ´ط·آ·ط¢آ¯ط·آ·ط¢آ§ط·آ·ط¢آ±',
-
-
-
-  cancel: 'ط·آ·ط¢آ§ط·آ¸أ¢â‚¬آ ط·آ·ط¢آµط·آ·ط¢آ±ط·آ·ط¢آ§ط·آ¸ط¸آ¾',
-
-
-
-  save: 'ط·آ·ط¢آ°ط·آ·ط¢آ®ط·ط›ط¥â€™ط·آ·ط¢آ±ط·آ¸أ¢â‚¬طŒ',
-
-
-
-  edit: 'ط·آ¸ط«â€ ط·ط›ط¥â€™ط·آ·ط¢آ±ط·آ·ط¢آ§ط·ط›ط¥â€™ط·آ·ط¢آ´',
-
-
-
-  delete: 'ط·آ·ط¢آ­ط·آ·ط¢آ°ط·آ¸ط¸آ¾',
-
-
-
+/*
+  BEGIN LEGACY CORRUPTED CONTENT (commented out to restore type safety and remove syntax errors)
+  The following block was mojibake from previous encoding issues and is now disabled.
+  If you need any additional keys, add them to the clean fa/en objects above instead.
   close: 'ط·آ·ط¢آ¨ط·آ·ط¢آ³ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬آ ',
 
 
@@ -977,6 +885,7 @@ export const translations = {
 
 
 export type LanguageCode = keyof typeof translations
+*/
 
 
 

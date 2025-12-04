@@ -2,4 +2,7 @@
 .force-font, .widget *, .chart-label *, .MuiTypography-root, .ant-typography {
   font-family: 'Vazirmatn', 'Yekan', 'IRANSansX', sans-serif !important;
 }
-body * { direction: rtl !important; unicode-bidi: plaintext !important; }
+html[dir="rtl"], body[dir="rtl"], [dir="rtl"] * {
+  direction: rtl !important;
+  unicode-bidi: plaintext !important;
+}

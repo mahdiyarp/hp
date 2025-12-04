@@ -2154,7 +2154,7 @@ export default function SalesModule({ smartDate }: ModuleComponentProps) {
 
 
 
-          <table className="min-w-full text-sm">
+          <table className="hp-table min-w-full text-sm">
 
 
 
@@ -2542,7 +2542,7 @@ export default function SalesModule({ smartDate }: ModuleComponentProps) {
 
 
 
-              <table className="min-w-full text-sm">
+              <table className="hp-table min-w-full text-sm">
 
 
 
@@ -3170,7 +3170,7 @@ export default function SalesModule({ smartDate }: ModuleComponentProps) {
 
 
 
-                <table className="min-w-full text-sm">
+                <table className="hp-table min-w-full text-sm">
 
 
 

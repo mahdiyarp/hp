@@ -54,14 +54,28 @@ const App: React.FC = () => {
 		return () => window.removeEventListener('hashchange', onHashChange)
 	}, [])
 	
-	// Scroll lock for editor overlays
+	// Scroll lock + ESC to close editor overlays
 	React.useEffect(() => {
 		const isEditor = hash.includes('edit') || hash.includes('new') || hash.includes('payment') || hash.includes('task')
-		if (isEditor) {
-			document.body.style.overflow = 'hidden'
-			return () => { document.body.style.overflow = '' }
+		if (!isEditor) return
+
+		document.body.style.overflow = 'hidden'
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== 'Escape') return
+			const h = String(window.location.hash || '')
+			if (h.startsWith('#invoice')) navigate('invoices')
+			else if (h.startsWith('#contact')) navigate('contacts')
+			else if (h.startsWith('#product')) navigate('products')
+			else if (h.startsWith('#person')) navigate('persons')
+			else if (h.startsWith('#task')) navigate('tasks')
+			else if (h.startsWith('#payment')) navigate('payments')
 		}
-	}, [hash])
+		window.addEventListener('keydown', onKeyDown)
+		return () => {
+			document.body.style.overflow = ''
+			window.removeEventListener('keydown', onKeyDown)
+		}
+	}, [hash, navigate])
 	
 	return (
 		<div className="min-h-screen flex flex-col">
@@ -120,28 +134,28 @@ const App: React.FC = () => {
 
 						{/* Editor overlays based on hash */}
 						{String(window.location.hash||'').startsWith('#invoice-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='invoices'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='invoices'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<InvoiceEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#invoice-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='invoices'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='invoices'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<InvoiceEditor mode="create" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'').startsWith('#contact-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='contacts'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='contacts'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ContactEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#contact-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='contacts'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='contacts'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ContactEditor mode="create" />
 								</div>
@@ -149,28 +163,28 @@ const App: React.FC = () => {
 						)}
 
 						{String(window.location.hash||'').startsWith('#product-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='products'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='products'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ProductEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#product-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='products'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='products'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<ProductEditor mode="create" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'').startsWith('#person-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='persons'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='persons'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PersonEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#person-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='persons'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='persons'}}>
 								<div className="bg-white max-w-3xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PersonEditor mode="create" />
 								</div>
@@ -178,14 +192,14 @@ const App: React.FC = () => {
 						)}
 
 						{String(window.location.hash||'').startsWith('#task-edit') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='tasks'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='tasks'}}>
 								<div className="bg-white max-w-2xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<TaskEditor mode="edit" />
 								</div>
 							</div>
 						)}
 						{String(window.location.hash||'')==='#task-new' && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='tasks'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='tasks'}}>
 								<div className="bg-white max-w-2xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<TaskEditor mode="create" />
 								</div>
@@ -194,7 +208,7 @@ const App: React.FC = () => {
 
 						{/* Payment editor */}
 						{String(window.location.hash||'').startsWith('#payment') && (
-							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{window.location.hash='payments'}}>
+							<div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" role="dialog" aria-modal="true" onClick={()=>{window.location.hash='payments'}}>
 								<div className="bg-white max-w-xl w-full rounded shadow-lg" onClick={(e)=>e.stopPropagation()}>
 									<PaymentEditor />
 								</div>

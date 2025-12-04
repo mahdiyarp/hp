@@ -70,20 +70,20 @@ const BackupRestore: React.FC = () => {
     <div className="hp-card p-4" dir="rtl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">پشتیبان‌گیری و بازیابی</h2>
-        <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بروزرسانی'}</button>
+        <button className="hp-button" type="button" onClick={load} disabled={loading}>{loading ? '...' : 'بروزرسانی'}</button>
       </div>
       {msg && <div className="hp-badge mt-2">{msg}</div>}
 
       <div className="mt-3 hp-card p-3 bg-[var(--secondary)]/20">
         <h3 className="font-semibold mb-2">ایجاد بکاپ دستی</h3>
         <input className="hp-input w-full mb-2" placeholder="یادداشت (اختیاری)" value={note} onChange={e => setNote(e.target.value)} />
-        <button className="hp-button" onClick={createBackup} disabled={creating}>{creating ? '...' : 'ایجاد بکاپ'}</button>
+        <button className="hp-button" type="button" onClick={createBackup} disabled={creating}>{creating ? '...' : 'ایجاد بکاپ'}</button>
       </div>
 
       <div className="mt-3">
         <h3 className="font-semibold mb-2">لیست بکاپ‌ها</h3>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="hp-table min-w-full text-sm">
             <thead>
               <tr className="text-right">
                 <th className="px-3 py-2">شناسه</th>
@@ -104,8 +104,8 @@ const BackupRestore: React.FC = () => {
                   <td className="px-3 py-2">{b.note || '—'}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <button className="hp-button text-xs" onClick={() => downloadBackup(b.id)}>دانلود</button>
-                      <button className="hp-button text-xs bg-red-600 hover:bg-red-700" onClick={() => deleteBackup(b.id)}>حذف</button>
+                      <button className="hp-button text-xs" type="button" onClick={() => downloadBackup(b.id)}>دانلود</button>
+                      <button className="hp-button text-xs bg-red-600 hover:bg-red-700" type="button" onClick={() => deleteBackup(b.id)}>حذف</button>
                     </div>
                   </td>
                 </tr>

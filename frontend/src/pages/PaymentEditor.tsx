@@ -76,11 +76,11 @@ export default function PaymentEditor() {
   if (!location.hash.startsWith('#payment')) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={close}>
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={close} role="dialog" aria-modal="true">
       <div className="bg-white rounded shadow w-full max-w-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-bold">{pid ? 'ویرایش پرداخت' : 'افزودن پرداخت'}</h2>
-          <button onClick={close}>✕</button>
+          <button type="button" onClick={close}>✕</button>
         </div>
         {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-2 rounded">{error}</div>}
 
@@ -114,8 +114,8 @@ export default function PaymentEditor() {
         </div>
 
         <div className="flex items-center justify-end space-x-2 rtl:space-x-reverse">
-          <button className="px-3 py-2 bg-slate-200 rounded" onClick={close}>انصراف</button>
-          <button className="px-3 py-2 bg-indigo-600 text-white rounded" onClick={save} disabled={saving}>{saving ? '...' : 'ذخیره'}</button>
+          <button className="px-3 py-2 bg-slate-200 rounded" type="button" onClick={close}>انصراف</button>
+          <button className="px-3 py-2 bg-indigo-600 text-white rounded" type="button" onClick={save} disabled={saving}>{saving ? '...' : 'ذخیره'}</button>
         </div>
       </div>
     </div>

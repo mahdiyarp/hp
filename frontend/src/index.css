@@ -157,3 +157,10 @@ html[dir='rtl'] {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--border);
 }
+
+/* Ensure RTL alignment in tables and common containers */
+.hp-table { direction: rtl; text-align: right; }
+.hp-card, .hp-button, .hp-input { direction: rtl; }
+
+/* Avoid mojibake placeholder rendering differences */
+::placeholder { font-family: var(--app-font); }

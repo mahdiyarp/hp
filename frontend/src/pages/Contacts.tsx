@@ -34,23 +34,23 @@ const Contacts: React.FC = () => {
         <h2 className="text-lg font-semibold">مخاطبین</h2>
         <div className="flex items-center gap-2">
           <input className="hp-input w-56" placeholder="جستجو" value={q} onChange={(e)=>{setQ(e.target.value); setPage(1)}} />
-          <select className="hp-input" value={status} onChange={(e)=>{setStatus(e.target.value); setPage(1)}}>
+          <select aria-label="فیلتر وضعیت" className="hp-input" value={status} onChange={(e)=>{setStatus(e.target.value); setPage(1)}}>
             <option value="">همه وضعیت‌ها</option>
             <option value="active">فعال</option>
             <option value="inactive">غیرفعال</option>
             <option value="blacklist">بلک‌لیست</option>
           </select>
-          <select className="hp-input" value={limit} onChange={(e)=>{setLimit(Number(e.target.value)); setPage(1)}}>
+          <select aria-label="تعداد در صفحه" className="hp-input" value={limit} onChange={(e)=>{setLimit(Number(e.target.value)); setPage(1)}}>
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
           </select>
-          <button className="hp-button" onClick={()=>{ window.location.hash = 'contact-new' }}>ایجاد مخاطب</button>
+          <button type="button" className="hp-button" onClick={()=>{ window.location.hash = 'contact-new' }}>ایجاد مخاطب</button>
         </div>
       </div>
 
       <div className="overflow-x-auto mt-3">
-        <table className="min-w-full text-sm">
+        <table className="hp-table min-w-full text-sm">
           <thead>
             <tr className="text-right">
               <th className="px-3 py-2">شناسه</th>
@@ -69,7 +69,7 @@ const Contacts: React.FC = () => {
                 <td className="px-3 py-2">{c.company || '-'}</td>
                 <td className="px-3 py-2 flex items-center gap-2">
                   <span className={`hp-badge ${c.status==='blacklist'?'error':c.status==='inactive'?'dark':'success'}`}>{c.status||'-'}</span>
-                  <button className="hp-button secondary" onClick={()=>{ window.location.hash = `contact-edit:${c.id}` }}>ویرایش</button>
+                  <button type="button" className="hp-button secondary" onClick={()=>{ window.location.hash = `contact-edit:${c.id}` }}>ویرایش</button>
                 </td>
               </tr>
             ))}

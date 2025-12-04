@@ -21,16 +21,18 @@ def sales_summary(session: Session = Depends(db.get_db)):
     )
     today_total = sum(int(inv.total or 0) for inv in today_invoices)
     all_total = session.query(func.sum(models.Invoice.total)).filter(models.Invoice.status.in_(["paid", "issued"])).scalar() or 0
-    return {"today": int(today_total), "total": int(all_total), "count_today": len(today_invoices)}
+    count_all = session.query(func.count(models.Invoice.id)).filter(models.Invoice.status.in_(["paid", "issued"])).scalar() or 0
+    return {"today": int(today_total), "total": int(all_total), "count_today": len(today_invoices), "count": int(count_all)}
 
 
 @router.get("/cash")
 def cash_summary(session: Session = Depends(db.get_db)):
     """Cash balance: sum of payments (in - out)"""
     payments_in = session.query(func.sum(models.Payment.amount)).filter(models.Payment.status == "posted").scalar() or 0
-    # Assuming expenses/outflows would be separate; for now return positive balance
-    balance = int(payments_in)
-    return {"balance": balance, "total": balance}
+    # Placeholder for outflows; if not modeled, set to 0
+    payments_out = 0
+    balance = int(payments_in) - int(payments_out)
+    return {"in": int(payments_in), "out": int(payments_out), "balance": int(balance), "total": int(balance)}
 
 
 @router.get("/stock")
@@ -48,7 +50,8 @@ def pnl_summary(session: Session = Depends(db.get_db)):
     revenue = session.query(func.sum(models.Invoice.total)).filter(models.Invoice.status == "paid").scalar() or 0
     # Cost/expenses not modeled yet; return revenue as net
     net = int(revenue)
-    return {"net": net, "profit": net, "revenue": int(revenue), "cost": 0}
+    # Provide both cost and expenses keys for frontend/tests compatibility
+    return {"net": net, "profit": net, "revenue": int(revenue), "cost": 0, "expenses": 0}
 
 
 @router.get("/payments")

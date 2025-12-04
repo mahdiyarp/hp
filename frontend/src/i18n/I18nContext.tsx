@@ -77,7 +77,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = (key: TranslationKey, defaultValue?: string): string => {
     const dict = translations[language]
-    const value = dict[key]
+    // Use loose indexing while types are stabilized.
+    const value = (dict as any)[key]
     return typeof value === 'string' ? value : (defaultValue || key)
   }
 

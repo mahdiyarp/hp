@@ -66,6 +66,13 @@
 ### پیش‌نیازها
 - Docker و Docker Compose نصب شده
 - Windows, macOS یا Linux
+- Node.js و npm، Python (ترجیحاً `.venv`)
+
+برای بررسی سریع پیش‌نیازها:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/check-prereqs.ps1
+```
 
 ### شروع بلافاصله (Windows)
 ```batch
@@ -141,6 +148,233 @@ popd
 ```powershell
 docker compose exec backend sh -lc "pip install -q pytest && pytest -q backend/tests"
 ```
+
+## 🧪 UI Smoke (محلی، بدون پوش)
+
+برای اجرای سریع تست‌های UI روی ویندوز (بدون پوش به گیت‌هاب):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/ui-smoke.ps1
+# باز کردن خودکار گزارش:
+powershell -ExecutionPolicy Bypass -File scripts/ui-smoke.ps1 -OpenReport
+```
+
+گزارش‌ها در مسیر `artifacts/ui-smoke/<timestamp>/` ذخیره می‌شوند (HTML report + اسکرین‌شات/ویدیو در خطا).
+
+این اسکریپت در پوشه `frontend` وابستگی‌ها را نصب می‌کند، مرورگرهای Playwright را نصب کرده و تست‌های Playwright داخل `frontend/tests/playwright` را اجرا می‌کند.
+
+## 📂 باز کردن سریع گزارش Playwright
+
+پس از اجرای هر تست (UI smoke / E2E / Dev)، برای باز کردن آخرین گزارش HTML:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/open-playwright-report.ps1
+```
+
+در VS Code نیز می‌توانید از تسک `UI: Open Playwright Report` استفاده کنید.
+
+### باز کردن Trace (برای دیباگ دقیق)
+
+برای باز کردن آخرین Trace تولیدشده (فایل .zip) در Trace Viewer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/open-playwright-trace.ps1
+```
+
+در VS Code تسک `UI: Open Playwright Trace (latest)` را اجرا کنید.
+
+## 📦 آماده‌سازی ریلیز محلی (بدون پوش)
+
+برای ساخت `dist` فرانت‌اند و بررسی سلامت API/Assistant به صورت محلی:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/prepare-release.ps1
+```
+
+خروجی بیلد در `frontend/dist` قرار می‌گیرد. اگر بک‌اند محلی فعال باشد، نتایج سلامت `/api/health` و `/api/assistant/health` در خروجی چاپ می‌شود.
+
+## 🔄 E2E محلی با Docker (بدون پوش)
+
+اجرای تست‌های UI روی استک داکرایز‌شده، همراه با صبر برای سلامت سرویس‌ها:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1
+
+# پایان کار و جمع‌کردن سرویس‌ها:
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Down
+# با باز کردن خودکار گزارش:
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -OpenReport
+ 
+# اجرای سریع بدون بیلد مجدد ایمیج‌ها/فرانت‌اند:
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -NoBuild
+# افزایش زمان انتظار سلامت سرویس‌ها (مثال: 300 ثانیه)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -WaitTimeoutSec 300
+# اجرای Headed برای دیباگ (مثال: فقط کرومیوم)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Headed -Project chromium
+# پرش از نصب مجدد مرورگرها (سریع‌تر روی سیستم‌های آماده)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -SkipBrowsersInstall
+
+# انتخاب تست‌ها با الگو (grep) یا معکوس
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Grep "invoice"
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -GrepInvert "slow|flaky"
+
+# تعداد تلاش مجدد (Retries) و حالت دیباگ (PWDEBUG)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Retries 2
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Debug
+
+# کنترل Trace و تعداد Workers
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Trace on-first-retry
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Workers 1
+
+# توقف پس از اولین خطا و اجرای Shard
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -MaxFailures 1
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -Shard 1/2
+
+### حالت سریع (Quick)
+
+اجرای سریع با حذف بیلد، بستن سرویس‌ها در پایان و باز کردن گزارش:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -NoBuild -Down -OpenReport -SkipBrowsersInstall
+```
+
+### تنظیم زمان انتظار جداگانه برای سرویس‌ها
+
+```powershell
+# انتظار طولانی‌تر فقط برای API (مثال: 240 ثانیه)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -ApiWaitSec 240
+# انتظار کوتاه‌تر برای UI (مثال: 60 ثانیه)
+powershell -ExecutionPolicy Bypass -File scripts/run-e2e.ps1 -UiWaitSec 60
+```
+```
+
+گزارش‌های E2E در مسیر `artifacts/e2e/<timestamp>/` ذخیره می‌شوند.
+
+این اسکریپت فرانت‌اند را بیلد می‌کند، `docker compose up -d --build` اجرا می‌کند، سلامت API و UI را بررسی می‌کند و سپس Playwright را با پیکربندی `playwright.docker.config.js` اجرا می‌کند (baseURL = `http://127.0.0.1:3000`).
+
+## 👨‍💻 UI در حالت Dev + بک‌اند لوکال (بدون پوش)
+
+بک‌اند محلی را اجرا می‌کند، سلامت API را صبر می‌کند، سپس Playwright را مقابل dev server (Vite) اجرا می‌کند. آرتیفکت‌ها در `artifacts/dev/<timestamp>/` ذخیره می‌شوند.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1
+
+# نگه داشتن بک‌اند پس از تست:
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -KeepBackend
+
+# با باز کردن خودکار گزارش:
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -OpenReport
+# افزایش زمان انتظار سلامت API (مثال: 300 ثانیه)
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -WaitTimeoutSec 300
+# اجرای Headed برای دیباگ (مثال: فقط WebKit)
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Headed -Project webkit
+# پرش از نصب مجدد مرورگرها
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -SkipBrowsersInstall
+
+# انتخاب تست‌ها با grep و معکوس
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Grep "smoke"
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -GrepInvert "e2e"
+
+# تعداد تلاش مجدد و حالت دیباگ
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Retries 2
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Debug
+
+# Trace و Workers
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Trace retain-on-failure
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Workers 1
+
+# توقف پس از اولین خطا و Shard
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -MaxFailures 1
+powershell -ExecutionPolicy Bypass -File scripts/run-local-dev.ps1 -Shard 2/2
+```
+
+## 🧹 پاک‌سازی آرتیفکت‌ها
+
+برای آزادسازی فضای دیسک می‌توانید آرتیفکت‌های قدیمی را حذف کنید:
+
+```powershell
+# حذف آرتیفکت‌های قدیمی‌تر از 7 روز (پیش‌فرض)
+powershell -ExecutionPolicy Bypass -File scripts/clean-artifacts.ps1
+
+# مشخص‌کردن تعداد روز
+powershell -ExecutionPolicy Bypass -File scripts/clean-artifacts.ps1 -OlderThanDays 14
+
+# حذف گزارش پیش‌فرض Playwright در frontend نیز
+powershell -ExecutionPolicy Bypass -File scripts/clean-artifacts.ps1 -IncludeFrontendReport
+
+# Dry-run برای مشاهده‌ی موارد حذف‌شدنی
+powershell -ExecutionPolicy Bypass -File scripts/clean-artifacts.ps1 -WhatIf
+```
+
+## 📦 خروجی گرفتن از آخرین آرتیفکت
+
+برای فشرده‌سازی آخرین اجرای آرتیفکت‌ها (جهت ارسال گزارش مشکل):
+
+```powershell
+# نوع آرتیفکت را انتخاب کنید: e2e | dev | ui-smoke | backend
+powershell -ExecutionPolicy Bypass -File scripts/zip-latest-artifacts.ps1 -Type e2e
+```
+
+در VS Code از تسک `Artifacts: Zip latest (pick type)` استفاده کنید.
+
+## 🧰 اجرای سریع تست‌های Backend (اسکریپت)
+
+برای سهولت اجرای تست بک‌اند با SQLite in-memory و نصب وابستگی‌ها:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1
+```
+
+فلگ‌های مفید:
+### Backend tests: QoL flags and examples
+
+- Last failed and failures-first:
+	- Run via task: `Terminal > Run Task > Backend: Tests (last failed)`
+	- Command:
+		- PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\backend-tests.ps1 -LastFailed -FailuresFirst`
+
+- Bail after first failure:
+	- Run via task: `Terminal > Run Task > Backend: Tests (bail after 1)`
+	- Command:
+		- PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\backend-tests.ps1 -MaxFailures 1 -FailuresFirst`
+
+- Coverage + JUnit XML (for CI tools consuming reports):
+	- Run via task: `Terminal > Run Task > Backend: Tests (coverage + junit)`
+	- Command:
+		- PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\backend-tests.ps1 -Coverage -JUnit`
+
+- Pattern filter (pytest -k):
+	- Run via task: `Terminal > Run Task > Backend: Tests (pattern)` and enter your `-k` expression.
+	- Command:
+		- PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\backend-tests.ps1 -K "invoice and not slow"`
+
+Artifacts for backend runs are stored under `artifacts/backend/<timestamp>/` including `test-results/`, coverage HTML (when `-Coverage`), and `junit.xml` (when `-JUnit`).
+
+
+```powershell
+# فیلتر با -k (مثال: فقط اینویس)
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -K test_invoice
+
+# مسیر تست‌ها (مثال: فایل/پوشه مشخص)
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -TestsPath backend\tests\test_invoice_api.py
+
+# با کاورج و آرشیو خروجی در artifacts/backend/<timestamp>/
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -Coverage
+
+# فقط تست‌های شکست‌خورده‌ی آخرین اجرا
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -LastFailed
+
+# اجرای تست‌های شکست‌خورده در ابتدا
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -FailuresFirst
+
+# توقف پس از اولین خطا
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -MaxFailures 1
+
+# خروجی JUnit XML در test-results/pytest.xml (برای گزارش‌گیری)
+powershell -ExecutionPolicy Bypass -File scripts/backend-tests.ps1 -JUnit
+```
+
+در VS Code می‌توانید از تسک‌های آماده استفاده کنید: `Backend: Tests (last failed)`, `Backend: Tests (bail after 1)`, و `Backend: Tests (coverage + junit)`.
 
 ## 🧪 تنظیمات تست و موتور پایگاه داده
 

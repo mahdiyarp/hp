@@ -9,23 +9,31 @@
     "dev3000": "vite --port 3000 --host",
     "build": "vite build",
     "preview": "vite preview --port 3000",
+    "preview5173": "vite preview --port 5173",
     "start": "node index.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"{src,public}/**/*.{ts,tsx,js,json,css,html}\"",
     "typecheck": "tsc --noEmit",
     "prepare": "husky install",
+    "pretest": "npx playwright install",
     "persian-check": "node ./scripts/persian-check.js",
-    "iranYekan-check": "npx playwright test frontend/tests/playwright --reporter=list"
+    "iranYekan-check": "npx playwright test frontend/tests/playwright --reporter=list",
+    "test": "npm run iranYekan-check",
+    "test:smoke": "npx playwright test frontend/tests/playwright --reporter=list",
+    "test:visual": "npx playwright test frontend/tests/playwright --reporter=html",
+    "ui:smoke": "npx playwright test frontend/tests/playwright --reporter=list",
+    "ui:visual": "npx playwright test frontend/tests/playwright --reporter=html",
+    "ui:interaction": "npx playwright test frontend/tests/playwright --grep @interaction --reporter=list"
   },
   "dependencies": {
     "express": "^4.18.2",
     "grapesjs": "^0.22.14",
     "jalaali-js": "^1.1.0",
+    "moment-jalaali": "^0.10.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-grid-layout": "^1.3.4",
-    "react-modern-calendar-datepicker": "^3.1.5",
-    "moment-jalaali": "^0.10.1"
+    "react-modern-calendar-datepicker": "^3.1.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

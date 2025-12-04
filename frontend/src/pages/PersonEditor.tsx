@@ -58,7 +58,7 @@ const PersonEditor: React.FC<Props> = ({ mode }) => {
           <input className="hp-input w-full mb-2" placeholder="تلفن" value={data.phone||''} onChange={e=>setField('phone', e.target.value)} />
           <input className="hp-input w-full mb-2" placeholder="ایمیل" value={data.email||''} onChange={e=>setField('email', e.target.value)} />
           <input className="hp-input w-full mb-2" placeholder="آدرس" value={data.address||''} onChange={e=>setField('address', e.target.value)} />
-          <select className="hp-input w-full mb-2" value={data.status||'active'} onChange={e=>setField('status', e.target.value)}>
+          <select aria-label="وضعیت شخص" className="hp-input w-full mb-2" value={data.status||'active'} onChange={e=>setField('status', e.target.value)}>
             <option value="active">فعال</option>
             <option value="inactive">غیرفعال</option>
             <option value="blacklist">بلک‌لیست</option>
@@ -76,14 +76,14 @@ const PersonEditor: React.FC<Props> = ({ mode }) => {
           <div className="hp-card p-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">فعالیت‌ها</h3>
-              <button className="hp-button ghost" onClick={async()=>{ /* no-op */ }}>بروزرسانی</button>
+              <button className="hp-button ghost" type="button" onClick={async()=>{ /* no-op */ }}>بروزرسانی</button>
             </div>
             <EntityTimeline entityType="person" entityId={id} />
           </div>
           <div className="hp-card p-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">وظایف مرتبط</h3>
-              <button className="hp-button" onClick={()=>{ try{ localStorage.setItem('hp.task.prefill', JSON.stringify({ entity_type: 'person', entity_id: id })) }catch{}; window.location.hash = 'task-new' }}>ایجاد وظیفه</button>
+              <button className="hp-button" type="button" onClick={()=>{ try{ localStorage.setItem('hp.task.prefill', JSON.stringify({ entity_type: 'person', entity_id: id })) }catch{}; window.location.hash = 'task-new' }}>ایجاد وظیفه</button>
             </div>
             <EntityTasks entityType="person" entityId={id} />
           </div>
@@ -131,7 +131,7 @@ const EntityTasks: React.FC<{entityType: string; entityId: number}> = ({entityTy
               <div className="font-medium">{t.title}</div>
               <div className="text-xs text-[var(--primary)]/70">{t.status} • {t.priority}</div>
             </div>
-            <button className="hp-button secondary" onClick={()=>{ window.location.hash = `task-edit:${t.id}` }}>ویرایش</button>
+            <button className="hp-button secondary" type="button" onClick={()=>{ window.location.hash = `task-edit:${t.id}` }}>ویرایش</button>
           </li>
         ))}
       </ul>

@@ -44,7 +44,8 @@ def test_backups_download(test_session: Session):
     bk = crud.create_backup(test_session, created_by=None, kind="manual", note="Download test")
     response = client.get(f"/api/backups/{bk.id}/download")
     assert response.status_code == 200
-    assert response.headers.get("content-type") == "application/json"
+    ct = (response.headers.get("content-type") or "").lower()
+    assert ct.startswith("application/json")
 
 
 def test_backups_delete(test_session: Session):
