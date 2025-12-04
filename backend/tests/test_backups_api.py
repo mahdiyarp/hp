@@ -28,30 +28,36 @@ def test_backups_manual_create(test_session: Session):
 
 def test_backups_get_detail(test_session: Session):
     """Test GET /api/backups/{id} retrieves a backup."""
-    # Create backup first
-    bk = crud.create_backup(test_session, created_by=None, kind="manual", note="Detail test")
-    assert bk.id is not None
+    # Create backup via API to ensure it's committed and visible across sessions
+    create_resp = client.post("/api/backups/manual", params={"note": "Detail test"})
+    assert create_resp.status_code == 201
+    bk_id = create_resp.json()["id"]
 
-    response = client.get(f"/api/backups/{bk.id}")
+    response = client.get(f"/api/backups/{bk_id}")
     assert response.status_code == 200
     data = response.json()
-    assert data["id"] == bk.id
+    assert data["id"] == bk_id
     assert data["kind"] == "manual"
 
 
 def test_backups_download(test_session: Session):
     """Test GET /api/backups/{id}/download returns file."""
-    bk = crud.create_backup(test_session, created_by=None, kind="manual", note="Download test")
-    response = client.get(f"/api/backups/{bk.id}/download")
+    create_resp = client.post("/api/backups/manual", params={"note": "Download test"})
+    assert create_resp.status_code == 201
+    bk_id = create_resp.json()["id"]
+    response = client.get(f"/api/backups/{bk_id}/download")
     assert response.status_code == 200
-    assert response.headers.get("content-type") == "application/json"
+    ct = (response.headers.get("content-type") or "").lower()
+    assert ct.startswith("application/json")
 
 
 def test_backups_delete(test_session: Session):
     """Test DELETE /api/backups/{id} removes backup."""
-    bk = crud.create_backup(test_session, created_by=None, kind="manual", note="Delete test")
-    response = client.delete(f"/api/backups/{bk.id}")
+    create_resp = client.post("/api/backups/manual", params={"note": "Delete test"})
+    assert create_resp.status_code == 201
+    bk_id = create_resp.json()["id"]
+    response = client.delete(f"/api/backups/{bk_id}")
     assert response.status_code == 204
     # Verify removed from DB
-    removed = crud.get_backup(test_session, bk.id)
+    removed = crud.get_backup(test_session, bk_id)
     assert removed is None

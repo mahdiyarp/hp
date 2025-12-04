@@ -46,7 +46,7 @@ const TaskEditor: React.FC<Props> = ({ mode }) => {
     <div className="hp-card p-4" dir="rtl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{mode==='create'?'ایجاد وظیفه':'ویرایش وظیفه'} {id?`#${id}`:''}</h2>
-        <button className="hp-button" onClick={save} disabled={saving}>{saving?'...':'ذخیره'}</button>
+        <button className="hp-button" type="button" onClick={save} disabled={saving}>{saving?'...':'ذخیره'}</button>
       </div>
       {error && <div className="hp-badge error mt-2">{error}</div>}
 

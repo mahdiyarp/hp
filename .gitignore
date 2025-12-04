@@ -25,6 +25,7 @@ backend/*.db
 
 # Repository-level artifacts
 logs/
+artifacts/
 
 # IDE artifacts
 .vs/

@@ -46,8 +46,8 @@ const Reports: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">گزارشات</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading || !canView}>{loading ? '...' : 'بروزرسانی'}</button>
-          <button className="hp-button" onClick={exportCsv} disabled={!canView}>خروجی CSV</button>
+          <button type="button" className="hp-button" onClick={load} disabled={loading || !canView}>{loading ? '...' : 'بروزرسانی'}</button>
+          <button type="button" className="hp-button" onClick={exportCsv} disabled={!canView}>خروجی CSV</button>
         </div>
       </div>
       {!canView && <div className="hp-badge error mt-2 text-xs">شما دسترسی مشاهده گزارشات را ندارید</div>}
@@ -58,13 +58,13 @@ const Reports: React.FC = () => {
         <input className="hp-input" placeholder="تا تاریخ (YYYY-MM-DD)" value={filters.to} onChange={e=>setFilters({...filters, to: e.target.value})} />
         <input className="hp-input" placeholder="مشتری" value={filters.customer} onChange={e=>setFilters({...filters, customer: e.target.value})} />
         <input className="hp-input" placeholder="کالا" value={filters.product} onChange={e=>setFilters({...filters, product: e.target.value})} />
-        <select className="hp-input" value={filters.status} onChange={e=>setFilters({...filters, status: e.target.value})}>
+        <select aria-label="فیلتر وضعیت" className="hp-input" value={filters.status} onChange={e=>setFilters({...filters, status: e.target.value})}>
           <option value="">همه وضعیت‌ها</option>
           <option value="draft">پیش‌نویس</option>
           <option value="final">نهایی</option>
           <option value="paid">پرداخت شده</option>
         </select>
-        <select className="hp-input" value={limit} onChange={e=>{setLimit(Number(e.target.value)); setPage(1)}}>
+        <select aria-label="تعداد در صفحه" className="hp-input" value={limit} onChange={e=>{setLimit(Number(e.target.value)); setPage(1)}}>
           <option value={10}>10</option>
           <option value={20}>20</option>
           <option value={50}>50</option>
@@ -72,7 +72,7 @@ const Reports: React.FC = () => {
       </div>
 
       <div className="overflow-x-auto mt-3">
-        <table className="min-w-full text-sm">
+        <table className="hp-table min-w-full text-sm">
           <thead>
             <tr className="text-right">
               <th className="px-3 py-2">تاریخ</th>
@@ -98,9 +98,9 @@ const Reports: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1 || !canView}>قبلی</button>
+          <button type="button" className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1 || !canView}>قبلی</button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={!canView}>بعدی</button>
+          <button type="button" className="hp-button" onClick={()=> setPage(page+1)} disabled={!canView}>بعدی</button>
         </div>
       </div>
     </div>

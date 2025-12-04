@@ -141,7 +141,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
         </div>
         <div className="flex items-center gap-2">
           <span className={retroBadge}>Active date: {smartDate.jalali || '---'}</span>
-          <button className={retroButton} onClick={() => saveSettings()} disabled={busy}>
+          <button className={retroButton} type="button" onClick={() => saveSettings()} disabled={busy}>
             Save
           </button>
         </div>
@@ -167,6 +167,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <button
             key={t.id}
             className={`${retroButton} ${activeTab === t.id ? '!bg-[var(--primary)] text-white' : '!bg-[var(--background)] !text-[var(--primary)]'}`}
+            type="button"
             onClick={() => setActiveTab(t.id)}
           >
             {t.label}
@@ -251,7 +252,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
             </label>
             <div className="text-sm text-[var(--primary)] space-y-1">
               Sidebar order
-              <button className={retroButton} onClick={() => apiPatch('/api/users/preferences/sidebar-order', { order: settings.sidebar_order })}>
+              <button className={retroButton} type="button" onClick={() => apiPatch('/api/users/preferences/sidebar-order', { order: settings.sidebar_order })}>
                 Save sidebar order
               </button>
             </div>
@@ -320,7 +321,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <div className="space-y-2 text-sm text-[var(--primary)]">
             <p>Quick checks: call /api/version and /api/time/now after saving.</p>
             <div className="flex gap-2">
-              <button className={retroButton} onClick={() => loadSettings()}>
+              <button className={retroButton} type="button" onClick={() => loadSettings()}>
                 Reload settings
               </button>
             </div>

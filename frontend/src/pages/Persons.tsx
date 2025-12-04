@@ -86,8 +86,8 @@ const Persons: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">اشخاص</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
-          <button className="hp-button" onClick={()=>{ window.location.hash = 'person-new' }}>افزودن شخص</button>
+          <button type="button" className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
+          <button type="button" className="hp-button" onClick={()=>{ window.location.hash = 'person-new' }}>افزودن شخص</button>
         </div>
       </div>
 
@@ -96,7 +96,7 @@ const Persons: React.FC = () => {
       <div className="mt-3">
         <div className="flex items-center gap-2 mb-2">
           <input className="hp-input w-56" placeholder="جستجو" value={query} onChange={(e)=>{setQuery(e.target.value); setPage(1)}} />
-          <select className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
+          <select aria-label="تعداد در صفحه" className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
@@ -104,7 +104,7 @@ const Persons: React.FC = () => {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="hp-table min-w-full text-sm">
           <thead>
             <tr className="text-right">
               <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('name')}>نام</th>
@@ -124,7 +124,7 @@ const Persons: React.FC = () => {
                   <td className="px-3 py-2">{p.type || '-'}</td>
                   <td className="px-3 py-2 flex items-center gap-2">
                     <span>{p.created_at || '-'}</span>
-                    <button className="hp-button secondary" onClick={()=>{ window.location.hash = `person-edit:${p.id}` }}>ویرایش</button>
+                    <button type="button" className="hp-button secondary" onClick={()=>{ window.location.hash = `person-edit:${p.id}` }}>ویرایش</button>
                   </td>
                 </tr>
               ))
@@ -138,9 +138,9 @@ const Persons: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
+          <button type="button" className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
+          <button type="button" className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
         </div>
       </div>
     </div>

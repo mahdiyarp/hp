@@ -70,7 +70,7 @@ const Settings: React.FC = () => {
     <div className="hp-card p-4" dir="rtl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">تنظیمات</h2>
-        <button className="hp-button" onClick={save} disabled={saving}>{saving?'...':'ذخیره تغییرات'}</button>
+        <button type="button" className="hp-button" onClick={save} disabled={saving}>{saving?'...':'ذخیره تغییرات'}</button>
       </div>
       {msg && <div className="hp-badge mt-2">{msg}</div>}
       <div className="mt-3 text-sm text-[var(--primary)]/75">

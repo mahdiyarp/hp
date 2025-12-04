@@ -79,7 +79,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بروزرسانی'}</button>
+        <button type="button" className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بروزرسانی'}</button>
         {error && <span className="hp-badge error">{error}</span>}
       </div>
 
@@ -109,10 +109,10 @@ const Dashboard: React.FC = () => {
       <section className="hp-card p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">فعالیت‌های اخیر</h2>
-          <button className="hp-button ghost text-sm">مشاهده همه</button>
+          <button type="button" className="hp-button ghost text-sm">مشاهده همه</button>
         </div>
         <div className="mt-3">
-          <table className="min-w-full text-sm">
+          <table className="hp-table min-w-full text-sm">
             <thead>
               <tr className="text-right">
                 <th className="px-3 py-2">زمان</th>

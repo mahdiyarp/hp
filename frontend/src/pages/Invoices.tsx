@@ -95,8 +95,8 @@ const Invoices: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">فاکتورها</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
-          <button className="hp-button" onClick={()=>{window.location.hash='invoice-new'}}>ثبت فاکتور جدید</button>
+          <button type="button" className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
+          <button type="button" className="hp-button" onClick={()=>{window.location.hash='invoice-new'}}>ثبت فاکتور جدید</button>
         </div>
       </div>
 
@@ -105,17 +105,17 @@ const Invoices: React.FC = () => {
       <div className="mt-3">
         <div className="flex items-center gap-2 mb-2">
           <input className="hp-input w-56" placeholder="جستجو" value={query} onChange={(e)=>{setQuery(e.target.value); setPage(1)}} />
-          <select className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
+          <select aria-label="تعداد در صفحه" className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
           </select>
-          <input type="date" className="hp-input" value={dateFrom} onChange={(e)=>{setDateFrom(e.target.value); setPage(1)}} />
-          <input type="date" className="hp-input" value={dateTo} onChange={(e)=>{setDateTo(e.target.value); setPage(1)}} />
+          <input aria-label="از تاریخ" type="date" className="hp-input" value={dateFrom} onChange={(e)=>{setDateFrom(e.target.value); setPage(1)}} />
+          <input aria-label="تا تاریخ" type="date" className="hp-input" value={dateTo} onChange={(e)=>{setDateTo(e.target.value); setPage(1)}} />
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <table className="hp-table min-w-full text-sm">
           <thead>
             <tr className="text-right">
               <th className="px-3 py-2">شماره</th>
@@ -156,9 +156,9 @@ const Invoices: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
+          <button className="hp-button" type="button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
+          <button className="hp-button" type="button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
         </div>
       </div>
     </div>
@@ -224,14 +224,14 @@ function actionMenu(row: any, reload: () => Promise<void>) {
     <details className="relative">
       <summary className="hp-button">اقدامات</summary>
       <div className="absolute z-20 mt-1 bg-white border rounded shadow min-w-[10rem]">
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goEdit}>🖊 ویرایش</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goView}>📄 مشاهده</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={doDuplicate}>📥 تکثیر</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goAddPayment}>💰 ثبت پرداخت</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={doChangeStatus}>🔁 تغییر وضعیت</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={openPdf}>🧾 چاپ/PDF</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={shareLink}>📤 اشتراک لینک</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50 text-red-600" onClick={doDelete}>🗑 حذف</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goEdit}>🖊 ویرایش</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goView}>📄 مشاهده</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={doDuplicate}>📥 تکثیر</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={goAddPayment}>💰 ثبت پرداخت</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={doChangeStatus}>🔁 تغییر وضعیت</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={openPdf}>🧾 چاپ/PDF</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={shareLink}>📤 اشتراک لینک</button>
+        <button type="button" className="block w-full text-right px-3 py-2 hover:bg-gray-50 text-red-600" onClick={doDelete}>🗑 حذف</button>
       </div>
     </details>
   )

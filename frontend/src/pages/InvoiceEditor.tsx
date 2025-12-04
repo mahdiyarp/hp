@@ -142,7 +142,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
         {/* Items */}
         <section className="hp-card p-3 col-span-1 lg:col-span-2" draggable>
           <h3 className="font-semibold mb-2">آیتم‌ها</h3>
-          <table className="min-w-full text-sm">
+          <table className="hp-table min-w-full text-sm">
             <thead>
               <tr className="text-right">
                 <th className="px-3 py-2">شناسه</th>
@@ -176,7 +176,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
               ))}
               <tr>
                 <td colSpan={6} className="px-2 py-2">
-                  <button className="hp-button" onClick={()=> setField('items', [...(data.items||[]), { description: '', qty: 1, unit_price: 0, discount_rate: 0, tax_rate: 0 }])}>+ افزودن آیتم</button>
+                  <button className="hp-button" type="button" onClick={()=> setField('items', [...(data.items||[]), { description: '', qty: 1, unit_price: 0, discount_rate: 0, tax_rate: 0 }])}>+ افزودن آیتم</button>
                 </td>
               </tr>
             </tbody>
@@ -196,7 +196,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
         <section className="hp-card p-3" draggable>
           <h3 className="font-semibold mb-2">پرداخت‌ها</h3>
           <div className="overflow-auto rounded border mb-3">
-            <table className="min-w-full text-sm">
+            <table className="hp-table min-w-full text-sm">
               <thead>
                 <tr className="text-right">
                   <th className="px-2 py-1">شناسه</th>
@@ -214,9 +214,9 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
                     <td className="px-2 py-1">{new Intl.NumberFormat('fa-IR').format(Number(p.amount||0))}</td>
                     <td className="px-2 py-1">{p.status}</td>
                     <td className="px-2 py-1 space-x-1 rtl:space-x-reverse">
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/posted`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>ثبت</button>
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/reconciled`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>تسویه</button>
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/void`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>باطل</button>
+                      <button type="button" disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/posted`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>ثبت</button>
+                      <button type="button" disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/reconciled`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>تسویه</button>
+                      <button type="button" disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/void`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>باطل</button>
                     </td>
                   </tr>
                 ))}
@@ -241,6 +241,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
               try { localStorage.setItem('hp.prefill.payment', JSON.stringify(prefill)); } catch {}
               window.location.hash = '#payment/new'
             }}
+            type="button"
           >
             + ثبت پرداخت
           </button>

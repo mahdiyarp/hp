@@ -1,6 +1,6 @@
 import authService from './auth'
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 
 /**
  * Date format for API:
@@ -9,7 +9,7 @@ type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
  * - Compatibility: Use X-Date-Format header if needed (default: 'jalali')
  */
 
-async function parseResponse<T>(res: Response): Promise<T> {
+async function parseResponse<T = any>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText || 'Request failed'
     try {
@@ -34,7 +34,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
   }
 }
 
-export async function apiRequest<T>(
+export async function apiRequest<T = any>(
   path: string,
   method: HttpMethod = 'GET',
   init?: RequestInit,
@@ -51,11 +51,11 @@ export async function apiRequest<T>(
   return parseResponse<T>(response)
 }
 
-export async function apiGet<T>(path: string, init?: RequestInit) {
+export async function apiGet<T = any>(path: string, init?: RequestInit): Promise<T> {
   return apiRequest<T>(path, 'GET', init)
 }
 
-export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit) {
+export async function apiPost<T = any>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData
   return apiRequest<T>(path, 'POST', {
     headers: isForm
@@ -71,7 +71,7 @@ export async function apiPost<T>(path: string, body?: unknown, init?: RequestIni
   })
 }
 
-export async function apiPatch<T>(path: string, body?: unknown, init?: RequestInit) {
+export async function apiPatch<T = any>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
   return apiRequest<T>(path, 'PATCH', {
     headers: {
       'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
   })
 }
 
-export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit) {
+export async function apiPut<T = any>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
   return apiRequest<T>(path, 'PUT', {
     headers: {
       'Content-Type': 'application/json',
@@ -93,6 +93,6 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
   })
 }
 
-export async function apiDelete<T>(path: string, init?: RequestInit) {
+export async function apiDelete<T = any>(path: string, init?: RequestInit): Promise<T> {
   return apiRequest<T>(path, 'DELETE', init)
 }
