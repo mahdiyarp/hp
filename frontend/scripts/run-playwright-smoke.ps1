@@ -12,9 +12,10 @@ foreach ($p in $ports) {
 Get-Process | Where-Object { $_.ProcessName -match 'node|vite' } | ForEach-Object { Stop-Process -Id $_.Id -Force }
 
 Push-Location "$PSScriptRoot\.."
-# Ensure browsers installed
-npx playwright install | Out-Null
-# Run smoke with CI flag
+# Ensure browsers installed via @playwright/test
+npx @playwright/test install --with-deps | Out-Null
+# Run smoke with CI flag and explicit config
 $env:CI = "true"
-npx playwright test frontend/tests/playwright --reporter=list
+$env:PLAYWRIGHT_BROWSERS_PATH = '0'
+npx @playwright/test test --config tests/playwright/playwright.config.js --reporter=list,html
 Pop-Location
