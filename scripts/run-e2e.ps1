@@ -106,8 +106,8 @@ if (-not ($okApi -and $okUi)) {
 Push-Location "$PSScriptRoot\..\frontend"
 try {
   if (-not $SkipBrowsersInstall) {
-    Write-Host "[E2E] Installing Playwright browsers..."
-    cmd /c npx playwright install
+    Write-Host "[E2E] Installing Playwright browsers (@playwright/test)..."
+    cmd /c npx @playwright/test install --with-deps
   } else {
     Write-Host "[E2E] Skipping Playwright browsers install due to -SkipBrowsersInstall"
   }
@@ -123,8 +123,9 @@ try {
   if ($MaxFailures -gt 0) { $args += @('--max-failures', $MaxFailures) }
   if ($Shard -and $Shard.Trim() -ne '') { $args += @('--shard', $Shard) }
   if ($Debug) { $env:PWDEBUG = '1' }
-  Write-Host "[E2E] Running Playwright: npx playwright $($args -join ' ')"
-  cmd /c npx playwright $args
+  $env:PLAYWRIGHT_BROWSERS_PATH = '0'
+  Write-Host "[E2E] Running Playwright: npx @playwright/test $($args -join ' ')"
+  cmd /c npx @playwright/test $args
   $pwExit = $LASTEXITCODE
   if ($Debug) { Remove-Item Env:PWDEBUG -ErrorAction SilentlyContinue }
   

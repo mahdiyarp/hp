@@ -48,11 +48,11 @@ if ($docker.ok) { Write-Host "[Check] docker: $($docker.out)" } else { Write-Hos
 $compose = Test-Cmd 'cmd' '/c docker compose version'
 if ($compose.ok) { Write-Host "[Check] docker compose: $($compose.out)" } else { Write-Host "[Check] docker compose: MISSING" -ForegroundColor Yellow; $failures += 'docker compose' }
 
-# Playwright CLI (from frontend dev deps)
+# Playwright test CLI (from frontend dev deps)
 Push-Location "$PSScriptRoot/../frontend"
 try {
-  $pw = Test-Cmd 'cmd' '/c npx playwright --version'
-  if ($pw.ok) { Write-Host "[Check] playwright: $($pw.out)" } else { Write-Host "[Check] playwright: Not installed yet (will be installed by scripts)" -ForegroundColor Yellow }
+  $pw = Test-Cmd 'cmd' '/c npx @playwright/test --version'
+  if ($pw.ok) { Write-Host "[Check] @playwright/test: $($pw.out)" } else { Write-Host "[Check] @playwright/test: Not installed yet (will be installed by scripts)" -ForegroundColor Yellow }
 } finally { Pop-Location }
 
 if ($failures.Count -gt 0) {

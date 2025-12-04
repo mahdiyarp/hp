@@ -52,7 +52,7 @@ if (-not $candidate) {
 Write-Host "[Trace] Opening: $candidate"
 Push-Location "$repoRoot\frontend"
 try {
-  cmd /c npx playwright show-trace "$candidate"
+  cmd /c npx @playwright/test show-trace "$candidate"
 } finally {
   Pop-Location
 }
