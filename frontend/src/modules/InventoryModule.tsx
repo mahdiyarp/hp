@@ -83,6 +83,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     const raw = localStorage.getItem('inventory.hideZero')
     return raw === null ? true : raw === 'true'
   })
+  const [hideNegativeInventory, setHideNegativeInventory] = useState<boolean>(() => {
+    const raw = localStorage.getItem('inventory.hideNegative')
+    return raw === 'true'
+  })
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
@@ -265,13 +269,14 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
         return false
       }
       if (hideZeroInventory && (prod.inventory ?? 0) === 0) return false
+      if (hideNegativeInventory && (prod.inventory ?? 0) < 0) return false
       if (search) {
         const hay = `${prod.name} ${prod.group ?? ''}`.toLowerCase()
         if (!hay.includes(search.toLowerCase())) return false
       }
       return true
     })
-  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search, hideZeroInventory])
+  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search, hideZeroInventory, hideNegativeInventory])
 
   const [sortKey, setSortKey] = useState<'name'|'group'|'unit'|'inventory'|'last_purchase_price'|'avg_purchase_price'|'last_sale_price'|'avg_sale_price'>(()=>{
     const raw = localStorage.getItem('inventory.sort.key')
@@ -310,6 +315,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   useEffect(() => {
     try { localStorage.setItem('inventory.hideZero', String(hideZeroInventory)) } catch {}
   }, [hideZeroInventory])
+
+  useEffect(() => {
+    try { localStorage.setItem('inventory.hideNegative', String(hideNegativeInventory)) } catch {}
+  }, [hideNegativeInventory])
 
   const totals = useMemo(() => {
     const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
@@ -593,6 +602,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <label className="flex items-center gap-2 text-xs mt-1">
               <input type="checkbox" checked={hideZeroInventory} onChange={e => setHideZeroInventory(e.target.checked)} />
               عدم نمایش موجودی صفر
+            </label>
+            <label className="flex items-center gap-2 text-xs mt-1">
+              <input type="checkbox" checked={hideNegativeInventory} onChange={e => setHideNegativeInventory(e.target.checked)} />
+              عدم نمایش موجودی منفی
             </label>
           </div>
           <div className="space-y-2">
