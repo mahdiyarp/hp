@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet, apiPost } from '../services/api'
+import { apiGet, apiPost, apiPatch } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
+import { parseJalaliInput } from '../utils/date'
 import {
   retroBadge,
   retroButton,
@@ -47,6 +48,7 @@ interface PersonOption {
 interface PaymentFormState {
   direction: 'in' | 'out'
   method: string
+  bank_name?: string
   party_name: string
   amount: string
   reference: string
@@ -60,6 +62,11 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [checksDue, setChecksDue] = useState<CheckDue[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [paymentListLimit, setPaymentListLimit] = useState<number>(()=>{
+    const raw = localStorage.getItem('finance.pageSize')
+    const n = raw ? parseInt(raw) : 5
+    return [5,10,20,50].includes(n) ? n : 5
+  })
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [methodFilter, setMethodFilter] = useState('all')
@@ -82,14 +89,70 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     note: '',
   }
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>(emptyForm)
+  const [auditNote, setAuditNote] = useState('')
   const [showLedger, setShowLedger] = useState(false)
   const [ledgerPayments, setLedgerPayments] = useState<Payment[]>([] as any)
   const [ledgerParty, setLedgerParty] = useState<string>('')
+  const [paymentMethods, setPaymentMethods] = useState<string[]>(()=>{
+    try {
+      const raw = localStorage.getItem('hesabpak_payment_methods')
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr) && arr.length) return arr
+      }
+    } catch {}
+    return ['cash','bank','pos','cheque','other']
+  })
+  const [showMethodMgr, setShowMethodMgr] = useState(false)
+  const [availableBanks, setAvailableBanks] = useState<string[]>(()=>{
+    try {
+      const raw = localStorage.getItem('hesabpak_banks_selected')
+      if (raw) {
+        const arr = JSON.parse(raw)
+        if (Array.isArray(arr)) return arr
+      }
+    } catch {}
+    return []
+  })
+  const [personBanks, setPersonBanks] = useState<Record<string,string[]>>(()=>{
+    try { const raw = localStorage.getItem('hesabpak_person_banks'); return raw? JSON.parse(raw): {} } catch { return {} }
+  })
+  const [historyOpen, setHistoryOpen] = useState<{ paymentId: number, items: Array<{ id: string|number; user?: string; time: string; note?: string; changes?: any }> } | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [sortKey, setSortKey] = useState<'number'|'direction'|'method'|'party'|'amount'|'status'|'server_time'|'due_date'>(()=>{
+    const raw = localStorage.getItem('finance.sort.key')
+    const allowed = ['number','direction','method','party','amount','status','server_time','due_date']
+    return (raw && allowed.includes(raw)) ? (raw as any) : 'server_time'
+  })
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>(()=>{
+    const raw = localStorage.getItem('finance.sort.dir')
+    return raw === 'asc' || raw === 'desc' ? raw : 'desc'
+  })
 
   useEffect(() => {
     loadData()
     loadPersons()
     loadOpenInvoices()
+    // تلاش برای بارگذاری روش‌های پرداخت از تنظیمات سیستم
+    ;(async ()=>{
+      try {
+        const settings = await apiGet<any[]>('/api/admin/settings')
+        const pm = Array.isArray(settings) ? settings.find((s:any)=>s.key==='payment_methods') : null
+        if (pm && pm.value) {
+          const arr = JSON.parse(pm.value)
+          if (Array.isArray(arr) && arr.length) {
+            setPaymentMethods(arr)
+            try { localStorage.setItem('hesabpak_payment_methods', JSON.stringify(arr)) } catch {}
+          }
+        }
+        // banks from integration (optional)
+        try {
+          const data = await apiGet<{banks: Array<{name:string}>}>('/api/integrations/iran-banks')
+          const names = Array.isArray(data?.banks) ? data.banks.map(b=>b.name).filter(Boolean) : []
+          if (names.length) setAvailableBanks(prev=> prev.length? prev: names.slice(0, 200))
+        } catch {}
+      } catch {}
+    })()
     
     // Listen for prefill events from invoice module
     const handlePrefill = (e: Event) => {
@@ -182,6 +245,19 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     }
   }
 
+  const openPaymentHistory = async (pay: Payment) => {
+    setHistoryOpen({ paymentId: pay.id, items: [] })
+    setHistoryLoading(true)
+    try {
+      const items = await apiGet<Array<{ id: string|number; user?: string; time: string; note?: string; changes?: any }>>(`/api/payments/${pay.id}/history`).catch(()=>[])
+      setHistoryOpen({ paymentId: pay.id, items: items || [] })
+    } catch {
+      setHistoryOpen({ paymentId: pay.id, items: [] })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   const filteredPayments = useMemo(() => {
     return payments.filter(p => {
       if (directionFilter !== 'all' && p.direction !== directionFilter) return false
@@ -199,8 +275,42 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         }
       }
       return true
-    }).slice(0, 5)
-  }, [payments, directionFilter, statusFilter, methodFilter, search])
+    })
+    .sort((a,b)=>{
+      const base = (()=>{
+        switch (sortKey) {
+          case 'number': {
+            const an = (a.payment_number ?? a.id)?.toString()
+            const bn = (b.payment_number ?? b.id)?.toString()
+            return an.localeCompare(bn, 'fa', { sensitivity: 'base' })
+          }
+          case 'direction':
+            return a.direction.localeCompare(b.direction, 'fa', { sensitivity: 'base' })
+          case 'method':
+            return (a.method ?? '').localeCompare(b.method ?? '', 'fa', { sensitivity: 'base' })
+          case 'party':
+            return (a.party_name ?? '').localeCompare(b.party_name ?? '', 'fa', { sensitivity: 'base' })
+          case 'amount':
+            return (a.amount ?? 0) - (b.amount ?? 0)
+          case 'status':
+            return (a.status ?? '').localeCompare(b.status ?? '', 'fa', { sensitivity: 'base' })
+          case 'due_date': {
+            const ad = a.due_date ? Date.parse(a.due_date) : 0
+            const bd = b.due_date ? Date.parse(b.due_date) : 0
+            return ad - bd
+          }
+          case 'server_time':
+          default: {
+            const at = a.server_time ? Date.parse(a.server_time) : 0
+            const bt = b.server_time ? Date.parse(b.server_time) : 0
+            return at - bt
+          }
+        }
+      })()
+      return sortDir === 'asc' ? base : -base
+    })
+    .slice(0, paymentListLimit)
+  }, [payments, directionFilter, statusFilter, methodFilter, search, sortKey, sortDir, paymentListLimit])
 
   const totals = useMemo(() => {
     return payments.reduce(
@@ -226,6 +336,14 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     setFormSuccess(null)
   }
 
+  useEffect(()=>{
+    try {
+      localStorage.setItem('finance.pageSize', String(paymentListLimit))
+      localStorage.setItem('finance.sort.key', sortKey)
+      localStorage.setItem('finance.sort.dir', sortDir)
+    } catch {}
+  }, [paymentListLimit, sortKey, sortDir])
+
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!paymentForm.party_name.trim()) {
@@ -243,10 +361,15 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       const clientTime = smartDate.isoDate
         ? new Date(`${smartDate.isoDate}T12:00:00Z`).toISOString()
         : new Date().toISOString()
-      const due =
-        paymentForm.due_date.trim() !== ''
-          ? new Date(`${paymentForm.due_date}T12:00:00Z`).toISOString()
-          : undefined
+      let due: string | undefined = undefined
+      if (paymentForm.due_date.trim() !== '') {
+        if (paymentForm.due_date.includes('/')) {
+          const parsed = parseJalaliInput(paymentForm.due_date.trim())
+          due = parsed?.iso
+        } else {
+          due = new Date(`${paymentForm.due_date}T12:00:00Z`).toISOString()
+        }
+      }
       const payload = {
         direction: paymentForm.direction,
         mode: 'manual',
@@ -255,6 +378,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
         amount: amountValue,
         reference: paymentForm.reference.trim() || undefined,
         note: paymentForm.note.trim() || undefined,
+        audit_note: auditNote.trim() || undefined,
         due_date: due,
         client_time: clientTime,
         invoice_id: paymentForm.invoice_id,
@@ -262,6 +386,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       await apiPost<Payment>('/api/payments/manual', payload)
       await loadData(false)
       resetForm()
+      setAuditNote('')
       setFormSuccess('تراکنش با موفقیت ثبت شد.')
       setShowForm(false)
     } catch (err) {
@@ -422,23 +547,43 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className={retroHeading}>روش پرداخت</label>
-                <select
-                  value={paymentForm.method}
-                  onChange={e => handleFormChange('method', e.target.value)}
-                  className={`${retroInput} w-full`}
-                >
-                  <option value="cash">نقدی</option>
-                  <option value="bank">بانکی</option>
-                  <option value="pos">دستگاه کارت‌خوان</option>
-                  <option value="cheque">چک</option>
-                  <option value="other">سایر</option>
-                </select>
+                <div className="flex gap-2">
+                  <select
+                    value={paymentForm.method}
+                    onChange={e => handleFormChange('method', e.target.value)}
+                    className={`${retroInput} w-full`}
+                  >
+                    {paymentMethods.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <button type="button" className={`${retroButton}`} onClick={() => setShowMethodMgr(true)}>مدیریت</button>
+                </div>
+                {(paymentForm.method === 'bank' || paymentForm.method === 'pos') && (
+                  <div className="mt-2">
+                    <label className={`${retroMuted} text-[11px]`}>بانک مرتبط</label>
+                    <select
+                      value={paymentForm.bank_name || ''}
+                      onChange={e => setPaymentForm(prev=> ({...prev, bank_name: e.target.value}))}
+                      className={`${retroInput} w-full`}
+                    >
+                      <option value="">-- انتخاب کنید --</option>
+                      {((personBanks[paymentForm.party_name||'']||[]).length? personBanks[paymentForm.party_name||''] : availableBanks).map(b=>(
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <label className={retroHeading}>تاریخ سررسید</label>
                 <input
-                  type="date"
+                  data-jdp
+                  data-jdp-only-date
+                  data-jdp-dir="rtl"
+                  placeholder="تاریخ شمسی"
                   value={paymentForm.due_date}
+                  onFocus={e=>{ try{ (window as any).jalaliDatepicker?.show(e.target) }catch{} }}
                   onChange={e => handleFormChange('due_date', e.target.value)}
                   className={`${retroInput} w-full`}
                 />
@@ -491,10 +636,32 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
             </div>
 
             <div className="space-y-2">
+              <label className={retroHeading}>توضیح سیستمی برای مدیر (غیرچاپی)</label>
+              <textarea
+                className={`${retroInput} w-full h-16`}
+                value={auditNote}
+                onChange={e => setAuditNote(e.target.value)}
+                placeholder="برای ثبت در تاریخچه؛ در چاپ نمی‌آید"
+              />
+            </div>
+
+            <div className="space-y-2">
               <label className={retroHeading}>فاکتور مرتبط (اختیاری)</label>
               <select
                 value={paymentForm.invoice_id || ''}
-                onChange={e => setPaymentForm(prev => ({ ...prev, invoice_id: e.target.value ? Number(e.target.value) : undefined }))}
+                onChange={e => {
+                  const val = e.target.value
+                  const invId = val ? Number(val) : undefined
+                  const inv = openInvoices.find(i => i.id === invId)
+                  setPaymentForm(prev => ({
+                    ...prev,
+                    invoice_id: invId,
+                    party_name: inv?.party_name ?? prev.party_name,
+                    amount: inv?.total ? String(inv.total) : prev.amount,
+                    reference: inv?.invoice_number ? String(inv.invoice_number) : prev.reference,
+                    note: prev.note || (inv ? (inv.invoice_type === 'sale' ? 'پرداخت مرتبط با فاکتور فروش' : 'پرداخت مرتبط با فاکتور خرید') : '')
+                  }))
+                }}
                 className={`${retroInput} w-full`}
               >
                 <option value="">-- انتخاب نکن --</option>
@@ -590,22 +757,43 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
               className={`${retroInput} w-full`}
             />
           </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>تعداد نمایشی</label>
+            <select
+              value={paymentListLimit}
+              onChange={e => setPaymentListLimit(parseInt(e.target.value))}
+              className={`${retroInput} w-full`}
+            >
+              <option value={5}>۵</option>
+              <option value={10}>۱۰</option>
+              <option value={20}>۲۰</option>
+              <option value={50}>۵۰</option>
+            </select>
+          </div>
         </div>
         <div className="border border-dashed border-[#c5bca5] p-3 text-xs text-[#7a6b4f] rounded-sm">
-          {filteredPayments.length} تراکنش از {payments.length} تراکنش کلی نمایش داده می‌شود (حداکثر 5)
+          {filteredPayments.length} تراکنش از {payments.length} تراکنش کلی نمایش داده می‌شود (حداکثر {paymentListLimit})
         </div>
 
         {filteredPayments.length > 0 ? (
           <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
             <thead>
               <tr>
-                <th className={retroTableHeader}>شماره</th>
-                <th className={retroTableHeader}>جهت</th>
-                <th className={retroTableHeader}>روش</th>
-                <th className={retroTableHeader}>طرف حساب</th>
-                <th className={retroTableHeader}>مبلغ</th>
-                <th className={retroTableHeader}>وضعیت</th>
-                <th className={retroTableHeader}>تاریخ</th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='number') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('number') }}>شماره {sortKey==='number' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='direction') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('direction') }}>جهت {sortKey==='direction' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='method') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('method') }}>روش {sortKey==='method' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='party') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('party') }}>طرف حساب {sortKey==='party' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='amount') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('amount') }}>مبلغ {sortKey==='amount' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='status') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('status') }}>وضعیت {sortKey==='status' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}>
+                  <div className="flex items-center gap-2">
+                    <button className="underline" onClick={()=> { if (sortKey==='server_time') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('server_time') }}>تاریخ {sortKey==='server_time' ? (sortDir==='asc'?'↑':'↓') : ''}</button>
+                    <select value={sortDir} onChange={e => setSortDir(e.target.value as any)} className="text-xs border border-[#c5bca5] rounded px-1 py-0.5">
+                      <option value="asc">صعودی</option>
+                      <option value="desc">نزولی</option>
+                    </select>
+                  </div>
+                </th>
                 <th className={retroTableHeader}>لینک</th>
               </tr>
             </thead>
@@ -660,6 +848,10 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                     ) : (
                       <span className="text-[10px] text-[#7a6b4f]">---</span>
                     )}
+                    <button
+                      onClick={() => openPaymentHistory(pay)}
+                      className="text-[11px] px-2 py-1 border border-[#c5bca5] bg-[#faf4de] hover:bg-[#f1e8c9] transition ml-1"
+                    >تاریخچه</button>
                   </td>
                 </tr>
               ))}
@@ -671,6 +863,174 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
           </div>
         )}
       </section>
+
+      {historyOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setHistoryOpen(null)}>
+          <div className="w-[520px] max-w-[90vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-[#1f2e3b]">تاریخچه پرداخت #{historyOpen.paymentId}</h4>
+              <button className={`${retroButton}`} onClick={()=> setHistoryOpen(null)}>بستن</button>
+            </div>
+            {historyLoading ? (
+              <div className="text-xs text-[#7a6b4f]">در حال دریافت تاریخچه...</div>
+            ) : historyOpen.items.length ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {historyOpen.items.map(h => (
+                  <div key={h.id} className="bg-[#f8f5ee] px-3 py-2 rounded border border-[#e5ddc5] text-xs">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">{h.user || 'کاربر'}</span>
+                      <span className="text-[11px] text-[#7a6b4f]">{h.time ? isoToJalali(h.time) : ''}</span>
+                    </div>
+                    {h.note && <div className="mt-1 text-[#5b4a2f]">یادداشت: {h.note}</div>}
+                    {(h as any).audit_note && (
+                      <div className="mt-1 text-[#1f2e3b] font-semibold">توضیح سیستمی: {(h as any).audit_note}</div>
+                    )}
+                    {h.changes && <pre className="mt-2 text-[10px] bg-[#f6f1df] px-2 py-1 rounded overflow-x-auto">{JSON.stringify(h.changes, null, 2)}</pre>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-[#7a6b4f]">تاریخچه‌ای ثبت نشده است.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showMethodMgr && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="w-[480px] max-w-[90vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-bold text-[#1f2e3b]">مدیریت روش‌های پرداخت</h4>
+              <button className={`${retroButton}`} onClick={() => setShowMethodMgr(false)}>بستن</button>
+            </div>
+            <div className="space-y-3">
+              <div className="border border-dashed border-[#c5bca5] p-3">
+                <div className="font-semibold mb-2">بانک‌ها (برای انتخاب سریع در پرداخت بانکی)</div>
+                <div className="flex gap-2 mb-2">
+                  <input id="newBankInput" className={`${retroInput} flex-1`} placeholder="نام بانک" />
+                  <button type="button" className={`${retroButton}`} onClick={()=>{
+                    const el = document.getElementById('newBankInput') as HTMLInputElement | null
+                    const v = (el?.value||'').trim()
+                    if (!v) return
+                    if (!availableBanks.includes(v)) {
+                      const next = [...availableBanks, v]
+                      setAvailableBanks(next)
+                      try { localStorage.setItem('hesabpak_banks_selected', JSON.stringify(next)) } catch {}
+                    }
+                    if (el) el.value = ''
+                  }}>افزودن بانک</button>
+                </div>
+                <ul className="space-y-2">
+                  {availableBanks.map(b=> (
+                    <li key={b} className="flex items-center gap-2">
+                      <input defaultValue={b} className={`${retroInput} flex-1`} onBlur={(e)=>{
+                        const nv = e.target.value.trim(); if (!nv || nv===b) return;
+                        const next = availableBanks.map(x=> x===b? nv: x)
+                        setAvailableBanks(next)
+                        try { localStorage.setItem('hesabpak_banks_selected', JSON.stringify(next)) } catch {}
+                      }} />
+                      <button type="button" className={`${retroButton} !bg-[#7a1f1f]`} onClick={()=>{
+                        const next = availableBanks.filter(x=> x!==b)
+                        setAvailableBanks(next)
+                        try { localStorage.setItem('hesabpak_banks_selected', JSON.stringify(next)) } catch {}
+                      }}>حذف</button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3">
+                  <div className="text-xs text-[#7a6b4f]">می‌توانید بانک‌های اختصاصی برای هر طرف‌حساب تعریف کنید:</div>
+                  <div className="flex gap-2 mt-2">
+                    <input id="personBankPerson" className={`${retroInput} w-48`} placeholder="نام طرف‌حساب" />
+                    <select id="personBankBank" className={`${retroInput} w-64`}>
+                      <option value="">-- انتخاب بانک --</option>
+                      {availableBanks.map(b=> <option key={b} value={b}>{b}</option>)}
+                    </select>
+                    <button type="button" className={`${retroButton}`} onClick={()=>{
+                      const pEl = document.getElementById('personBankPerson') as HTMLInputElement | null
+                      const bEl = document.getElementById('personBankBank') as HTMLSelectElement | null
+                      const p = (pEl?.value||'').trim(); const b = (bEl?.value||'').trim()
+                      if (!p || !b) return
+                      const list = personBanks[p] || []
+                      if (!list.includes(b)) {
+                        const nextMap = { ...personBanks, [p]: [...list, b] }
+                        setPersonBanks(nextMap)
+                        try { localStorage.setItem('hesabpak_person_banks', JSON.stringify(nextMap)) } catch {}
+                      }
+                    }}>افزودن بانک برای طرف‌حساب</button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" className={`${retroButton}`} onClick={async()=>{
+                  try {
+                    await apiPatch(`/api/admin/settings/payment_methods`, { value: JSON.stringify(paymentMethods) })
+                    alert('روش‌ها در تنظیمات سیستم ذخیره شد')
+                  } catch (e) {
+                    try {
+                      await apiPost(`/api/admin/settings`, { key: 'payment_methods', value: JSON.stringify(paymentMethods) })
+                      alert('روش‌ها به‌عنوان تنظیم جدید ذخیره شد')
+                    } catch {
+                      alert('ذخیره در تنظیمات سیستم ناموفق بود')
+                    }
+                  }
+                }}>ذخیره در تنظیمات سیستم</button>
+                <button type="button" className={`${retroButton}`} onClick={async()=>{
+                  try {
+                    const settings = await apiGet<any[]>('/api/admin/settings')
+                    const pm = Array.isArray(settings) ? settings.find((s:any)=>s.key==='payment_methods') : null
+                    if (pm && pm.value) {
+                      const arr = JSON.parse(pm.value)
+                      if (Array.isArray(arr) && arr.length) {
+                        setPaymentMethods(arr)
+                        try { localStorage.setItem('hesabpak_payment_methods', JSON.stringify(arr)) } catch {}
+                        alert('روش‌ها از تنظیمات سیستم بارگذاری شد')
+                      }
+                    }
+                  } catch {
+                    alert('بارگذاری از تنظیمات سیستم ناموفق بود')
+                  }
+                }}>بارگذاری از تنظیمات سیستم</button>
+              </div>
+              <div className="flex gap-2">
+                <input id="newMethodInput" className={`${retroInput} flex-1`} placeholder="روش جدید (مثلاً: کارت، حواله)" />
+                <button className={`${retroButton}`} onClick={() => {
+                  const el = document.getElementById('newMethodInput') as HTMLInputElement | null
+                  const v = (el?.value || '').trim()
+                  if (!v) return
+                  if (!paymentMethods.includes(v)) {
+                    const next = [...paymentMethods, v]
+                    setPaymentMethods(next)
+                    try { localStorage.setItem('hesabpak_payment_methods', JSON.stringify(next)) } catch {}
+                    if (!paymentForm.method) handleFormChange('method', v)
+                  }
+                  if (el) el.value = ''
+                }}>افزودن</button>
+              </div>
+              <ul className="space-y-2">
+                {paymentMethods.map(m => (
+                  <li key={m} className="flex items-center gap-2">
+                    <input defaultValue={m} className={`${retroInput} flex-1`} onBlur={(e)=>{
+                      const nv = e.target.value.trim()
+                      if (!nv) return
+                      if (nv === m) return
+                      const next = paymentMethods.map(x => x === m ? nv : x)
+                      setPaymentMethods(next)
+                      try { localStorage.setItem('hesabpak_payment_methods', JSON.stringify(next)) } catch {}
+                      if (paymentForm.method === m) handleFormChange('method', nv)
+                    }} />
+                    <button className={`${retroButton} !bg-[#7a1f1f]`} onClick={()=>{
+                      const next = paymentMethods.filter(x => x !== m)
+                      setPaymentMethods(next)
+                      try { localStorage.setItem('hesabpak_payment_methods', JSON.stringify(next)) } catch {}
+                      if (paymentForm.method === m) handleFormChange('method', next[0] || '')
+                    }}>حذف</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex items-center justify-between gap-4">

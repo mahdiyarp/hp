@@ -41,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!res.ok) return
         const data = await res.json()
         setUser({ id: data.id, username: data.username, role: data.role, otp_enabled: data.otp_enabled })
+        try { localStorage.setItem('hesabpak_user_id', String(data.id)) } catch {}
         
         // Fetch user's modules and permissions
         const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
@@ -76,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (res.ok) {
       const d = await res.json()
       setUser({ id: d.id, username: d.username, role: d.role, otp_enabled: d.otp_enabled })
+      try { localStorage.setItem('hesabpak_user_id', String(d.id)) } catch {}
       
       // Fetch user's modules and permissions
       const modsRes = await authService.fetchWithAuth('/api/current-user/modules')

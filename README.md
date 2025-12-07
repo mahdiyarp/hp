@@ -42,6 +42,12 @@ npm run prepare   # installs husky hooks
 
 See `docs/architecture.md` for module breakdown and roadmap.
 
+## Financial Year (FY) UX
+- Active FY is selectable in the header via the FY selector.
+- After changing FY, the app auto-refreshes and all lists (invoices, payments, party ledger, product movement, balances) reflect the selected FY.
+- The active FY badge appears next to date badges to confirm the applied FY.
+- FY state persists in user preferences and mirrors to localStorage for fast client routing.
+
 ## 📚 Documentation
 
 The project includes comprehensive documentation:

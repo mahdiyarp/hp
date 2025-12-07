@@ -63,6 +63,9 @@ type ProductFormState = {
   name: string
   unit: string
   group: string
+  group_l1?: string
+  group_l2?: string
+  group_l3?: string
   code: string
   description: string
 }
@@ -73,6 +76,9 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [groupL1Filter, setGroupL1Filter] = useState<string>('')
+  const [groupL2Filter, setGroupL2Filter] = useState<string>('')
+  const [groupL3Filter, setGroupL3Filter] = useState<string>('')
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
@@ -85,6 +91,9 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     name: '',
     unit: '',
     group: '',
+    group_l1: '',
+    group_l2: '',
+    group_l3: '',
     code: '',
     description: '',
   }
@@ -124,13 +133,17 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       setFormError('نام کالا را وارد کنید.')
       return
     }
+    const l1 = (productForm.group_l1 || '').trim()
+    const l2 = (productForm.group_l2 || '').trim()
+    const l3 = (productForm.group_l3 || '').trim()
+    const groupPath = [l1, l2, l3].filter(Boolean).join('/')
     setCreating(true)
     setFormError(null)
     try {
       const payload = {
         name: productForm.name.trim(),
         unit: productForm.unit.trim() || undefined,
-        group: productForm.group.trim() || undefined,
+        group: (groupPath || productForm.group.trim()).trim() || undefined,
         description: productForm.description.trim() || undefined,
         code: productForm.code.trim() || undefined,
       }
@@ -203,22 +216,98 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     return Array.from(set).sort()
   }, [products])
 
+  const groupLevels = useMemo(() => {
+    const l1 = new Set<string>()
+    const l2 = new Map<string, Set<string>>()
+    const l3 = new Map<string, Set<string>>()
+    groups.forEach(path => {
+      const parts = path.split('/').map(s => s.trim()).filter(Boolean)
+      if (parts[0]) {
+        l1.add(parts[0])
+        if (!l2.has(parts[0])) l2.set(parts[0], new Set<string>())
+      }
+      if (parts[0] && parts[1]) {
+        l2.get(parts[0])!.add(parts[1])
+        const key = `${parts[0]}/${parts[1]}`
+        if (!l3.has(key)) l3.set(key, new Set<string>())
+      }
+      if (parts[0] && parts[1] && parts[2]) {
+        const key = `${parts[0]}/${parts[1]}`
+        l3.get(key)!.add(parts[2])
+      }
+    })
+    return {
+      l1: Array.from(l1).sort(),
+      l2map: Array.from(l2.entries()).reduce<Record<string, string[]>>((acc, [k, v]) => {
+        acc[k] = Array.from(v).sort()
+        return acc
+      }, {}),
+      l3map: Array.from(l3.entries()).reduce<Record<string, string[]>>((acc, [k, v]) => {
+        acc[k] = Array.from(v).sort()
+        return acc
+      }, {}),
+    }
+  }, [groups])
+
   const filtered = useMemo(() => {
     return products.filter(prod => {
-      if (groupFilter !== 'all' && (prod.group ?? 'other') !== groupFilter) return false
+      // hierarchical filter takes precedence if any level selected
+      if (groupL1Filter || groupL2Filter || groupL3Filter) {
+        const parts: string[] = (prod.group || '').split('/').map(s => s.trim()).filter(Boolean)
+        if (groupL1Filter && parts[0] !== groupL1Filter) return false
+        if (groupL2Filter && parts[1] !== groupL2Filter) return false
+        if (groupL3Filter && parts[2] !== groupL3Filter) return false
+      } else if (groupFilter !== 'all' && (prod.group ?? 'other') !== groupFilter) {
+        return false
+      }
       if (search) {
         const hay = `${prod.name} ${prod.group ?? ''}`.toLowerCase()
         if (!hay.includes(search.toLowerCase())) return false
       }
       return true
     })
-  }, [products, groupFilter, search])
+  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search])
+
+  const [sortKey, setSortKey] = useState<'name'|'group'|'unit'|'inventory'|'last_purchase_price'|'avg_purchase_price'|'last_sale_price'|'avg_sale_price'>(()=>{
+    const raw = localStorage.getItem('inventory.sort.key')
+    const allowed = ['name','group','unit','inventory','last_purchase_price','avg_purchase_price','last_sale_price','avg_sale_price']
+    return (raw && allowed.includes(raw)) ? (raw as any) : 'name'
+  })
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>(()=>{
+    const raw = localStorage.getItem('inventory.sort.dir')
+    return raw === 'asc' || raw === 'desc' ? raw : 'asc'
+  })
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    const cmp = (a: any, b: any) => {
+      const ak = sortKey === 'inventory' ? (a.inventory ?? 0) : (a[sortKey] ?? '')
+      const bk = sortKey === 'inventory' ? (b.inventory ?? 0) : (b[sortKey] ?? '')
+      if (typeof ak === 'string' && typeof bk === 'string') {
+        const res = ak.localeCompare(bk, 'fa', { sensitivity: 'base' })
+        return sortDir === 'asc' ? res : -res
+      }
+      const na = Number(ak) || 0
+      const nb = Number(bk) || 0
+      const res = na - nb
+      return sortDir === 'asc' ? res : -res
+    }
+    arr.sort(cmp)
+    return arr
+  }, [filtered, sortKey, sortDir])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('inventory.sort.key', sortKey)
+      localStorage.setItem('inventory.sort.dir', sortDir)
+    } catch {}
+  }, [sortKey, sortDir])
 
   const totals = useMemo(() => {
     const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
     const uniqueGroups = groups.length
-    const lowStockCount = products.filter(prod => (prod.inventory ?? 0) <= 5).length
-    return { totalInventory, uniqueGroups, lowStockCount }
+    const lowStockCount = products.filter(prod => (prod.inventory ?? 0) <= 5 && (prod.inventory ?? 0) >= 0).length
+    const shortageCount = products.filter(prod => (prod.inventory ?? 0) < 0).length
+    return { totalInventory, uniqueGroups, lowStockCount, shortageCount }
   }, [products, groups])
 
   if (loading) {
@@ -280,10 +369,11 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
           </div>
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>کالاهای کم‌موجودی</p>
-            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#c35c5c]' : ''}`}>
+            <p className={retroHeading}>کالاهای کم‌موجودی (≤۵)</p>
+            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#a35c2c]' : ''}`}>
               {formatNumberFa(totals.lowStockCount)}
             </p>
+            <p className="text-[11px] text-[#7a6b4f]">کمبود (منفی): <span className={`font-semibold ${totals.shortageCount ? 'text-[#c35c5c]' : ''}`}>{formatNumberFa(totals.shortageCount)}</span></p>
           </div>
         </div>
       </section>
@@ -340,13 +430,56 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                 />
               </div>
               <div className="space-y-2">
-                <label className={retroHeading}>گروه کالا</label>
-                <input
-                  value={productForm.group}
-                  onChange={e => handleProductChange('group', e.target.value)}
-                  className={`${retroInput} w-full`}
-                  placeholder="مثلاً: الکترونیک"
-                />
+                <label className={retroHeading}>گروه کالا (تا ۳ سطح)</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <input
+                      value={productForm.group_l1}
+                      onChange={e => handleProductChange('group_l1', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l1"
+                      placeholder="سطح ۱ (مثلاً: الکترونیک)"
+                    />
+                    <datalist id="group-l1">
+                      {groupLevels.l1.map(g => (
+                        <option key={`l1-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <input
+                      value={productForm.group_l2}
+                      onChange={e => handleProductChange('group_l2', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l2"
+                      placeholder="سطح ۲ (مثلاً: لپ‌تاپ)"
+                      disabled={!productForm.group_l1}
+                    />
+                    <datalist id="group-l2">
+                      {(groupLevels.l2map[productForm.group_l1 || ''] || []).map(g => (
+                        <option key={`l2-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <input
+                      value={productForm.group_l3}
+                      onChange={e => handleProductChange('group_l3', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l3"
+                      placeholder="سطح ۳ (مثلاً: گیمینگ)"
+                      disabled={!productForm.group_l1 || !productForm.group_l2}
+                    />
+                    <datalist id="group-l3">
+                      {(groupLevels.l3map[`${(productForm.group_l1||'')}/${(productForm.group_l2||'')}`] || []).map(g => (
+                        <option key={`l3-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+                <div className="text-[11px] text-[#7a6b4f] mt-1">
+                  مسیر گروه نهایی: {[productForm.group_l1, productForm.group_l2, productForm.group_l3].filter(Boolean).join('/') || (productForm.group || '—')}
+                </div>
               </div>
             </div>
 
@@ -400,49 +533,101 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className={retroHeading}>گروه کالا</label>
-            <select
-              value={groupFilter}
-              onChange={e => setGroupFilter(e.target.value)}
-              className={`${retroInput} w-full`}
-            >
-              <option value="all">همه گروه‌ها</option>
-              {groups.map(group => (
-                <option key={group} value={group}>
-                  {group}
-                </option>
-              ))}
-            </select>
+            <label className={retroHeading}>گروه کالا (فیلتر سلسله‌مراتبی)</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <select
+                  value={groupL1Filter}
+                  onChange={e => { setGroupL1Filter(e.target.value); setGroupL2Filter(''); setGroupL3Filter('') }}
+                  className={`${retroInput} w-full`}
+                >
+                  <option value="">سطح ۱: همه</option>
+                  {groupLevels.l1.map(g => (
+                    <option key={`fl1-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={groupL2Filter}
+                  onChange={e => { setGroupL2Filter(e.target.value); setGroupL3Filter('') }}
+                  className={`${retroInput} w-full`}
+                  disabled={!groupL1Filter}
+                >
+                  <option value="">سطح ۲: همه</option>
+                  {(groupLevels.l2map[groupL1Filter || ''] || []).map(g => (
+                    <option key={`fl2-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={groupL3Filter}
+                  onChange={e => setGroupL3Filter(e.target.value)}
+                  className={`${retroInput} w-full`}
+                  disabled={!groupL1Filter || !groupL2Filter}
+                >
+                  <option value="">سطح ۳: همه</option>
+                  {(groupLevels.l3map[`${groupL1Filter}/${groupL2Filter}`] || []).map(g => (
+                    <option key={`fl3-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="text-[11px] text-[#7a6b4f]">مسیر انتخاب‌شده: {[groupL1Filter, groupL2Filter, groupL3Filter].filter(Boolean).join('/') || '—'}</div>
           </div>
           <div className="space-y-2">
             <label className={retroHeading}>نمایش</label>
             <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
-              {formatNumberFa(filtered.length)} کالا مطابق فیلترها نمایش داده شده است.
+              {formatNumberFa(sorted.length)} کالا مطابق فیلترها نمایش داده شده است.
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>مرتب‌سازی</label>
+            <div className="grid grid-cols-2 gap-2">
+              <select value={sortKey} onChange={e => setSortKey(e.target.value as any)} className={`${retroInput} w-full`}>
+                <option value="name">نام کالا</option>
+                <option value="group">گروه</option>
+                <option value="unit">واحد</option>
+                <option value="inventory">موجودی</option>
+                <option value="last_purchase_price">آخرین خرید</option>
+                <option value="avg_purchase_price">میانگین خرید</option>
+                <option value="last_sale_price">آخرین فروش</option>
+                <option value="avg_sale_price">میانگین فروش</option>
+              </select>
+              <select value={sortDir} onChange={e => setSortDir(e.target.value as any)} className={`${retroInput} w-full`}>
+                <option value="asc">صعودی</option>
+                <option value="desc">نزولی</option>
+              </select>
             </div>
           </div>
         </div>
 
-        {filtered.length > 0 ? (
+        {sorted.length > 0 ? (
           <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
             <thead>
               <tr>
-                <th className={retroTableHeader}>نام کالا</th>
-                <th className={retroTableHeader}>گروه</th>
-                <th className={retroTableHeader}>واحد</th>
-                <th className={retroTableHeader}>موجودی</th>
-                <th className={retroTableHeader}>آخرین خرید</th>
-                <th className={retroTableHeader}>میانگین خرید</th>
-                <th className={retroTableHeader}>آخرین فروش</th>
-                <th className={retroTableHeader}>میانگین فروش</th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='name') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('name') }}>نام کالا {sortKey==='name' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='group') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('group') }}>گروه {sortKey==='group' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='unit') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('unit') }}>واحد {sortKey==='unit' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='inventory') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('inventory') }}>موجودی {sortKey==='inventory' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='last_purchase_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('last_purchase_price') }}>آخرین خرید {sortKey==='last_purchase_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='avg_purchase_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('avg_purchase_price') }}>میانگین خرید {sortKey==='avg_purchase_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='last_sale_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('last_sale_price') }}>آخرین فروش {sortKey==='last_sale_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='avg_sale_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('avg_sale_price') }}>میانگین فروش {sortKey==='avg_sale_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(prod => {
-                const lowStock = (prod.inventory ?? 0) <= 5
+              {sorted.map(prod => {
+                const inv = prod.inventory ?? 0
+                const isNegative = inv < 0
+                const isZero = inv === 0
+                const isPositive = inv > 0
+                const isLowPositive = isPositive && inv <= 5
                 return (
                   <tr 
                     key={prod.id} 
-                    className={`border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer ${lowStock ? 'bg-[#fff3f3]' : ''}`}
+                    className={`border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer ${isNegative ? 'bg-[#fff3f3]' : ''}`}
                     onClick={() => loadProductMovement(prod)}
                   >
                     <td className="px-3 py-2">
@@ -457,8 +642,12 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                     <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
                     <td className="px-3 py-2 text-left font-semibold">
                       <div className="flex items-center justify-between gap-2">
-                        <span>{formatNumberFa(prod.inventory ?? 0)}</span>
-                        {lowStock && <span className={`${retroBadge} !bg-[#c35c5c] !text-white text-[10px]`}>کمبود</span>}
+                        <span className={`${isLowPositive ? 'text-red-700' : isPositive ? 'text-green-700' : isZero ? 'text-gray-500' : 'text-red-700'}`}>
+                          {formatNumberFa(isLowPositive ? -inv : inv)}
+                        </span>
+                        {isNegative && (
+                          <span className={`${retroBadge} !bg-[#c35c5c] !text-white text-[10px]`}>کمبود</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-left">

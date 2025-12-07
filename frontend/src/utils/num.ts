@@ -99,6 +99,24 @@ export function isoToJalali(iso: string) {
   return `${new Intl.NumberFormat('fa').format(Number(jy))}/${new Intl.NumberFormat('fa').format(Number(jm))}/${new Intl.NumberFormat('fa').format(Number(jd))} ${timeStr}`
 }
 
+// Convert a Jalali date string (YYYY/MM/DD or YYYY-MM-DD) to ISO UTC string at 00:00:00
+export function jalaliToIso(jalaliDate: string): string | null {
+  if (!jalaliDate) return null
+  const norm = jalaliDate.replace(/-/g, '/').trim()
+  const m = norm.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
+  if (!m) return null
+  const jy = Number(m[1])
+  const jm = Number(m[2])
+  const jd = Number(m[3])
+  try {
+    const { gy, gm, gd } = jalaali.toGregorian(jy, jm, jd)
+    const d = new Date(Date.UTC(gy, (gm - 1), gd, 0, 0, 0))
+    return d.toISOString()
+  } catch {
+    return null
+  }
+}
+
 export function toPersianDigits(value: string | number) {
   const persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹']
   const str = String(value)

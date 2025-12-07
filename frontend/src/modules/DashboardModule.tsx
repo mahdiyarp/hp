@@ -250,36 +250,10 @@ export default function DashboardModule({
     )
   }
 
-  // دکمه تبدیل نمای و selector تعداد آیتم‌ها
-  const ViewToggle = () => (
-    <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-      <button
-        onClick={() => setViewMode('widgets')}
-        className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold"
-      >
-        نمای تنظیم‌پذیر
-      </button>
-      <div className="flex items-center gap-3 text-sm">
-        <label className={`${retroHeading} whitespace-nowrap`}>تعداد آیتم‌های نمایشی:</label>
-        <input
-          type="range"
-          min="5"
-          max="15"
-          value={itemLimit}
-          onChange={(e) => {
-            const newLimit = parseInt(e.target.value)
-            setItemLimit(newLimit)
-          }}
-          className="w-32 cursor-pointer"
-        />
-        <span className={`${retroHeading} w-10 text-center font-bold`}>{itemLimit}</span>
-      </div>
-    </div>
-  )
+  // کنترل‌های نمای تنظیم‌پذیر و تعداد آیتم‌ها حذف شدند.
 
   return (
     <div className="space-y-4">
-      <ViewToggle />
       <div className="space-y-8">
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">

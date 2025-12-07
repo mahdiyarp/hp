@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import type { ModuleComponentProps, SmartDateState } from '../components/layout/AppShell'
 import SmartDatePicker from '../components/SmartDatePicker'
-import { apiGet, apiPost, apiPatch, apiDelete } from '../services/api'
+import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '../services/api'
 import { isoToJalali } from '../utils/num'
 import {
   retroBadge,
@@ -95,6 +95,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   // SMS state
   const [smsTest, setSmsTest] = useState({ to: '', message: 'کد تست حساب‌پاک', provider: '' })
   const [smsReg, setSmsReg] = useState({ username: '', full_name: '', mobile: '', role_id: 2 })
+  const [smsConfig, setSmsConfig] = useState({ api_key: '', sender_name: '', provider: 'ippanel', enabled: false, auto_sms_enabled: false })
   
   // System Settings state
   const [allSettings, setAllSettings] = useState<SystemSetting[]>([])
@@ -104,6 +105,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [savingSidebarSide, setSavingSidebarSide] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
+  
+  // Financial Year state
+  type FinancialYear = { id: number; name: string; start_date: string; end_date?: string | null; is_closed: boolean }
+  const [fYears, setFYears] = useState<FinancialYear[]>([])
+  const [newFY, setNewFY] = useState<{ name: string; start_date: string; end_date?: string }>(() => ({ name: '', start_date: '' }))
+  const [savingFY, setSavingFY] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -149,6 +156,19 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         console.error(err)
         warn.push('لیست نقش‌ها قابل دریافت نیست.')
       }
+      // Load current user's SMS config (user id from localStorage cache if present)
+      try {
+        const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
+        const uid = Number.isFinite(meId) && meId > 0 ? meId : null
+        const cfg = await apiGet<typeof smsConfig>(`/api/users/${uid ?? 0}/sms-config`)
+        if (cfg && typeof cfg === 'object') setSmsConfig({
+          api_key: (cfg as any).api_key || '',
+          sender_name: (cfg as any).sender_name || '',
+          provider: (cfg as any).provider || 'ippanel',
+          enabled: !!(cfg as any).enabled,
+          auto_sms_enabled: !!(cfg as any).auto_sms_enabled,
+        })
+      } catch {}
       try {
         const allPerms = await apiGet<Permission[]>('/api/permissions')
         setPerms(allPerms)
@@ -158,6 +178,13 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       }
       try {
         const settings = await apiGet<SystemSetting[]>('/api/admin/settings')
+        try {
+          const years = await apiGet<FinancialYear[]>('/api/financial-years')
+          setFYears(years)
+        } catch (err) {
+          console.error(err)
+          warn.push('سال‌های مالی قابل دریافت نیست.')
+        }
         setAllSettings(settings)
         // Group by category
         const grouped: { [key: string]: SystemSetting[] } = {}
@@ -186,6 +213,92 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     } finally {
       setWarnings(warn)
       setLoading(false)
+    }
+  }
+
+  async function createFY() {
+    const name = (newFY.name || '').trim()
+    let startRaw = (newFY.start_date || '').trim()
+    if (!startRaw) {
+      try {
+        const ls = localStorage.getItem('hesabpak_selected_jalali') || ''
+        startRaw = ls.trim()
+      } catch {}
+    }
+    if (!name || !startRaw) { alert('نام و تاریخ شروع ضروری است'); return }
+    setSavingFY(true)
+    try {
+      const { parseJalaliInput } = await import('../utils/date')
+      const startParsed = parseJalaliInput(startRaw)
+      const endParsed = newFY.end_date ? parseJalaliInput(newFY.end_date) : null
+      if (!startParsed) { alert('فرمت تاریخ شروع نامعتبر است'); setSavingFY(false); return }
+      const payload = {
+        name,
+        start_date: startParsed?.iso ?? new Date(newFY.start_date).toISOString(),
+        end_date: endParsed ? endParsed.iso : (newFY.end_date ? new Date(newFY.end_date).toISOString() : null)
+      }
+      await apiPost('/api/financial-years', payload)
+      await loadData()
+      setNewFY({ name: '', start_date: '' })
+      alert('سال مالی ایجاد شد')
+    } catch (err) {
+      console.error(err)
+      alert('ایجاد سال مالی با خطا مواجه شد')
+    } finally {
+      setSavingFY(false)
+    }
+  }
+
+  async function updateFY(fid: number, patch: Partial<FinancialYear>) {
+    try {
+      await apiPatch(`/api/financial-years/${fid}`, patch)
+      await loadData()
+      alert('سال مالی بروزرسانی شد')
+    } catch (err) {
+      console.error(err)
+      alert('بروزرسانی ناموفق بود')
+    }
+  }
+
+  async function deleteFY(fid: number) {
+    if (!confirm('حذف سال مالی؟')) return
+    try {
+      await apiDelete(`/api/financial-years/${fid}`)
+      await loadData()
+      alert('حذف شد')
+    } catch (err) {
+      console.error(err)
+      alert('حذف ناموفق بود')
+    }
+  }
+
+  async function exportFY(fid: number) {
+    try {
+      const res = await fetch(`/api/financial-years/${fid}/export`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `financial-year-${fid}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      alert('دانلود ناموفق بود')
+    }
+  }
+
+  async function setActiveFY(fid: number) {
+    try {
+      const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
+      await apiPatch(`/api/users/${meId}/preferences`, { active_financial_year_id: fid })
+      try { localStorage.setItem('hesabpak_active_fy_id', String(fid)) } catch {}
+      // Notify and refresh softly
+      try { window.dispatchEvent(new Event('hesabpak-fy-changed')) } catch {}
+      setTimeout(() => { try { window.location.reload() } catch {} }, 100)
+    } catch (err) {
+      console.error(err)
+      alert('تنظیم سال فعال ناموفق بود')
     }
   }
 
@@ -262,9 +375,26 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     }
   }
 
+  async function saveSmsConfig() {
+    try {
+      const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
+      // Try update first; if not exists, create
+      try {
+        await apiPut(`/api/users/${meId}/sms-config`, smsConfig)
+      } catch (err) {
+        await apiPost(`/api/users/${meId}/sms-config`, smsConfig)
+      }
+      alert('تنظیمات پیامک ذخیره شد')
+    } catch (err) {
+      console.error(err)
+      alert('ذخیره تنظیمات پیامک ناموفق بود')
+    }
+  }
+
   async function sendTestSms() {
     try {
-      await apiPost('/api/sms/send', { ...smsTest })
+      const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
+      await apiPost(`/api/users/${meId}/sms-test`, { ...smsTest })
       alert('ارسال شد')
     } catch (err) {
       console.error(err)
@@ -426,6 +556,42 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
+          {/* Financial Years Management */}
+          <div className={`${retroPanel} p-4`}>
+            <p className={`${retroHeading} text-[#7a6b4f]`}>سال‌های مالی</p>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className={`${retroHeading}`}>ایجاد سال مالی جدید</p>
+                <div className="mt-2 flex flex-col gap-2">
+                  <input className="rounded p-2" placeholder="نام (مثلاً 1404)" value={newFY.name} onChange={e => setNewFY({ ...newFY, name: e.target.value })} />
+                  <input className="rounded p-2" data-jdp data-jdp-only-date data-jdp-dir="rtl" placeholder="تاریخ شروع (شمسی)" value={newFY.start_date} onFocus={e=>{ try{ (window as any).jalaliDatepicker?.show(e.target) }catch{} }} onChange={e => setNewFY({ ...newFY, start_date: e.target.value })} />
+                  <input className="rounded p-2" data-jdp data-jdp-only-date data-jdp-dir="rtl" placeholder="تاریخ پایان (شمسی)" value={newFY.end_date ?? ''} onFocus={e=>{ try{ (window as any).jalaliDatepicker?.show(e.target) }catch{} }} onChange={e => setNewFY({ ...newFY, end_date: e.target.value })} />
+                  <button className={`${retroButton}`} disabled={savingFY} onClick={createFY}>ایجاد سال مالی</button>
+                </div>
+              </div>
+              <div>
+                <p className={`${retroHeading}`}>لیست و عملیات</p>
+                <div className="mt-2 space-y-2">
+                  {fYears.length === 0 && <p className={retroMuted}>سال مالی ثبت نشده است.</p>}
+                  {fYears.map(y => (
+                    <div key={y.id} className="flex items-center justify-between gap-2 border rounded p-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`${retroBadge}`}>{y.name}</span>
+                        <span className={retroMuted}>از {isoToJalali(y.start_date)} تا {y.end_date ? isoToJalali(y.end_date) : '—'}</span>
+                        {y.is_closed && <span className={`${retroBadge} bg-red-800`}>بسته</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button className={`${retroButton}`} onClick={() => exportFY(y.id)}>دانلود</button>
+                        <button className={`${retroButton}`} onClick={() => setActiveFY(y.id)}>تنظیم به سال فعال</button>
+                        <button className={`${retroButton}`} onClick={() => updateFY(y.id, { is_closed: !y.is_closed })}>{y.is_closed ? 'بازکردن' : 'بستن'}</button>
+                        <button className={`${retroButton}`} onClick={() => deleteFY(y.id)}>حذف</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
             <p className={retroHeading}>System Console</p>
             <h2 className="text-2xl font-semibold mt-2">تنظیمات پیشرفته</h2>
             <p className={`text-xs ${retroMuted} mt-2`}>
@@ -449,6 +615,116 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             applySmartDate({ isoDate: iso.slice(0, 10), jalali })
           }
         />
+      </section>
+
+      {/* Combined: Users + Roles & Permissions + SMS Register */}
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header className="flex items-center justify-between">
+          <div>
+            <p className={retroHeading}>مدیریت کاربران و نقش‌ها</p>
+            <h3 className="text-lg font-semibold mt-2">زیبا، منسجم و کاربردی</h3>
+          </div>
+        </header>
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          {/* Card: نقش‌ها و دسترسی‌ها */}
+          <div className={`${retroPanel} p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
+              <p className={`${retroHeading} text-[#7a6b4f]`}>نقش‌ها و دسترسی‌ها</p>
+              <span className={`${retroBadge}`}>{roles.length} نقش</span>
+            </div>
+            <div className="space-y-2 max-h-[320px] overflow-auto">
+              {roles.map(r => (
+                <div key={r.id} className="border border-[#d9cfb6] rounded p-2 bg-[#faf4de]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{r.name}</span>
+                    <span className={`${retroBadge}`}>{(r.permissions||[]).length} مجوز</span>
+                  </div>
+                  <p className="text-xs text-[#7a6b4f] mt-1">{r.description || '—'}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(r.permissions||[]).slice(0,8).map(p => (
+                      <span key={`${r.id}-${p.id}`} className={`${retroBadge}`}>{p.name}</span>
+                    ))}
+                    {(r.permissions||[]).length > 8 && (
+                      <span className={`${retroBadge} bg-[#1f2e3b]`}>+{(r.permissions||[]).length - 8}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {roles.length === 0 && (
+                <p className={retroMuted}>نقشی ثبت نشده است.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Card: ارسال پیامک و ثبت کاربر */}
+          <div className={`${retroPanel} p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
+              <p className={`${retroHeading} text-[#7a6b4f]`}>ارسال پیامک و ثبت کاربر</p>
+              <span className={`${retroBadge}`}>OTP</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="موبایل" value={smsReg.mobile} onChange={e=>setSmsReg({...smsReg, mobile: e.target.value})} />
+              <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={smsReg.role_id} onChange={e=>setSmsReg({...smsReg, role_id: parseInt(e.target.value)})}>
+                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+              <button className={retroButton} onClick={registerUserViaSms}>ثبت کاربر</button>
+            </div>
+            <p className={retroMuted}>پس از ثبت، لینک و OTP به موبایل ارسال می‌شود.</p>
+
+            <div className="mt-4 border-t border-[#d9cfb6] pt-4 space-y-2">
+              <p className={`${retroHeading} text-[#7a6b4f]`}>تنظیمات پیامک</p>
+              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="IPPanel API Key" value={smsConfig.api_key} onChange={e=>setSmsConfig({...smsConfig, api_key: e.target.value})} />
+              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام فرستنده (Sender)" value={smsConfig.sender_name} onChange={e=>setSmsConfig({...smsConfig, sender_name: e.target.value})} />
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={smsConfig.enabled} onChange={e=>setSmsConfig({...smsConfig, enabled: e.target.checked})} />
+                  فعال‌سازی سرویس پیامک
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={smsConfig.auto_sms_enabled} onChange={e=>setSmsConfig({...smsConfig, auto_sms_enabled: e.target.checked})} />
+                  ارسال خودکار پیامک
+                </label>
+              </div>
+              <button className={retroButton} onClick={saveSmsConfig}>ذخیره تنظیمات پیامک</button>
+            </div>
+          </div>
+
+          {/* Card: مدیریت کاربران */}
+          <div className={`${retroPanel} p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
+              <p className={`${retroHeading} text-[#7a6b4f]`}>مدیریت کاربران</p>
+              <button className={retroButton} onClick={()=>setShowUserForm(!showUserForm)}>{showUserForm?'لغو':'کاربر جدید'}</button>
+            </div>
+            {showUserForm && (
+              <div className="space-y-2">
+                <input type="text" placeholder="نام کاربری" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} />
+                <input type="email" placeholder="ایمیل" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
+                <input type="text" placeholder="نام کامل" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.full_name} onChange={e => setNewUser({ ...newUser, full_name: e.target.value })} />
+                <input type="password" placeholder="رمز عبور" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
+                <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.role_id || ''} onChange={e => setNewUser({ ...newUser, role_id: e.target.value ? Number(e.target.value) : undefined })}>
+                  <option value="">انتخاب نقش</option>
+                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+                <button className={retroButton} onClick={createUser}>ثبت</button>
+              </div>
+            )}
+            <div className="space-y-2 max-h-[320px] overflow-auto">
+              {users.length === 0 && <p className={retroMuted}>کاربری یافت نشد.</p>}
+              {users.map(u => (
+                <div key={u.id} className="flex items-center justify-between border border-[#d9cfb6] rounded p-2 bg-[#faf4de]">
+                  <div className="flex items-center gap-2">
+                    <span className={`${retroBadge}`}>{u.username}</span>
+                    <span className={retroMuted}>{u.email || '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`${retroBadge}`}>{u.role || '—'}</span>
+                    <span className={`${retroBadge} ${u.is_active? '' : 'opacity-50'}`}>{u.is_active? 'فعال' : 'غیرفعال'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className={`${retroPanelPadded} space-y-4`}>

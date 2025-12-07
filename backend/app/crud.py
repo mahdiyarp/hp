@@ -44,6 +44,25 @@ def get_all_permissions(session: Session) -> List[models.Permission]:
     return session.query(models.Permission).all()
 
 
+# ==================== Safe Person Basic Loader ====================
+
+def get_person_basic(session: Session, person_id: str) -> Optional[dict]:
+    """Load minimal person fields safely without selecting newly-added columns.
+    Returns dict with keys: id, name, kind, mobile, code
+    """
+    from sqlalchemy import text
+    sql = text(
+        """
+        SELECT id, name, kind, mobile, code
+        FROM persons
+        WHERE id = :pid
+        LIMIT 1
+        """
+    )
+    row = session.execute(sql, { 'pid': person_id }).mappings().first()
+    return dict(row) if row else None
+
+
 def _normalize_username(raw: str) -> str:
     return normalize_for_search(raw or '')
 
@@ -211,7 +230,20 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
     norm = normalize_for_search(p.name)
     raw = {"name": p.name, "kind": p.kind or '', "mobile": p.mobile or '', "created_at": str(func.now())}
     pid = make_hash_id(raw)
-    person = models.Person(id=pid, name=p.name, name_norm=norm, kind=p.kind, mobile=p.mobile, description=p.description, code=p.code or '')
+    person = models.Person(
+        id=pid,
+        name=p.name,
+        name_norm=norm,
+        kind=p.kind,
+        mobile=p.mobile,
+        description=p.description,
+        code=p.code or '',
+        tax_id=p.tax_id,
+        national_id=p.national_id,
+        address=p.address,
+        payment_terms=p.payment_terms,
+        credit_limit=p.credit_limit,
+    )
     session.add(person)
     session.commit()
     session.refresh(person)
@@ -233,11 +265,151 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
 
 
 def get_persons(session: Session, q: Optional[str] = None, limit: int = 50):
-    qs = session.query(models.Person)
+    """Safely fetch persons even if some columns aren't migrated yet.
+
+    Uses a raw SELECT over known baseline columns to avoid selecting
+    non-existent columns in environments where Alembic migrations
+    haven't applied the new fields yet.
+    """
+    from sqlalchemy import text
+    base_cols = "id, name, name_norm, code, kind, mobile, description, created_at"
+    sql = f"SELECT {base_cols} FROM persons"
+    params = {}
     if q:
-        qn = normalize_for_search(q)
-        qs = qs.filter(models.Person.name_norm.contains(qn))
-    return qs.limit(limit).all()
+        # naive filter over name_norm using LIKE
+        sql += " WHERE name_norm LIKE :q"
+        params['q'] = f"%{normalize_for_search(q)}%"
+    sql += " LIMIT :limit"
+    params['limit'] = int(limit or 50)
+    rows = session.execute(text(sql), params).mappings().all()
+    persons = []
+    for r in rows:
+        persons.append(models.Person(
+            id=r['id'],
+            name=r['name'],
+            name_norm=r['name_norm'],
+            code=r.get('code'),
+            kind=r.get('kind'),
+            mobile=r.get('mobile'),
+            description=r.get('description'),
+            created_at=r.get('created_at'),
+        ))
+    return persons
+
+def get_person(session: Session, person_id: str) -> Optional[models.Person]:
+    return session.query(models.Person).filter(models.Person.id == person_id).first()
+
+def update_person(session: Session, person_id: str, p: PersonCreate) -> Optional[models.Person]:
+    person = get_person(session, person_id)
+    if not person:
+        return None
+    person.name = p.name
+    person.name_norm = normalize_for_search(p.name)
+    person.kind = p.kind
+    person.mobile = p.mobile
+    person.code = p.code or person.code
+    person.description = p.description
+    person.tax_id = p.tax_id
+    person.national_id = p.national_id
+    person.address = p.address
+    person.payment_terms = p.payment_terms
+    person.credit_limit = p.credit_limit
+    session.add(person)
+    session.commit()
+    session.refresh(person)
+    try:
+        search_client.index_person({
+            'id': person.id,
+            'name': person.name,
+            'mobile': person.mobile,
+            'description': person.description,
+        })
+    except Exception:
+        pass
+    return person
+
+def delete_person(session: Session, person_id: str) -> bool:
+    person = get_person(session, person_id)
+    if not person:
+        return False
+    session.delete(person)
+    session.commit()
+    return True
+
+def get_person_balances(session: Session, start: datetime | None = None, end: datetime | None = None):
+    """محاسبه مانده اشخاص از دفترکل.
+
+    مانده‌ها بر اساس حساب‌های "AccountsReceivable" و "AccountsPayable" محاسبه می‌شوند.
+    Receivable = مجموع بدهکار AR − مجموع بستانکار AR
+    Payable   = مجموع بستانکار AP − مجموع بدهکار AP
+    Balance   = Receivable − Payable
+    """
+    from sqlalchemy import text
+
+    people = session.execute(text("SELECT id, name, kind, mobile, code FROM persons ORDER BY id"))
+    people = people.mappings().all()
+
+    # Optionally filter by date range
+    date_filter = ""
+    params = {}
+    if start:
+        date_filter += " AND entry_date >= :start"
+        params['start'] = start
+    if end:
+        date_filter += " AND entry_date <= :end"
+        params['end'] = end
+
+    ar_rows = session.execute(text(
+        """
+        SELECT party_id,
+               COALESCE(SUM(CASE WHEN debit_account = 'AccountsReceivable' THEN amount ELSE 0 END),0) AS debit,
+               COALESCE(SUM(CASE WHEN credit_account = 'AccountsReceivable' THEN amount ELSE 0 END),0) AS credit
+        FROM ledger_entries
+        WHERE 1=1
+        """ + date_filter + """
+        GROUP BY party_id
+        """
+    ), params).mappings().all()
+
+    ap_rows = session.execute(text(
+        """
+        SELECT party_id,
+               COALESCE(SUM(CASE WHEN debit_account = 'AccountsPayable' THEN amount ELSE 0 END),0) AS debit,
+               COALESCE(SUM(CASE WHEN credit_account = 'AccountsPayable' THEN amount ELSE 0 END),0) AS credit
+        FROM ledger_entries
+        WHERE 1=1
+        """ + date_filter + """
+        GROUP BY party_id
+        """
+    ), params).mappings().all()
+
+    ar_map = {r['party_id']: {'debit': r['debit'], 'credit': r['credit']} for r in ar_rows}
+    ap_map = {r['party_id']: {'debit': r['debit'], 'credit': r['credit']} for r in ap_rows}
+
+    results = []
+    for p in people:
+        pid = p['id']
+        ar_debit = (ar_map.get(pid, {}).get('debit') or 0)
+        ar_credit = (ar_map.get(pid, {}).get('credit') or 0)
+        ap_debit = (ap_map.get(pid, {}).get('debit') or 0)
+        ap_credit = (ap_map.get(pid, {}).get('credit') or 0)
+
+        receivable = ar_debit - ar_credit
+        payable = ap_credit - ap_debit
+        balance = receivable - payable
+
+        results.append({
+            'person_id': pid,
+            'name': p['name'],
+            'kind': p.get('kind'),
+            'mobile': p.get('mobile'),
+            'code': p.get('code'),
+            'receivable': float(receivable),
+            'payable': float(payable),
+            'balance': float(balance),
+        })
+
+    return results
 
 
 def get_users(session: Session):
@@ -681,6 +853,34 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         from .activity_logger import log_activity
         log_activity(session, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
     except Exception:
+        pass
+
+    # Create ledger entries for payment to impact AccountsReceivable
+    try:
+        # For receipts (direction 'in'): Debit Cash/Bank, Credit AccountsReceivable
+        # For outgoing payments (direction 'out'): Debit AccountsPayable or Expense, Credit Cash/Bank
+        if pay.direction == 'in':
+            debit_acc = 'Cash'
+            credit_acc = 'AccountsReceivable'
+        else:
+            debit_acc = 'AccountsPayable'
+            credit_acc = 'Cash'
+        le = models.LedgerEntry(
+            ref_type='payment',
+            ref_id=str(pay.id),
+            entry_date=pay.client_time or pay.server_time,
+            debit_account=debit_acc,
+            credit_account=credit_acc,
+            amount=pay.amount,
+            party_id=pay.party_id,
+            party_name=pay.party_name,
+            description=f"Payment {pay.payment_number} ({pay.method or 'cash'})",
+            tracking_code=pay.tracking_code,
+        )
+        session.add(le)
+        session.commit()
+    except Exception as e:
+        print(f"Ledger creation error (payment): {e}")
         pass
     return pay
 

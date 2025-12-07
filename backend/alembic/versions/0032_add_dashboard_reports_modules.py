@@ -1,7 +1,7 @@
 """Add dashboard and reports module permissions.
 
-Revision ID: 0032
-Revises: 0031
+Revision ID: 0032_add_dashboard_reports_modules
+Revises: 0031_dashboard_widgets
 Create Date: 2025-11-15
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0032'
-down_revision = '0031'
+revision = '0032_add_dashboard_reports_modules'
+down_revision = '0031_dashboard_widgets'
 branch_labels = None
 depends_on = None
 
@@ -41,6 +41,7 @@ def upgrade() -> None:
         );
     """)
 
+    # no-op: metadata already defined above
 
 def downgrade() -> None:
     """Remove dashboard and reports permissions and assignments."""

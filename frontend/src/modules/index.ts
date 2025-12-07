@@ -5,8 +5,7 @@ import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
 import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
-import CustomerGroupsModule from './CustomerGroupsModule'
-import IccShopModule from './IccShopModule'
+import BanksModule from './settings/BanksModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -16,20 +15,6 @@ export const modules: ModuleDefinition[] = [
     description: 'نمایش خلاصه و معمّای خوی معاملات و تحلیل‌های سریع',
     component: DashboardModule,
     badge: 'DASHBOARD',
-  },
-  {
-    id: 'customer-groups',
-    label: 'گروه‌های مشتری',
-    description: 'ایجاد و مدیریت گروه‌های مشتری برای سازماندهی بهتر',
-    component: CustomerGroupsModule,
-    badge: 'GROUPS',
-  },
-  {
-    id: 'icc-shop',
-    label: 'ICC Shop',
-    description: 'یکپارچه‌سازی ساختار سازمانی ICC',
-    component: IccShopModule,
-    badge: 'ICC',
   },
   {
     id: 'reports',
@@ -72,5 +57,12 @@ export const modules: ModuleDefinition[] = [
     description: 'تاریخ هوشمند، بکاپ‌ها، یکپارچه‌سازی و لاگ‌ها',
     component: SystemModule,
     badge: 'SYSTEM',
+  },
+  {
+    id: 'banks',
+    label: 'بانک‌ها و شعب',
+    description: 'نمایش و جستجوی بانک‌ها و شعب ایران؛ بروزرسانی از منابع',
+    component: BanksModule,
+    badge: 'BANKS',
   },
 ]

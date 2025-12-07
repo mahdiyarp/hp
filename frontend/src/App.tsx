@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from './context/AuthContext'
 import LoginForm from './components/LoginForm'
 import AppShell from './components/layout/AppShell'
+import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
 import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
@@ -243,35 +244,36 @@ export default function App() {
     // If the logged-in user is a Developer, expose all modules (Developer
     // is considered the highest-level role). Otherwise, if `userModules`
     // is empty show the minimal starter menu to avoid overwhelming new users.
-    const accessibleModules = user?.role === 'Developer'
-      ? modules
-      : userModules.length === 0
-        ? modules.filter(mod => ['dashboard', 'icc-shop'].includes(mod.id))
-        : modules.filter(mod => userModules.includes(mod.id))
+    // نمایش ثابت: همهٔ ماژول‌های تعریف‌شده در اسلایدبار
+    const accessibleModules = modules
     
     return (
-      <>
-        <AppShell
-          modules={accessibleModules.length > 0 ? accessibleModules : modules}
-          sync={sync}
-          user={user ? { username: user.username, role: user.role } : null}
-          onLogout={logout}
-        />
-        {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
-      </>
+      <FYProvider>
+        <>
+          <AppShell
+            modules={accessibleModules.length > 0 ? accessibleModules : modules}
+            sync={sync}
+            user={user ? { username: user.username, role: user.role } : null}
+            onLogout={logout}
+          />
+          {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
+        </>
+      </FYProvider>
     )
   }
 
   // Show loading while initializing
   return (
     <>
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p>در حال راه‌اندازی سیستم هوشمند...</p>
-          <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
+      <FYProvider>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <p>در حال راه‌اندازی سیستم هوشمند...</p>
+            <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
+          </div>
         </div>
-      </div>
+      </FYProvider>
       {version && <div className="fixed bottom-2 right-2 text-xs text-[#6b7280]">v{version}</div>}
     </>
   )

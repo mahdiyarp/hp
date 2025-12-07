@@ -19,11 +19,10 @@ export default function SidebarMenu({
   modules: ModuleDef[]
   activeModuleId: string
   onNavigate: (id: string) => void
-  collapsed?: boolean
 }) {
   const [order, setOrder] = useState<string[]>([])
   const [expandedSettings, setExpandedSettings] = useState(false)
-  const collapsed = (arguments[0] && (arguments[0] as any).collapsed) || false
+  const collapsed = false
 
   useEffect(() => {
     let cancelled = false
@@ -110,7 +109,7 @@ export default function SidebarMenu({
   }
 
   return (
-    <nav className={`flex-1 overflow-y-auto px-2 py-4 ${collapsed ? 'space-y-1' : 'space-y-2'}`}>
+    <nav className={`flex-1 overflow-y-auto px-2 py-4 space-y-2`}>
       {nonSettings.map(mod => {
         const isActive = mod.id === activeModuleId
         if (collapsed) {

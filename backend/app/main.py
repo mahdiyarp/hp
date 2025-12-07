@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 import jdatetime
 from typing import List, Optional
+import json
+import requests
 import os
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -79,6 +81,26 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # app.add_middleware(AuditMiddleware)  # Temporarily disabled due to async issues
 
+# Startup safeguard: ensure user_preferences has active_financial_year_id column
+try:
+    from sqlalchemy import text
+    _s = DB.SessionLocal()
+    try:
+        _s.execute(text("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS active_financial_year_id INTEGER"))
+        _s.commit()
+    except Exception:
+        try:
+            _s.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            _s.close()
+        except Exception:
+            pass
+except Exception:
+    pass
+
 
 def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(db.get_db)):
     try:
@@ -92,6 +114,176 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
     if not user:
         raise HTTPException(status_code=401, detail='User not found')
     return user
+
+# ==================== People Endpoints ====================
+
+@app.get('/api/persons', response_model=list[PersonOut])
+def list_persons(q: Optional[str] = None, limit: Optional[int] = 100, session: Session = Depends(db.get_db)):
+    try:
+        persons = crud.get_persons(session, q=q, limit=int(limit or 100))
+        return persons
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/persons', response_model=PersonOut)
+def create_person(payload: PersonCreate, session: Session = Depends(db.get_db)):
+    try:
+        return crud.create_person(session, payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put('/api/persons/{pid}', response_model=PersonOut)
+def update_person(pid: str, payload: PersonCreate, session: Session = Depends(db.get_db)):
+    p = crud.update_person(session, pid, payload)
+    if not p:
+        raise HTTPException(status_code=404, detail='Person not found')
+    return p
+
+@app.delete('/api/persons/{pid}')
+def delete_person(pid: str, session: Session = Depends(db.get_db)):
+    ok = crud.delete_person(session, pid)
+    if not ok:
+        raise HTTPException(status_code=404, detail='Person not found')
+    return {'success': True}
+
+@app.get('/api/persons/balances')
+def person_balances(fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    try:
+        start = end = None
+        # prefer explicit fy_id, else user's active FY
+        effective_fy_id = fy_id
+        if not effective_fy_id and current_user and getattr(current_user, 'preferences', None):
+            effective_fy_id = getattr(current_user.preferences, 'active_financial_year_id', None)
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if not fy:
+                raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+            start = fy.start_date
+            end = fy.end_date
+        return {'balances': crud.get_person_balances(session, start=start, end=end)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== Financial Year Endpoints ====================
+
+@app.get('/api/financial-years', response_model=list[schemas.FinancialYearOut])
+def list_financial_years(session: Session = Depends(db.get_db)):
+    return session.query(models.FinancialYear).order_by(models.FinancialYear.start_date.desc()).all()
+
+@app.post('/api/financial-years', response_model=schemas.FinancialYearOut)
+def create_financial_year(payload: schemas.FinancialYearIn, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    fy = models.FinancialYear(
+        name=payload.name,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        is_closed=False,
+    )
+    session.add(fy)
+    session.commit()
+    session.refresh(fy)
+    return fy
+
+@app.get('/api/financial-years/{fid}', response_model=schemas.FinancialYearOut)
+def get_financial_year(fid: int, session: Session = Depends(db.get_db)):
+    fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fid).first()
+    if not fy:
+        raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+    return fy
+
+@app.patch('/api/financial-years/{fid}', response_model=schemas.FinancialYearOut)
+def update_financial_year(fid: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fid).first()
+    if not fy:
+        raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+    name = payload.get('name')
+    start_date = payload.get('start_date')
+    end_date = payload.get('end_date')
+    is_closed = payload.get('is_closed')
+    opening_balances = payload.get('opening_balances')
+    if name is not None:
+        fy.name = name
+    if start_date is not None:
+        fy.start_date = start_date
+    if end_date is not None:
+        fy.end_date = end_date
+    if is_closed is not None:
+        fy.is_closed = bool(is_closed)
+        if fy.is_closed:
+            from datetime import datetime, timezone
+            fy.closed_at = datetime.now(timezone.utc)
+        else:
+            fy.closed_at = None
+    if opening_balances is not None:
+        fy.opening_balances = opening_balances
+    session.add(fy)
+    session.commit()
+    session.refresh(fy)
+    return fy
+
+@app.delete('/api/financial-years/{fid}')
+def delete_financial_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin'])(current)
+    fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fid).first()
+    if not fy:
+        raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+    session.delete(fy)
+    session.commit()
+    return {'success': True}
+
+@app.get('/api/financial-years/{fid}/export')
+def export_financial_year(fid: int, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Export a single financial year as downloadable JSON (opening balances + meta)."""
+    fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fid).first()
+    if not fy:
+        raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+    payload = {
+        'id': fy.id,
+        'name': fy.name,
+        'start_date': fy.start_date.isoformat() if fy.start_date else None,
+        'end_date': fy.end_date.isoformat() if fy.end_date else None,
+        'is_closed': fy.is_closed,
+        'closed_at': fy.closed_at.isoformat() if fy.closed_at else None,
+        'opening_balances': fy.opening_balances,
+    }
+    # Return JSON with a filename hint
+    from fastapi.responses import JSONResponse
+    resp = JSONResponse(content=payload)
+    resp.headers['Content-Disposition'] = f"attachment; filename=financial-year-{fy.id}.json"
+    return resp
+
+# Preferences: set active financial year
+@app.patch('/api/users/{uid}/preferences')
+def update_user_preferences(uid: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    if current.id != uid and (not current.role_obj or current.role_obj.name != 'Admin'):
+        raise HTTPException(status_code=403, detail='اجازه ندارید')
+    from sqlalchemy import text
+    # Ensure column exists
+    try:
+        session.execute(text("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS active_financial_year_id INTEGER"))
+        session.commit()
+    except Exception:
+        session.rollback()
+    # Ensure preferences row exists using raw SQL
+    row = session.execute(text("SELECT id FROM user_preferences WHERE user_id = :uid LIMIT 1"), {'uid': uid}).mappings().first()
+    if not row:
+        session.execute(text("INSERT INTO user_preferences (user_id, language, currency, auto_convert_currency, theme_preference) VALUES (:uid, 'fa', 'irr', false, 'default')"), {'uid': uid})
+        session.commit()
+    afi = payload.get('active_financial_year_id')
+    if afi is not None:
+        fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == afi).first()
+        if not fy:
+            raise HTTPException(status_code=404, detail='سال مالی یافت نشد')
+        session.execute(text("UPDATE user_preferences SET active_financial_year_id = :afi WHERE user_id = :uid"), {'afi': afi, 'uid': uid})
+        session.commit()
+    prefs = session.execute(text("SELECT user_id, active_financial_year_id FROM user_preferences WHERE user_id = :uid"), {'uid': uid}).mappings().first()
+    return {
+        'user_id': prefs['user_id'] if prefs else uid,
+        'active_financial_year_id': prefs['active_financial_year_id'] if prefs else None,
+    }
 
 
 @app.get('/api/admin/activity', response_model=list[schemas.ActivityLogOut])
@@ -350,6 +542,11 @@ def admin_only(user = Depends(require_roles(role_names=['Admin']))):
 def me(current_user: models.User = Depends(get_current_user)):
     """Return current user info"""
     from fastapi.responses import JSONResponse
+    prefs = None
+    try:
+        prefs = current_user.preferences
+    except Exception:
+        prefs = None
     return JSONResponse({
         'id': current_user.id,
         'username': current_user.username,
@@ -359,7 +556,13 @@ def me(current_user: models.User = Depends(get_current_user)):
         'role': current_user.role,
         'role_id': current_user.role_id,
         'is_active': current_user.is_active,
-        'otp_enabled': getattr(current_user, 'otp_enabled', False)
+        'otp_enabled': getattr(current_user, 'otp_enabled', False),
+        'preferences': {
+            'active_financial_year_id': getattr(prefs, 'active_financial_year_id', None) if prefs else None,
+            'language': getattr(prefs, 'language', None) if prefs else None,
+            'currency': getattr(prefs, 'currency', None) if prefs else None,
+            'theme_preference': getattr(prefs, 'theme_preference', None) if prefs else None,
+        }
     })
 
 
@@ -649,7 +852,8 @@ def test_user_sms(user_id: int, session: Session = Depends(db.get_db), current: 
     
     from .sms import send_sms as send_sms_func
     message = 'این یک پیام تست از سیستم Hesabpak است.'
-    success, msg = send_sms_func(session, user.mobile, message, user_id=user_id)  # type: ignore
+    # فراخوانی تابع ارسال SMS بدون آرگومان اضافی مطابق امضای تابع
+    success, msg = send_sms_func(session, user.mobile, message)  # type: ignore
     
     return schemas.SmsTestResponse(
         success=success,
@@ -692,9 +896,31 @@ def create_invoice_from_draft(payload: InvoiceCreate, session: Session = Depends
 
 
 @app.get('/api/invoices', response_model=list[InvoiceOut])
-def list_invoices(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def list_invoices(q: Optional[str] = None, fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    # Determine effective FY
+    start_dt = None
+    end_dt = None
+    effective_fy_id = fy_id
+    try:
+        if effective_fy_id is None:
+            prefs = crud.get_user_preferences(session, current.id)
+            effective_fy_id = getattr(prefs, 'active_financial_year_id', None) if prefs else None
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if fy:
+                start_dt = fy.start_date
+                end_dt = fy.end_date
+    except Exception:
+        start_dt = None
+        end_dt = None
+
     invs = crud.get_invoices(session, q=q)
+    if start_dt or end_dt:
+        invs = [inv for inv in invs if (
+            (not start_dt or (inv.server_time and inv.server_time >= start_dt)) and
+            (not end_dt or (inv.server_time and inv.server_time <= end_dt))
+        )]
     # load items for each
     out = []
     for inv in invs:
@@ -822,49 +1048,98 @@ def account_balances(session: Session = Depends(db.get_db), current: models.User
 
 
 @app.get('/api/persons/balances')
-def persons_balances(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    """Get debit/credit balances for all persons"""
+def persons_balances(fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    """Get debit/credit balances for all persons, optionally filtered by financial year.
+    When `fy_id` is not provided, falls back to the current user's `active_financial_year_id` if available.
+    """
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
-    
+
+    # Determine effective financial year range if provided/available
+    start_dt = None
+    end_dt = None
+    effective_fy_id = fy_id
+    try:
+        if effective_fy_id is None:
+            # Fallback به FY فعال کاربر بدون ارجاع به ORM preferences برای اجتناب از ستون‌های ناقص
+            from sqlalchemy import text
+            try:
+                session.execute(text("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS active_financial_year_id INTEGER"))
+                session.commit()
+            except Exception:
+                session.rollback()
+            row = session.execute(text("SELECT active_financial_year_id FROM user_preferences WHERE user_id = :uid"), { 'uid': current.id }).mappings().first()
+            effective_fy_id = (row or {}).get('active_financial_year_id') if row else None
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if fy:
+                start_dt = fy.start_date
+                end_dt = fy.end_date
+    except Exception:
+        # مقاومت در برابر خطا: بدون فیلتر FY ادامه بده
+        start_dt = None
+        end_dt = None
+
     # Get all persons
     persons = session.query(models.Person).all()
-    
-    # Calculate balances for each person
+
+    # Calculate balances for each person, with optional date filter
     result = []
     for person in persons:
-        entries = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == str(person.id)).all()
-        
-        # Calculate debit (receivable - customer owes us)
+        q = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == str(person.id))
+        if start_dt:
+            q = q.filter(models.LedgerEntry.entry_date >= start_dt)
+        if end_dt:
+            q = q.filter(models.LedgerEntry.entry_date <= end_dt)
+        entries = q.all()
+
         debit_total = sum(e.amount for e in entries if e.debit_account == 'AccountsReceivable')
-        # Calculate credit (payable - we owe them)
         credit_total = sum(e.amount for e in entries if e.credit_account == 'AccountsReceivable')
-        
-        # Net balance: positive = they owe us (debtor), negative = we owe them (creditor)
         net_balance = debit_total - credit_total
-        
+
         result.append({
             'person_id': str(person.id),
             'debit': debit_total,
             'credit': credit_total,
-            'balance': net_balance
+            'balance': net_balance,
+            'fy_id': effective_fy_id
         })
-    
+
     return {'balances': result}
 
 
 @app.get('/api/ledger/party/{party_id}')
-def party_ledger(party_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def party_ledger(party_id: str, fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Salesman', 'Viewer'])(current)
     
     # Get person details
-    person = session.query(models.Person).filter(models.Person.id == party_id).first()
-    if not person:
+    person_basic = crud.get_person_basic(session, party_id)
+    if not person_basic:
         raise HTTPException(status_code=404, detail='Person not found')
     
     # Get all ledger entries for this party
-    ledger_entries = session.query(models.LedgerEntry).filter(
-        models.LedgerEntry.party_id == party_id
-    ).order_by(models.LedgerEntry.entry_date.desc()).all()
+    # Determine effective FY date range
+    start_dt = None
+    end_dt = None
+    effective_fy_id = fy_id
+    try:
+        if effective_fy_id is None:
+            prefs = crud.get_user_preferences(session, current.id)
+            effective_fy_id = getattr(prefs, 'active_financial_year_id', None) if prefs else None
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if fy:
+                start_dt = fy.start_date
+                end_dt = fy.end_date
+    except Exception:
+        start_dt = None
+        end_dt = None
+
+    q = session.query(models.LedgerEntry).filter(models.LedgerEntry.party_id == party_id)
+    if start_dt:
+        q = q.filter(models.LedgerEntry.entry_date >= start_dt)
+    if end_dt:
+        q = q.filter(models.LedgerEntry.entry_date <= end_dt)
+    ledger_entries = q.order_by(models.LedgerEntry.entry_date.desc()).all()
     
     # Enrich entries with related invoice/payment details
     enriched_entries = []
@@ -935,11 +1210,11 @@ def party_ledger(party_id: str, session: Session = Depends(db.get_db), current: 
     return {
         'party_id': party_id,
         'person': {
-            'id': person.id,
-            'name': person.name,
-            'kind': person.kind,
-            'mobile': person.mobile,
-            'code': person.code,
+            'id': person_basic.get('id'),
+            'name': person_basic.get('name'),
+            'kind': person_basic.get('kind'),
+            'mobile': person_basic.get('mobile'),
+            'code': person_basic.get('code'),
         },
         'entries': enriched_entries,
         'debit_total': debit_total,
@@ -1015,9 +1290,31 @@ def create_payment_from_draft(payload: schemas.PaymentCreate, session: Session =
 
 
 @app.get('/api/payments', response_model=list[schemas.PaymentOut])
-def list_payments(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def list_payments(q: Optional[str] = None, fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_view'])(current)
+    # Determine effective FY
+    start_dt = None
+    end_dt = None
+    effective_fy_id = fy_id
+    try:
+        if effective_fy_id is None:
+            prefs = crud.get_user_preferences(session, current.id)
+            effective_fy_id = getattr(prefs, 'active_financial_year_id', None) if prefs else None
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if fy:
+                start_dt = fy.start_date
+                end_dt = fy.end_date
+    except Exception:
+        start_dt = None
+        end_dt = None
+
     pays = crud.get_payments(session, q=q)
+    if start_dt or end_dt:
+        pays = [p for p in pays if (
+            (not start_dt or (p.server_time and p.server_time >= start_dt)) and
+            (not end_dt or (p.server_time and p.server_time <= end_dt))
+        )]
     return pays
 
 
@@ -1028,9 +1325,6 @@ def get_payment(payment_id: int, session: Session = Depends(db.get_db), current:
     if not p:
         raise HTTPException(status_code=404, detail='Payment not found')
     return p
-
-
-@app.patch('/api/payments/{payment_id}', response_model=schemas.PaymentOut)
 def patch_payment(payment_id: int, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_edit'])(current)
     p = crud.update_invoice(session, payment_id, payload)  # reuse generic update helper
@@ -1481,7 +1775,7 @@ def api_products_external_save(payload: SaveExternalProductRequest, session: Ses
 
 
 @app.get('/api/products/{product_id}/movement')
-def product_movement(product_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def product_movement(product_id: str, fy_id: Optional[int] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     """Get movement history for a product with invoice and party details"""
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     
@@ -1491,9 +1785,33 @@ def product_movement(product_id: str, session: Session = Depends(db.get_db), cur
         raise HTTPException(status_code=404, detail='Product not found')
     
     # Get all invoice items for this product
-    invoice_items = session.query(models.InvoiceItem).filter(
-        models.InvoiceItem.product_id == product_id
-    ).order_by(models.InvoiceItem.id.desc()).all()
+    # Determine effective FY range
+    start_dt = None
+    end_dt = None
+    effective_fy_id = fy_id
+    try:
+        if effective_fy_id is None:
+            prefs = crud.get_user_preferences(session, current.id)
+            effective_fy_id = getattr(prefs, 'active_financial_year_id', None) if prefs else None
+        if effective_fy_id:
+            fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == effective_fy_id).first()
+            if fy:
+                start_dt = fy.start_date
+                end_dt = fy.end_date
+    except Exception:
+        start_dt = None
+        end_dt = None
+
+    iq = session.query(models.InvoiceItem).filter(models.InvoiceItem.product_id == product_id)
+    if start_dt:
+        # Join via invoice to filter by its time
+        from sqlalchemy.orm import aliased
+        Inv = models.Invoice
+        iq = iq.join(Inv, Inv.id == models.InvoiceItem.invoice_id)
+        iq = iq.filter(Inv.server_time >= start_dt)
+        if end_dt:
+            iq = iq.filter(Inv.server_time <= end_dt)
+    invoice_items = iq.order_by(models.InvoiceItem.id.desc()).all()
     
     movements = []
     current_stock = product.inventory or 0
@@ -1505,7 +1823,7 @@ def product_movement(product_id: str, session: Session = Depends(db.get_db), cur
             
         person = None
         if invoice.party_id:
-            person = session.query(models.Person).filter(models.Person.id == invoice.party_id).first()
+            person = crud.get_person_basic(session, invoice.party_id)
         
         # Determine movement type based on invoice type
         is_sale = invoice.invoice_type == 'sale'
@@ -1525,9 +1843,9 @@ def product_movement(product_id: str, session: Session = Depends(db.get_db), cur
             'unit_price': item.unit_price,
             'total_price': item.total or (item.unit_price * item.quantity),
             'party': {
-                'id': person.id,
-                'name': person.name,
-                'kind': person.kind,
+                'id': person.get('id'),
+                'name': person.get('name'),
+                'kind': person.get('kind'),
             } if person else None,
             'status': invoice.status,
         })
@@ -1549,6 +1867,7 @@ def product_movement(product_id: str, session: Session = Depends(db.get_db), cur
         },
         'movements': movements,
         'total_movements': len(movements),
+        'fy_id': effective_fy_id,
     }
 
 
@@ -1709,6 +2028,22 @@ def api_create_person(p: PersonCreate, session: Session = Depends(db.get_db), cu
 def api_get_persons(q: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"])(current)
     return crud.get_persons(session, q=q)
+
+@app.put("/api/persons/{person_id}", response_model=PersonOut)
+def api_update_person(person_id: str, p: PersonCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=["Admin", "Accountant"])(current)
+    person = crud.update_person(session, person_id, p)
+    if not person:
+        raise HTTPException(status_code=404, detail="شخص یافت نشد")
+    return person
+
+@app.delete("/api/persons/{person_id}")
+def api_delete_person(person_id: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=["Admin", "Accountant"])(current)
+    ok = crud.delete_person(session, person_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="شخص یافت نشد")
+    return {"message": "طرف حساب حذف شد"}
 
 
 @app.get('/api/financial/auto-context')
@@ -2397,420 +2732,8 @@ async def get_audit_log(
     }
 
 
-# ==================== Customer Groups Endpoints ====================
-
-@app.get('/api/customer-groups', response_model=List[schemas.CustomerGroupOut])
-async def list_customer_groups(
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    دریافت لیست گروه‌های مشتری کاربر
-    """
-    groups = crud.get_user_customer_groups(session, current.id)
-    return groups
 
 
-@app.post('/api/customer-groups', response_model=schemas.CustomerGroupOut)
-async def create_customer_group(
-    payload: schemas.CustomerGroupCreate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    ایجاد گروه مشتری جدید
-    """
-    group = crud.create_customer_group(session, current.id, payload)
-    return group
-
-
-@app.get('/api/customer-groups/{group_id}', response_model=schemas.CustomerGroupOut)
-async def get_customer_group(
-    group_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    دریافت اطلاعات گروه مشتری
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id and not group.is_shared:
-        raise HTTPException(status_code=403, detail='دسترسی رد شد')
-    
-    return group
-
-
-@app.put('/api/customer-groups/{group_id}', response_model=schemas.CustomerGroupOut)
-async def update_customer_group(
-    group_id: int,
-    payload: schemas.CustomerGroupUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    به‌روزرسانی گروه مشتری
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را تغییر دهد')
-    
-    updated = crud.update_customer_group(session, group_id, payload)
-    return updated
-
-
-@app.patch('/api/customer-groups/{group_id}', response_model=schemas.CustomerGroupOut)
-async def patch_customer_group(
-    group_id: int,
-    payload: schemas.CustomerGroupUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    به‌روزرسانی جزئی گروه مشتری
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را تغییر دهد')
-    
-    updated = crud.update_customer_group(session, group_id, payload)
-    return updated
-
-
-@app.delete('/api/customer-groups/{group_id}')
-async def delete_customer_group(
-    group_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    حذف گروه مشتری
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند آن را حذف کند')
-    
-    crud.delete_customer_group(session, group_id)
-    return {'message': 'گروه با موفقیت حذف شد'}
-
-
-@app.post('/api/customer-groups/{group_id}/members/{person_id}')
-async def add_member_to_group(
-    group_id: int,
-    person_id: str,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    افزودن مشتری به گروه
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند اعضای آن را تغییر دهد')
-    
-    # بررسی وجود مشتری
-    person = session.query(models.Person).filter(models.Person.id == person_id).first()
-    if not person:
-        raise HTTPException(status_code=404, detail='مشتری یافت نشد')
-    
-    member = crud.add_customer_to_group(session, group_id, person_id)
-    return {'message': 'مشتری به گروه اضافه شد', 'member_id': member.id}
-
-
-@app.delete('/api/customer-groups/{group_id}/members/{person_id}')
-async def remove_member_from_group(
-    group_id: int,
-    person_id: str,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """
-    حذف مشتری از گروه
-    """
-    group = crud.get_customer_group(session, group_id)
-    if not group:
-        raise HTTPException(status_code=404, detail='گروه یافت نشد')
-    
-    if group.created_by_user_id != current.id:
-        raise HTTPException(status_code=403, detail='فقط مالک گروه می‌تواند اعضای آن را تغییر دهد')
-    
-    success = crud.remove_customer_from_group(session, group_id, person_id)
-    if not success:
-        raise HTTPException(status_code=404, detail='مشتری در این گروه یافت نشد')
-    
-    return {'message': 'مشتری از گروه حذف شد'}
-
-
-# ==================== ICC Shop Endpoints ====================
-
-@app.get('/api/icc/categories', response_model=List[schemas.IccCategoryOut])
-async def list_icc_categories(
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت تمام دسته‌بندی‌های ICC"""
-    categories = crud.get_all_icc_categories(session)
-    return categories
-
-
-@app.post('/api/icc/categories', response_model=schemas.IccCategoryOut)
-async def create_icc_category(
-    payload: schemas.IccCategoryCreate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """ایجاد دسته‌بندی ICC"""
-    category = crud.create_icc_category(session, payload)
-    return category
-
-
-@app.get('/api/icc/categories/{category_id}', response_model=schemas.IccCategoryOut)
-async def get_icc_category(
-    category_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت دسته‌بندی ICC"""
-    category = crud.get_icc_category(session, category_id)
-    if not category:
-        raise HTTPException(status_code=404, detail='دسته‌بندی یافت نشد')
-    return category
-
-
-@app.patch('/api/icc/categories/{category_id}', response_model=schemas.IccCategoryOut)
-async def update_icc_category(
-    category_id: int,
-    payload: schemas.IccCategoryUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """به‌روزرسانی دسته‌بندی ICC"""
-    category = crud.update_icc_category(session, category_id, payload)
-    if not category:
-        raise HTTPException(status_code=404, detail='دسته‌بندی یافت نشد')
-    return category
-
-
-@app.delete('/api/icc/categories/{category_id}')
-async def delete_icc_category(
-    category_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """حذف دسته‌بندی ICC"""
-    success = crud.delete_icc_category(session, category_id)
-    if not success:
-        raise HTTPException(status_code=404, detail='دسته‌بندی یافت نشد')
-    return {'message': 'دسته‌بندی با موفقیت حذف شد'}
-
-
-@app.get('/api/icc/centers', response_model=List[schemas.IccCenterOut])
-async def list_icc_centers(
-    category_id: Optional[int] = None,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت مراکز ICC"""
-    if category_id:
-        centers = crud.get_icc_centers_by_category(session, category_id)
-    else:
-        centers = session.query(models.IccCenter).order_by(models.IccCenter.name).all()
-    return centers
-
-
-@app.post('/api/icc/centers', response_model=schemas.IccCenterOut)
-async def create_icc_center(
-    payload: schemas.IccCenterCreate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """ایجاد مرکز ICC"""
-    center = crud.create_icc_center(session, payload)
-    return center
-
-
-@app.get('/api/icc/centers/{center_id}', response_model=schemas.IccCenterOut)
-async def get_icc_center(
-    center_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت مرکز ICC"""
-    center = crud.get_icc_center(session, center_id)
-    if not center:
-        raise HTTPException(status_code=404, detail='مرکز یافت نشد')
-    return center
-
-
-@app.patch('/api/icc/centers/{center_id}', response_model=schemas.IccCenterOut)
-async def update_icc_center(
-    center_id: int,
-    payload: schemas.IccCenterUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """به‌روزرسانی مرکز ICC"""
-    center = crud.update_icc_center(session, center_id, payload)
-    if not center:
-        raise HTTPException(status_code=404, detail='مرکز یافت نشد')
-    return center
-
-
-@app.delete('/api/icc/centers/{center_id}')
-async def delete_icc_center(
-    center_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """حذف مرکز ICC"""
-    success = crud.delete_icc_center(session, center_id)
-    if not success:
-        raise HTTPException(status_code=404, detail='مرکز یافت نشد')
-    return {'message': 'مرکز با موفقیت حذف شد'}
-
-
-@app.get('/api/icc/units', response_model=List[schemas.IccUnitOut])
-async def list_icc_units(
-    center_id: Optional[int] = None,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت واحدهای ICC"""
-    if center_id:
-        units = crud.get_icc_units_by_center(session, center_id)
-    else:
-        units = session.query(models.IccUnit).order_by(models.IccUnit.name).all()
-    return units
-
-
-@app.post('/api/icc/units', response_model=schemas.IccUnitOut)
-async def create_icc_unit(
-    payload: schemas.IccUnitCreate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """ایجاد واحد ICC"""
-    unit = crud.create_icc_unit(session, payload)
-    return unit
-
-
-@app.get('/api/icc/units/{unit_id}', response_model=schemas.IccUnitOut)
-async def get_icc_unit(
-    unit_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت واحد ICC"""
-    unit = crud.get_icc_unit(session, unit_id)
-    if not unit:
-        raise HTTPException(status_code=404, detail='واحد یافت نشد')
-    return unit
-
-
-@app.patch('/api/icc/units/{unit_id}', response_model=schemas.IccUnitOut)
-async def update_icc_unit(
-    unit_id: int,
-    payload: schemas.IccUnitUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """به‌روزرسانی واحد ICC"""
-    unit = crud.update_icc_unit(session, unit_id, payload)
-    if not unit:
-        raise HTTPException(status_code=404, detail='واحد یافت نشد')
-    return unit
-
-
-@app.delete('/api/icc/units/{unit_id}')
-async def delete_icc_unit(
-    unit_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """حذف واحد ICC"""
-    success = crud.delete_icc_unit(session, unit_id)
-    if not success:
-        raise HTTPException(status_code=404, detail='واحد یافت نشد')
-    return {'message': 'واحد با موفقیت حذف شد'}
-
-
-@app.get('/api/icc/extensions', response_model=List[schemas.IccExtensionOut])
-async def list_icc_extensions(
-    unit_id: Optional[int] = None,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت شاخه‌های ICC"""
-    if unit_id:
-        extensions = crud.get_icc_extensions_by_unit(session, unit_id)
-    else:
-        extensions = session.query(models.IccExtension).order_by(models.IccExtension.name).all()
-    return extensions
-
-
-@app.post('/api/icc/extensions', response_model=schemas.IccExtensionOut)
-async def create_icc_extension(
-    payload: schemas.IccExtensionCreate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """ایجاد شاخه ICC"""
-    extension = crud.create_icc_extension(session, payload)
-    return extension
-
-
-@app.get('/api/icc/extensions/{extension_id}', response_model=schemas.IccExtensionOut)
-async def get_icc_extension(
-    extension_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """دریافت شاخه ICC"""
-    extension = crud.get_icc_extension(session, extension_id)
-    if not extension:
-        raise HTTPException(status_code=404, detail='شاخه یافت نشد')
-    return extension
-
-
-@app.patch('/api/icc/extensions/{extension_id}', response_model=schemas.IccExtensionOut)
-async def update_icc_extension(
-    extension_id: int,
-    payload: schemas.IccExtensionUpdate,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """به‌روزرسانی شاخه ICC"""
-    extension = crud.update_icc_extension(session, extension_id, payload)
-    if not extension:
-        raise HTTPException(status_code=404, detail='شاخه یافت نشد')
-    return extension
-
-
-@app.delete('/api/icc/extensions/{extension_id}')
-async def delete_icc_extension(
-    extension_id: int,
-    current: models.User = Depends(get_current_user),
-    session: Session = Depends(db.get_db)
-):
-    """حذف شاخه ICC"""
-    success = crud.delete_icc_extension(session, extension_id)
-    if not success:
-        raise HTTPException(status_code=404, detail='شاخه یافت نشد')
-    return {'message': 'شاخه با موفقیت حذف شد'}
 
 
 # ==================== System Settings API ====================
@@ -2937,6 +2860,65 @@ async def create_widget(
     """ایجاد widget جدید"""
     widget = crud.create_dashboard_widget(session, current.id, payload)
     return widget
+
+
+# ==================== Iran Banks Integration ====================
+
+@app.get('/api/integrations/iran-banks')
+async def get_iran_banks(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """
+    دریافت لیست بانک‌ها و شعب ایران از تنظیمات سیستم.
+    - کلیدها: iran_banks (لیست بانک‌ها)، iran_bank_branches (لیست شعب)
+    فقط برای Admin.
+    """
+    if not current.role or current.role != 'Admin':
+        raise HTTPException(status_code=403, detail='دسترسی محدود')
+    banks = crud.get_system_setting(session, 'iran_banks')
+    branches = crud.get_system_setting(session, 'iran_bank_branches')
+    return {
+        'banks': json.loads(banks.value) if banks and banks.value else [],
+        'branches': json.loads(branches.value) if branches and branches.value else []
+    }
+
+
+@app.post('/api/integrations/iran-banks/update')
+async def update_iran_banks(current: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    """
+    بروزرسانی خودکار بانک‌ها و شعب ایران.
+    از URLهای تنظیمات: iran_banks_source_url و iran_branches_source_url می‌خواند.
+    خروجی در کلیدهای iran_banks و iran_bank_branches ذخیره می‌شود.
+    فقط برای Admin.
+    """
+    if not current.role or current.role != 'Admin':
+        raise HTTPException(status_code=403, detail='دسترسی محدود')
+    src_banks = crud.get_system_setting(session, 'iran_banks_source_url')
+    src_branches = crud.get_system_setting(session, 'iran_branches_source_url')
+    if not src_banks or not src_banks.value:
+        raise HTTPException(status_code=400, detail='آدرس منبع بانک‌ها تنظیم نشده است (iran_banks_source_url)')
+    # Fetch banks
+    try:
+        resp = requests.get(src_banks.value, timeout=20)
+        resp.raise_for_status()
+        banks_data = resp.json()
+        if not isinstance(banks_data, list):
+            raise ValueError('فرمت لیست بانک‌ها معتبر نیست')
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'دریافت بانک‌ها ناموفق بود: {e}')
+    # Fetch branches (optional)
+    branches_data = []
+    if src_branches and src_branches.value:
+        try:
+            resp2 = requests.get(src_branches.value, timeout=30)
+            resp2.raise_for_status()
+            branches_data = resp2.json()
+            if not isinstance(branches_data, list):
+                branches_data = []
+        except Exception:
+            branches_data = []
+    # Store into settings
+    crud.update_system_setting(session, 'iran_banks', schemas.SystemSettingUpdate(value=json.dumps(banks_data), setting_type='json'), current.id)
+    crud.update_system_setting(session, 'iran_bank_branches', schemas.SystemSettingUpdate(value=json.dumps(branches_data), setting_type='json'), current.id)
+    return {'success': True, 'banks_count': len(banks_data), 'branches_count': len(branches_data)}
 
 
 @app.get('/api/dashboard/widgets/{widget_id}', response_model=schemas.DashboardWidgetOut)

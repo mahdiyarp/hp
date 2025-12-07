@@ -1,6 +1,30 @@
 import authService from './auth'
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+function appendFyParam(path: string): string {
+  try {
+    const activeFy = localStorage.getItem('hesabpak_active_fy_id')
+    const fyId = activeFy ? Number(activeFy) : null
+    if (!fyId || !Number.isFinite(fyId)) return path
+    const u = new URL(path, window.location.origin)
+    const targets = [
+      '/api/invoices',
+      '/api/payments',
+    ]
+    const isPartyLedger = u.pathname.startsWith('/api/ledger/party/')
+    const isProductMovement = /\/api\/products\/.+\/movement$/.test(u.pathname)
+    if (targets.includes(u.pathname) || isPartyLedger || isProductMovement) {
+      if (!u.searchParams.has('fy_id')) {
+        u.searchParams.set('fy_id', String(fyId))
+      }
+      return u.pathname + '?' + u.searchParams.toString()
+    }
+    return path
+  } catch {
+    return path
+  }
+}
+
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT'
 
 async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -32,7 +56,7 @@ export async function apiRequest<T>(
   method: HttpMethod = 'GET',
   init?: RequestInit,
 ): Promise<T> {
-  const response = await authService.fetchWithAuth(path, {
+  const response = await authService.fetchWithAuth(appendFyParam(path), {
     ...(init || {}),
     method,
   })
@@ -67,5 +91,16 @@ export async function apiPatch<T>(path: string, body?: unknown, init?: RequestIn
 
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
+}
+
+export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit) {
+  return apiRequest<T>(path, 'PUT', {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...init,
+  })
 }
 

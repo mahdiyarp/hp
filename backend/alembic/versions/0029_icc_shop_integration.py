@@ -1,7 +1,7 @@
 """Add ICC Shop Organization Structure
 
-Revision ID: 0029
-Revises: 0028
+Revision ID: 0029_icc_shop_integration
+Revises: 0028_customer_groups
 Create Date: 2025-11-14
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0029'
-down_revision = '0028'
+revision = '0029_icc_shop_integration'
+down_revision = '0028_customer_groups'
 branch_labels = None
 depends_on = None
 
