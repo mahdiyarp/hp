@@ -94,7 +94,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
         const pnlData = await apiGet<PnLReport>(
           `/api/reports/pnl?start=${encodeURIComponent(startParam)}&end=${encodeURIComponent(
             endParam,
-          )}`,
+          )}&method=${encodeURIComponent(costMethod)}`,
         )
         setPnl(pnlData)
       } catch (err) {

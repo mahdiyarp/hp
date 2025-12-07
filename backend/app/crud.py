@@ -1215,6 +1215,130 @@ def report_pnl(session: Session, start: Optional[datetime] = None, end: Optional
     return {'start': start, 'end': end, 'sales': int(sales), 'purchases': int(purchases), 'gross_profit': int(gross)}
 
 
+def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end: Optional[datetime] = None, method: str = 'FIFO'):
+    """Compute P&L with COGS using FIFO/LIFO layers.
+    Revenue is sum of finalized sales within [start,end]. COGS is derived by consuming purchase layers according to method.
+    Sales before the start reduce layers without impacting period revenue/COGS. Purchases up to end add to layers.
+    """
+    method = (method or 'FIFO').upper()
+    if method not in ('FIFO', 'LIFO'):
+        method = 'FIFO'
+    # Fetch all finalized invoices up to `end` to build layers
+    inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
+    if end:
+        inv_q = inv_q.filter(models.Invoice.server_time <= end)
+    invs = inv_q.all()
+    if not invs:
+        return {'start': start, 'end': end, 'sales': 0, 'cogs': 0, 'gross_profit': 0}
+    # Load items in bulk
+    inv_ids = [i.id for i in invs]
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id.in_(inv_ids)).all()
+    items_by_inv = {}
+    for it in items:
+        items_by_inv.setdefault(it.invoice_id, []).append(it)
+    # Compose events per product
+    by_product: dict[str, list] = {}
+    for inv in invs:
+        t = inv.server_time or inv.client_time
+        if not t:
+            continue
+        its = items_by_inv.get(inv.id, [])
+        for it in its:
+            if not it.product_id:
+                continue
+            by_product.setdefault(it.product_id, []).append({
+                't': t,
+                'type': inv.invoice_type,
+                'qty': int(it.quantity or 0),
+                'unit': int(it.unit_price or 0),
+                'total': int(it.total or 0),
+            })
+    total_revenue = 0
+    total_cogs = 0
+    for pid, evs in by_product.items():
+        evs.sort(key=lambda x: x['t'])
+        layers: list[dict] = []
+        last_cost = 0
+        def take(need: int) -> int:
+            nonlocal layers, last_cost
+            taken = 0
+            while need > 0:
+                idx = 0 if method == 'FIFO' else (len(layers) - 1)
+                if idx < 0 or idx >= len(layers):
+                    taken += need * last_cost
+                    need = 0
+                    break
+                layer = layers[idx]
+                use = min(need, layer['qty'])
+                taken += use * layer['cost']
+                layer['qty'] -= use
+                need -= use
+                if layer['qty'] <= 0:
+                    layers.pop(idx)
+            return taken
+        for e in evs:
+            if e['type'] == 'purchase':
+                layers.append({'qty': e['qty'], 'cost': e['unit']})
+                last_cost = e['unit'] or last_cost
+            elif e['type'] == 'sale':
+                in_range = True
+                if start and e['t'] < start:
+                    in_range = False
+                if end and e['t'] > end:
+                    in_range = False
+                if in_range:
+                    total_revenue += e['total']
+                    total_cogs += take(e['qty'])
+                else:
+                    # consume layers for before-period sales without counting
+                    take(e['qty'])
+    gross = total_revenue - total_cogs
+    return {'start': start, 'end': end, 'sales': int(total_revenue), 'cogs': int(total_cogs), 'gross_profit': int(gross), 'method': method}
+
+
+def product_ledger(session: Session, product_id: str, start: Optional[datetime] = None, end: Optional[datetime] = None):
+    """Return chronological movement for a product within [start,end]: purchase/sale lines with running quantity."""
+    inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
+    if start:
+        inv_q = inv_q.filter(models.Invoice.server_time >= start)
+    if end:
+        inv_q = inv_q.filter(models.Invoice.server_time <= end)
+    invs = inv_q.all()
+    if not invs:
+        return []
+    inv_ids = [i.id for i in invs]
+    items = session.query(models.InvoiceItem).filter(
+        models.InvoiceItem.invoice_id.in_(inv_ids),
+        models.InvoiceItem.product_id == product_id
+    ).all()
+    evs = []
+    for it in items:
+        inv = next((x for x in invs if x.id == it.invoice_id), None)
+        if not inv:
+            continue
+        t = inv.server_time or inv.client_time
+        if not t:
+            continue
+        evs.append({'date': t, 'type': inv.invoice_type, 'qty': int(it.quantity or 0), 'unit': int(it.unit_price or 0), 'total': int(it.total or 0)})
+    evs.sort(key=lambda x: x['date'])
+    running = 0
+    rows = []
+    for e in evs:
+        if e['type'] == 'purchase':
+            running += e['qty']
+        elif e['type'] == 'sale':
+            running -= e['qty']
+        rows.append({
+            'date': e['date'],
+            'type': e['type'],
+            'qty': e['qty'],
+            'unit': e['unit'],
+            'total': e['total'],
+            'running': running,
+        })
+    return rows
+
+
 def report_person_turnover(session: Session, party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[datetime] = None, end: Optional[datetime] = None):
     # Sum invoices and payments for a person
     inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')

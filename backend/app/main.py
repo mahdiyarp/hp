@@ -1442,12 +1442,15 @@ def reports_query(payload: dict, session: Session = Depends(db.get_db), current:
 
 
 @app.get('/api/reports/pnl')
-def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, method: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
-    out = crud.report_pnl(session, start=s, end=e)
+    if method:
+        out = crud.report_pnl_with_cost(session, start=s, end=e, method=method)
+    else:
+        out = crud.report_pnl(session, start=s, end=e)
     return out
 
 
@@ -1486,6 +1489,16 @@ def dashboard_summary(session: Session = Depends(db.get_db), current: models.Use
 def dashboard_sales_trends(days: Optional[int] = 30, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
     out = crud.dashboard_sales_trends(session, days=days)
+    return out
+
+
+@app.get('/api/ledger/product/{product_id}')
+def product_ledger(product_id: str, start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    require_roles(role_names=['Admin', 'Accountant', 'Manager', 'Viewer'])(current)
+    from datetime import datetime
+    s = datetime.fromisoformat(start) if start else None
+    e = datetime.fromisoformat(end) if end else None
+    out = crud.product_ledger(session, product_id=product_id, start=s, end=e)
     return out
 
 
