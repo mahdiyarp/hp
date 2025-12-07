@@ -134,19 +134,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
       }
 
       // Load invoices to compute FIFO/LIFO based gross profit and product-ledger base
-      try {
-        const invs = await apiGet<Array<any>>('/api/invoices')
-        const withItems = invs.filter(i => i.status === 'final' && Array.isArray(i.items))
-        const startT = new Date(startIso).getTime()
-        const endT = new Date(endIso).getTime()
-        const { sales, cogs } = computePnLWithCost(withItems, startT, endT, costMethod)
-        // prefer server values if provided in pnl
-        setComputedSales((pnl as any)?.sales || sales)
-        setComputedCOGS((pnl as any)?.cogs || cogs)
-      } catch (err) {
-        console.error('FIFO/LIFO compute failed', err)
-        newWarnings.push('محاسبه FIFO/LIFO انجام نشد.')
-      }
+      // prefer server-side calculations; fallback removed for simplicity and performance
+      if (pnl && (pnl as any).sales != null) setComputedSales((pnl as any).sales as number)
+      if (pnl && (pnl as any).cogs != null) setComputedCOGS((pnl as any).cogs as number)
 
       // Load sales trends for chart
       try {
