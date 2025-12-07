@@ -249,27 +249,31 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
               <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
-              <p>
-                {sync?.serverUtc
-                  ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
-                  : 'در انتظار همگام‌سازی'}
-              </p>
-              {sync?.serverLocal && (
-                <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
-              )}
-              {sync?.jalali && <p>JALALI: {sync.jalali}</p>}
-              <p className={`text-[#7a6b4f]`}>
-                اختلاف منطقه: {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
-              </p>
-              {clockDriftMs !== null && (
-                <p className={`text-[#7a6b4f]`}>
-                  اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
-                </p>
-              )}
-              {sync?.latencyMs !== null && (
-                <p className={`text-[#7a6b4f]`}>
-                  تاخیر شبکه: {formatNumberFa(sync.latencyMs)} میلی‌ثانیه
-                </p>
+              {sync ? (
+                <>
+                  <p>
+                    UTC: {toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}
+                  </p>
+                  {sync.serverLocal && (
+                    <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
+                  )}
+                  {sync.jalali && <p>JALALI: {sync.jalali}</p>}
+                  <p className={`text-[#7a6b4f]`}>
+                    اختلاف منطقه: {toPersianDigits(sync.serverOffset ?? `${sync.serverOffsetSeconds}s`)}
+                  </p>
+                  {clockDriftMs !== null && (
+                    <p className={`text-[#7a6b4f]`}>
+                      اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
+                    </p>
+                  )}
+                  {typeof sync.latencyMs === 'number' && (
+                    <p className={`text-[#7a6b4f]`}>
+                      تاخیر شبکه: {formatNumberFa(Number(sync.latencyMs))} میلی‌ثانیه
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>در انتظار همگام‌سازی</p>
               )}
             </div>
               <div className="flex sm:flex-row flex-col gap-2 text-xs">

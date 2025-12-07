@@ -140,4 +140,5 @@ cd backend && alembic heads && alembic history --verbose
 ## Notes
 
 - Some auth paths are relaxed in test-only contexts to satisfy the current suite. We can tighten these once we add dedicated test fixtures.
+- Logging: set `LOG_LEVEL` (e.g., `DEBUG`, `INFO`, `WARNING`) to control verbosity. Defaults to `INFO`.
 

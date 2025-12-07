@@ -42,7 +42,7 @@ def notify_person_sync(person_id: str, info: Dict[str, Any]):
 from . import models, schemas
 import secrets
 from sqlalchemy.orm import Session
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
 from datetime import timedelta
@@ -1349,23 +1349,41 @@ def report_cash_balance(session: Session, method: Optional[str] = None):
 
 
 def dashboard_summary(session: Session):
-    # counts: invoices today/7days/month
+    # counts: invoices today/7days/month (ایمن در برابر ستون‌های ناقص دیتابیس)
     now = datetime.now(timezone.utc)
     start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_7 = now - timedelta(days=7)
     start_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    invoices_today = session.query(models.Invoice).filter(models.Invoice.server_time >= start_today).count()
-    invoices_7 = session.query(models.Invoice).filter(models.Invoice.server_time >= start_7).count()
-    invoices_month = session.query(models.Invoice).filter(models.Invoice.server_time >= start_month).count()
-    receipts_today = session.query(models.Payment).filter(models.Payment.direction == 'in', models.Payment.server_time >= start_today).all()
-    payments_today = session.query(models.Payment).filter(models.Payment.direction == 'out', models.Payment.server_time >= start_today).all()
-    receipts_total = sum(p.amount or 0 for p in receipts_today)
-    payments_total = sum(p.amount or 0 for p in payments_today)
+    try:
+        invoices_today = session.query(models.Invoice).filter(models.Invoice.server_time >= start_today).count()
+    except Exception:
+        invoices_today = 0
+    try:
+        invoices_7 = session.query(models.Invoice).filter(models.Invoice.server_time >= start_7).count()
+    except Exception:
+        invoices_7 = 0
+    try:
+        invoices_month = session.query(models.Invoice).filter(models.Invoice.server_time >= start_month).count()
+    except Exception:
+        invoices_month = 0
+    try:
+        receipts_today = session.query(models.Payment).filter(models.Payment.direction == 'in', models.Payment.server_time >= start_today).all()
+    except Exception:
+        receipts_today = []
+    try:
+        payments_today = session.query(models.Payment).filter(models.Payment.direction == 'out', models.Payment.server_time >= start_today).all()
+    except Exception:
+        payments_today = []
+    receipts_total = sum(getattr(p, 'amount', 0) or 0 for p in receipts_today)
+    payments_total = sum(getattr(p, 'amount', 0) or 0 for p in payments_today)
     net_today = receipts_total - payments_total
     # cash balances by method
     cash_balances = {}
     for m in ['cash', 'bank', 'pos']:
-        cash_balances[m] = report_cash_balance(session, method=m).get('balance', 0)
+        try:
+            cash_balances[m] = report_cash_balance(session, method=m).get('balance', 0)
+        except Exception:
+            cash_balances[m] = 0
     return {
         'invoices': {'today': invoices_today, '7days': invoices_7, 'month': invoices_month},
         'receipts_today': int(receipts_total),
@@ -2527,6 +2545,29 @@ def finalize_sale_order(session: Session, so_id: int, client_time: Optional[date
         except Exception:
             pass
         return so
+
+def get_fiscal_year(session: Session, date: Optional[Union[datetime, dict]] = None, user_id: Optional[int] = None) -> Optional[models.FinancialYear]:
+    """Get the fiscal year for a given date, or the current one if no date is provided."""
+    from .utils.date import to_gregorian
+    
+    target_date = None
+    if isinstance(date, dict):
+        try:
+            target_date = to_gregorian(date)
+        except (ValueError, TypeError):
+            pass  # Fallback to current date if conversion fails
+    elif isinstance(date, datetime):
+        target_date = date
+
+    if target_date is None:
+        return get_current_fiscal_year(session)
+    
+    # Find a fiscal year that contains the target date
+    return session.query(models.FinancialYear).filter(
+        models.FinancialYear.start_date <= target_date,
+        models.FinancialYear.end_date >= target_date,
+    ).first()
+
 
 def get_current_fiscal_year(session: Session) -> Optional[models.FinancialYear]:
     """Get the current active fiscal year."""

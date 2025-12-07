@@ -2,6 +2,7 @@
 /* If licensed IranYekan webfonts are not present, fall back to bundled Yekan files to avoid invalid font decoding errors in browsers. */
 
 /* Map IranYekan family to bundled Yekan files when the proper IranYekan woff2 is missing */
+/*
 @font-face {
   font-family: 'IranYekan';
   src: url('/fonts/Yekan.woff2') format('woff2');
@@ -55,6 +56,7 @@
   font-style: normal;
   font-display: swap;
 }
+*/
 
 :root {
   /* prefer IranYekan (mapped to Yekan when missing), then Vazirmatn, then Yekan */

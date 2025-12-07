@@ -7,6 +7,8 @@ type MeResponse = {
   full_name?: string
 }
 
+type LoginResult = { otpRequired: true } | { otpRequired: false; access_token: string }
+
 const LoginPanel: React.FC = () => {
   const [username, setUsername] = React.useState('admin')
   const [password, setPassword] = React.useState('Admin@123')
@@ -41,13 +43,11 @@ const LoginPanel: React.FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const result = await loginApi(username, password)
-      if (result?.access_token) {
-        await fetchMe()
-      } else if (result?.otpRequired) {
+      const result: LoginResult = await loginApi(username, password)
+      if (result.otpRequired) {
         setError('OTP لازم است')
       } else {
-        setError('ورود ناموفق')
+        await fetchMe()
       }
     } catch (err: any) {
       setError(err?.message || 'خطای ورود')

@@ -1,0 +1,82 @@
+src/components/FontDiagnosticButton.tsx(91,14): error TS1507: There is nothing available for repetition.
+src/components/FontDiagnosticButton.tsx(154,32): error TS2552: Cannot find name 'txt'. Did you mean 'Text'?
+src/components/FontDiagnosticButton.tsx(155,28): error TS2304: Cannot find name 'txt'.
+src/components/LoginPanel.tsx(45,19): error TS2339: Property 'access_token' does not exist on type 'LoginResult'.
+  Property 'access_token' does not exist on type '{ otpRequired: true; }'.
+src/components/finance/PaymentsList.tsx(4,10): error TS2614: Module '"../../modules/FinanceModule"' has no exported member 'Payment'. Did you mean to use 'import Payment from "../../modules/FinanceModule"' instead?
+src/components/finance/TransactionForm.tsx(8,10): error TS2614: Module '"../../modules/FinanceModule"' has no exported member 'PaymentFormState'. Did you mean to use 'import PaymentFormState from "../../modules/FinanceModule"' instead?
+src/components/finance/TransactionForm.tsx(8,28): error TS2614: Module '"../../modules/FinanceModule"' has no exported member 'PersonOption'. Did you mean to use 'import PersonOption from "../../modules/FinanceModule"' instead?
+src/components/finance/TransactionForm.tsx(8,42): error TS2614: Module '"../../modules/FinanceModule"' has no exported member 'PaymentMethod'. Did you mean to use 'import PaymentMethod from "../../modules/FinanceModule"' instead?
+src/components/layout/AppShell.tsx(271,47): error TS18047: 'sync' is possibly 'null'.
+src/components/people/PeopleList.tsx(4,10): error TS2614: Module '"../../modules/PeopleModule"' has no exported member 'PersonWithBalance'. Did you mean to use 'import PersonWithBalance from "../../modules/PeopleModule"' instead?
+src/components/people/PersonLedger.tsx(4,10): error TS2614: Module '"../../modules/PeopleModule"' has no exported member 'PersonLedger'. Did you mean to use 'import PersonLedger from "../../modules/PeopleModule"' instead?
+src/components/people/PersonLedger.tsx(4,24): error TS2614: Module '"../../modules/PeopleModule"' has no exported member 'LedgerEntry'. Did you mean to use 'import LedgerEntry from "../../modules/PeopleModule"' instead?
+src/components/people/PersonLedger.tsx(77,43): error TS7006: Parameter 'entry' implicitly has an 'any' type.
+src/components/people/PersonLedger.tsx(122,52): error TS2304: Cannot find name 'apiPost'.
+src/components/reports/StockValuationReport.tsx(4,10): error TS2614: Module '"../../modules/ReportsModule"' has no exported member 'StockValuation'. Did you mean to use 'import StockValuation from "../../modules/ReportsModule"' instead?
+src/i18n/I18nContext.tsx(80,19): error TS7053: Element implicitly has an 'any' type because expression of type '"username" | "app_name" | "loading" | "error" | "success" | "warning" | "cancel" | "save" | "edit" | "delete" | "close" | "back" | "remove" | "are_you_sure" | "please_fill_required_fields" | ... 70 more ... | "session_expired"' can't be used to index type '{ app_name: string; loading: string; error: string; success: string; warning: string; cancel: string; save: string; edit: string; delete: string; close: string; back: string; remove: string; are_you_sure: string; ... 72 more ...; session_expired: string; } | { ...; } | { ...; } | { ...; }'.
+  Property 'customer_groups' does not exist on type '{ app_name: string; loading: string; error: string; success: string; warning: string; cancel: string; save: string; edit: string; delete: string; close: string; back: string; remove: string; are_you_sure: string; ... 72 more ...; session_expired: string; } | { ...; } | { ...; } | { ...; }'.
+src/modules/DeveloperModule.tsx(193,32): error TS18046: 'data' is of type 'unknown'.
+src/modules/DeveloperModule.tsx(193,52): error TS18046: 'data' is of type 'unknown'.
+src/modules/DeveloperModule.tsx(277,36): error TS18046: 'data' is of type 'unknown'.
+src/modules/FinanceModule.tsx(200,20): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/modules/FinanceModule.tsx(208,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/modules/FinanceModule.tsx(211,22): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/modules/FinanceModule.tsx(438,60): error TS2322: Type '(showSpinner?: boolean) => Promise<void>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
+  Types of parameters 'showSpinner' and 'event' are incompatible.
+    Type 'MouseEvent<HTMLButtonElement, MouseEvent>' is not assignable to type 'boolean | undefined'.
+src/modules/InvoicesModule.tsx(57,70): error TS2345: Argument of type '"ریال"' is not assignable to parameter of type '"ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†" | "ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ " | undefined'.
+src/modules/InvoicesModule.tsx(633,82): error TS2345: Argument of type '"ریال"' is not assignable to parameter of type '"ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†" | "ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ " | undefined'.
+src/modules/InvoicesModule.tsx(637,86): error TS2345: Argument of type '"ریال"' is not assignable to parameter of type '"ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†" | "ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ " | undefined'.
+src/modules/InvoicesModule.tsx(1101,12): error TS2304: Cannot find name 'viewMode'.
+src/modules/InvoicesModule.tsx(1103,114): error TS2304: Cannot find name 'saleOrders'.
+src/modules/InvoicesModule.tsx(1109,42): error TS2304: Cannot find name 'viewMode'.
+src/modules/InvoicesModule.tsx(1112,16): error TS2304: Cannot find name 'viewMode'.
+src/modules/InvoicesModule.tsx(1146,49): error TS2304: Cannot find name 'finalizeSaleOrder'.
+src/modules/InvoicesModule.tsx(1147,27): error TS2304: Cannot find name 'setSaleOrders'.
+src/modules/InvoicesModule.tsx(1147,41): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+src/modules/InvoicesModule.tsx(1147,58): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/modules/InvoicesModule.tsx(1155,45): error TS2304: Cannot find name 'exportSaleOrder'.
+src/modules/InvoicesModule.tsx(1169,14): error TS2304: Cannot find name 'viewMode'.
+src/modules/InvoicesModule.tsx(1324,84): error TS2345: Argument of type '"ریال"' is not assignable to parameter of type '"ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†" | "ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ " | undefined'.
+src/modules/InvoicesModule.tsx(1325,74): error TS2345: Argument of type '"ریال"' is not assignable to parameter of type '"ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†" | "ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ " | undefined'.
+src/modules/PageBuilderModule.tsx(515,17): error TS2345: Argument of type 'void' is not assignable to parameter of type 'SetStateAction<string>'.
+src/modules/PageBuilderModule.tsx(585,9): error TS2322: Type 'string | void' is not assignable to type 'string'.
+  Type 'void' is not assignable to type 'string'.
+src/modules/PageBuilderModule.tsx(1130,23): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/modules/SaleOrdersModule.tsx(20,90): error TS2352: Conversion of type 'undefined' to type 'string | null' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+src/modules/SaleOrdersModule.tsx(123,45): error TS2345: Argument of type '{ party_name: string; client_time: string; client_calendar: string; note: string | undefined; items: { description: string; quantity: number; unit: string | undefined; unit_price: number; product_id: string | undefined; }[]; }' is not assignable to parameter of type 'CreateSaleOrderPayload'.
+  Types of property 'client_calendar' are incompatible.
+    Type 'string' is not assignable to type '"jalali" | "gregorian" | undefined'.
+src/pages/Activity.tsx(15,21): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/ContactEditor.tsx(38,119): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/ContactEditor.tsx(38,143): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/ContactEditor.tsx(38,194): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/ContactEditor.tsx(106,172): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/ContactEditor.tsx(127,162): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/Contacts.tsx(22,21): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/Dashboard.tsx(44,40): error TS2339: Property 'total' does not exist on type '{}'.
+src/pages/InvoiceEditor.tsx(46,19): error TS2345: Argument of type '{}' is not assignable to parameter of type 'SetStateAction<any[]>'.
+src/pages/InvoiceEditor.tsx(48,33): error TS18046: 's' is of type 'unknown'.
+src/pages/InvoiceEditor.tsx(48,63): error TS18046: 's' is of type 'unknown'.
+src/pages/InvoiceEditor.tsx(48,94): error TS18046: 's' is of type 'unknown'.
+src/pages/InvoiceEditor.tsx(48,121): error TS18046: 's' is of type 'unknown'.
+src/pages/InvoiceEditor.tsx(89,26): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/InvoiceEditor.tsx(91,24): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/InvoiceEditor.tsx(92,60): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/PersonEditor.tsx(38,118): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/PersonEditor.tsx(38,142): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/PersonEditor.tsx(38,192): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/PersonEditor.tsx(101,172): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/PersonEditor.tsx(122,162): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/Persons.tsx(33,52): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/ProductEditor.tsx(38,119): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/ProductEditor.tsx(38,143): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/ProductEditor.tsx(38,194): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/Products.tsx(32,52): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/Reports.tsx(27,52): error TS2339: Property 'items' does not exist on type '{}'.
+src/pages/TaskEditor.tsx(40,114): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/TaskEditor.tsx(40,138): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/TaskEditor.tsx(40,186): error TS2339: Property 'id' does not exist on type '{}'.
+src/pages/Tasks.tsx(22,21): error TS2339: Property 'items' does not exist on type '{}'.
+src/services/api.ts(86,30): error TS2345: Argument of type '"PUT"' is not assignable to parameter of type 'HttpMethod | undefined'.

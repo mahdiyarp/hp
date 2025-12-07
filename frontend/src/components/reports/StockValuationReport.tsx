@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react'
 import { retroHeading, retroPanelPadded, retroButton, retroTableHeader } from '../retroTheme'
 import { formatNumberFa } from '../../utils/num'
-import { StockValuation } from '../../modules/ReportsModule'
+import * as ReportsModule from '../../modules/ReportsModule'
 
 interface StockValuationReportProps {
-  stock: StockValuation[]
+  stock: ReportsModule.StockValuation[]
   onExport: () => void
 }
 
@@ -46,10 +46,10 @@ export default function StockValuationReport({ stock, onExport }: StockValuation
                 <td className="px-3 py-2">{item.name}</td>
                 <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
                 <td className="px-3 py-2 text-left">
-                  {item.unit_price ? formatNumberFa(item.unit_price) : 'نامشخص'}
+                  {item.unit_price != null ? formatNumberFa(item.unit_price) : 'نامشخص'}
                 </td>
                 <td className="px-3 py-2 text-left">
-                  {formatNumberFa(item.total_value)} ریال
+                  {formatNumberFa(item.total_value ?? 0)} ریال
                 </td>
               </tr>
             ))}

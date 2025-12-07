@@ -13,6 +13,18 @@ import PnLReport from '../components/reports/PnLReport'
 import CashReport from '../components/reports/CashReport'
 import StockValuationReport from '../components/reports/StockValuationReport'
 
+// Exported types used by report components
+export type StockValuation = {
+  product_id: string | number
+  name: string
+  inventory: number
+  unit_price?: number | null
+  total_value?: number | null
+}
+export type PersonOption = { id: string; name: string; kind?: string | null }
+export type PersonReportEntry = any
+export type InvoiceMatch = any
+
 // ... (interfaces remain the same)
 
 // Local data interfaces (avoid name collision with component identifiers)

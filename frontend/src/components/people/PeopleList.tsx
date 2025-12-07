@@ -1,11 +1,11 @@
 import React from 'react'
 import { retroBadge, retroTableHeader } from '../retroTheme'
 import { formatNumberFa } from '../../utils/num'
-import { PersonWithBalance } from '../../modules/PeopleModule'
+import * as PeopleModule from '../../modules/PeopleModule'
 
 interface PeopleListProps {
-  people: PersonWithBalance[]
-  onSelectPerson: (person: PersonWithBalance) => void
+  people: PeopleModule.PersonWithBalance[]
+  onSelectPerson: (person: PeopleModule.PersonWithBalance) => void
   sortField: string
   sortOrder: 'asc' | 'desc'
   onSort: (field: 'name' | 'debit' | 'credit' | 'balance' | 'created_at') => void

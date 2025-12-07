@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, ReactNode, useEffect, useState } from 'react'
-import { translations, type LanguageCode, type TranslationKey } from './translations.clean'
+import { fa, en, ar, ku, translations, type LanguageCode, type TranslationKey } from './translations.clean'
 import { getAccessToken } from '../services/auth'
 
 interface I18nContextType {
@@ -75,10 +75,21 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Normalize translations so all languages have the full FA key set as fallback
+  type Dict = Record<TranslationKey, string>
+  const safeTranslations: Record<LanguageCode, Dict> = useMemo(() => ({
+    fa: fa as Dict,
+    en: { ...(fa as Dict), ...(en as any) },
+    ar: { ...(fa as Dict), ...(ar as any) },
+    ku: { ...(fa as Dict), ...(ku as any) },
+  }), [])
+
   const t = (key: TranslationKey, defaultValue?: string): string => {
-    const dict = translations[language]
-    const value = dict[key]
-    return typeof value === 'string' ? value : (defaultValue || key)
+    const dict = safeTranslations[language]
+    if (Object.prototype.hasOwnProperty.call(dict, key)) {
+      return dict[key];
+    }
+    return defaultValue || key
   }
 
   const dir = language === 'ar' || language === 'ku' || language === 'fa' ? 'rtl' : 'ltr'

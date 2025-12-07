@@ -1,10 +1,7 @@
 const ACCESS_KEY = 'hesabpak_access_token'
 const REFRESH_KEY = 'hesabpak_refresh_token'
 
-let API_BASE = ''
-if (typeof window !== 'undefined' && window.location.port === '5173') {
-  API_BASE = 'http://127.0.0.1:8000'
-}
+const API_BASE = ''
 
 export const getAccessToken = () => localStorage.getItem(ACCESS_KEY)
 export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY)

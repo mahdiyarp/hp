@@ -81,8 +81,8 @@ def seed():
                 username='developer',
                 email='developer@hesabpak.local',
                 full_name='Developer User',
-                mobile='09123506545',
-                hashed_password=get_password_hash('09123506545'),
+                mobile='88808881',
+                hashed_password=get_password_hash('88808881'),
                 role='Admin',
                 role_id=admin_role.id,
                 is_active=True

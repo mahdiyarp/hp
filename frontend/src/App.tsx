@@ -255,7 +255,7 @@ export default function App() {
     // If the logged-in user is a Developer, expose all modules (Developer
     // is considered the highest-level role). Otherwise, if `userModules`
     // is empty show the minimal starter menu to avoid overwhelming new users.
-    const accessibleModules = user?.role_name === 'Developer'
+    const accessibleModules = user?.role === 'Developer'
       ? modules
       : userModules.length === 0
         ? modules.filter(mod => ['dashboard', 'icc-shop'].includes(mod.id))

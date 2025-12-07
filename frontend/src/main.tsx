@@ -2,7 +2,8 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
-import './styles/combined-persian-fonts.css'
+// Disabled bundled webfont registration until real woff2 files are provided.
+// import './styles/combined-persian-fonts.css'
 import './styles/classic.css'
 import './utils/persian-font-watcher.js' // runtime watcher for corrupted chars
 // Append-only import for optional auto-fix CSS if present

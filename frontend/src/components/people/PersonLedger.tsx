@@ -1,10 +1,11 @@
 import React from 'react'
+import { apiPost } from '../../services/api'
 import { retroButton, retroHeading, retroPanelPadded, retroTableHeader } from '../retroTheme'
 import { formatNumberFa, isoToJalali } from '../../utils/num'
-import { PersonLedger, LedgerEntry } from '../../modules/PeopleModule'
+import * as PeopleModule from '../../modules/PeopleModule'
 
 interface PersonLedgerProps {
-  ledgerData: PersonLedger | null
+  ledgerData: PeopleModule.PersonLedger | null
   onClose: () => void
   onExport: () => void
 }
@@ -74,7 +75,7 @@ export default function PersonLedger({ ledgerData, onClose, onExport }: PersonLe
                   </tr>
                 </thead>
                 <tbody>
-                  {ledgerData.entries.map(entry => (
+                  {ledgerData.entries.map((entry: PeopleModule.LedgerEntry) => (
                     <tr key={entry.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
                       <td className="px-3 py-2 text-xs">
                         {new Date(entry.entry_date).toLocaleDateString('fa-IR')}

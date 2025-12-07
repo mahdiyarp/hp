@@ -5,24 +5,27 @@ import {
   retroInput,
 } from '../retroTheme'
 import Alert from '../Alert'
-import { PaymentFormState, PersonOption, PaymentMethod } from '../../modules/FinanceModule'
+import * as FinanceModule from '../../modules/FinanceModule';
+type PaymentFormState = FinanceModule.PaymentFormState;
+type PersonOption = FinanceModule.PersonOption;
+type PaymentMethod = FinanceModule.PaymentMethod;
 import { formatNumberFa, isoToJalali } from '../../utils/num'
 import { parseJalaliInput } from '../../utils/date'
 
 interface TransactionFormProps {
-  form: PaymentFormState
-  onFormChange: (field: keyof PaymentFormState, value: string) => void
+  form: FinanceModule.PaymentFormState
+  onFormChange: (field: keyof FinanceModule.PaymentFormState, value: string) => void
   onDueDateChange: (value: string) => void
   onSubmit: (e: React.FormEvent) => void
   onClose: () => void
   creating: boolean
   error: string | null
   success: string | null
-  persons: PersonOption[]
+  persons: FinanceModule.PersonOption[]
   peopleLoading: boolean
   openInvoices: any[]
   invoicesLoading: boolean
-  paymentMethods: PaymentMethod[]
+  paymentMethods: FinanceModule.PaymentMethod[]
 }
 
 export default function TransactionForm({

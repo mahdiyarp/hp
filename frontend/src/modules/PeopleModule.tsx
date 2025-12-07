@@ -18,7 +18,7 @@ import PersonLedger from '../components/people/PersonLedger'
 // ... (interfaces remain the same)
 
 
-interface Person {
+export interface Person {
   id: string
   name: string
   kind: string | null
@@ -28,14 +28,14 @@ interface Person {
   created_at: string
 }
 
-interface PersonBalance {
+export interface PersonBalance {
   person_id: string
   debit: number
   credit: number
   balance: number
 }
 
-interface PersonWithBalance extends Person {
+export interface PersonWithBalance extends Person {
   debit: number
   credit: number
   balance: number
@@ -45,7 +45,7 @@ type KindFilter = 'all' | 'customer' | 'supplier' | 'other'
 type SortField = 'name' | 'debit' | 'credit' | 'balance' | 'created_at'
 type SortOrder = 'asc' | 'desc'
 
-interface LedgerEntry {
+export interface LedgerEntry {
   id: string
   description: string
   debit_account: string
@@ -71,7 +71,7 @@ interface LedgerEntry {
   } | null
 }
 
-interface PersonLedger {
+export interface PersonLedger {
   party_id: string
   person: {
     id: string

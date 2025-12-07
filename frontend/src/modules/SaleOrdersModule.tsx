@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'

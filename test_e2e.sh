@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-API_URL="http://localhost:8000"
+API_URL="http://localhost:8881"
 ADMIN_USER="admin"
 ADMIN_PASS="admin"
 

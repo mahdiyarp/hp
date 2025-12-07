@@ -1,7 +1,7 @@
 import React from 'react'
 import { retroBadge, retroButton, retroTableHeader } from '../retroTheme'
 import { formatNumberFa, isoToJalali } from '../../utils/num'
-import { Payment } from '../../modules/FinanceModule'
+import Payment from '../../modules/FinanceModule'
 
 interface PaymentsListProps {
   payments: Payment[]

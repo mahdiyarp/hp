@@ -25,7 +25,8 @@ root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 os.environ.setdefault('PYTHONPATH', root)
 
 # Build uvicorn command
-cmd = [sys.executable, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '127.0.0.1', '--port', '8000']
+port = os.environ.get('BACKEND_PORT') or os.environ.get('PORT') or '8881'
+cmd = [sys.executable, '-m', 'uvicorn', 'backend.app.main:app', '--reload', '--host', '127.0.0.1', '--port', str(port)]
 print('Starting backend with:', ' '.join(cmd))
 # Spawn as detached process
 if os.name == 'nt':

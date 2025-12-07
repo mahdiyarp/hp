@@ -142,6 +142,7 @@ export default function InvoicesModule({ smartDate, sync }: ModuleComponentProps
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [saleOrders, setSaleOrders] = useState<any[]>([])
   const [invoiceListLimit, setInvoiceListLimit] = useState(20)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
@@ -162,6 +163,7 @@ export default function InvoicesModule({ smartDate, sync }: ModuleComponentProps
   const [exporting, setExporting] = useState(false)
   const [recentlyViewedInvoiceId, setRecentlyViewedInvoiceId] = useState<number | null>(null)
   const [autoFinalize, setAutoFinalize] = useState(true)
+  const [viewMode, setViewMode] = useState<'invoices' | 'saleOrders'>('invoices')
   const [invoiceForm, setInvoiceForm] = useState<InvoiceFormState>({
     invoice_type: 'sale',
     party_name: '',
@@ -261,6 +263,19 @@ export default function InvoicesModule({ smartDate, sync }: ModuleComponentProps
     }
   }
   
+  const finalizeSaleOrder = async (id: number, client_time: string) => {
+    const updated = await apiPost(`/api/sale-orders/${id}/finalize`, { client_time })
+    return updated
+  }
+
+  const exportSaleOrder = async (id: number, format: 'pdf' | 'csv' | 'xlsx') => {
+    const res = await apiPost<{ download_url?: string }>(
+      `/api/exports/sale-order/${id}?format=${format}`,
+      {},
+    )
+    return res
+  }
+
     const resetForm = (type: InvoiceFormState['invoice_type'] = invoiceForm.invoice_type) => {
     setInvoiceForm({
       invoice_type: type,

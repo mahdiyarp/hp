@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost } from '../services/api'
 import { formatNumberFa, isoToJalali } from '../utils/num'
+import { parseJalaliInput } from '../utils/date'
 import {
   retroBadge,
   retroButton,
@@ -16,6 +17,56 @@ import Alert from '../components/Alert'
 import PaymentsList from '../components/finance/PaymentsList'
 import ChecksList from '../components/finance/ChecksList'
 import TransactionForm from '../components/finance/TransactionForm'
+
+// Shared types exported for other components
+export type DirectionFilter = 'all' | 'in' | 'out'
+export type StatusFilter = 'all' | 'draft' | 'posted'
+
+export interface Payment {
+  id: number
+  payment_number?: string | null
+  direction: 'in' | 'out'
+  method?: string | null
+  party_name?: string | null
+  amount: number
+  status: string
+  server_time: string
+  due_date?: string | null
+  reference?: string | null
+  invoice_id?: number | null
+}
+
+export type PersonOption = { id: number | string; name: string; kind?: string | null }
+
+export type PaymentMethod = {
+  id: number
+  key: string
+  name: string
+  is_cheque?: boolean
+  enabled?: boolean
+  order?: number
+}
+
+export type PaymentFormState = {
+  direction: 'in' | 'out'
+  method: string
+  party_name: string
+  amount: string
+  reference: string
+  due_date: string
+  due_date_jalali: string
+  note: string
+  invoice_id?: number | string
+}
+
+export type CheckDue = {
+  id: number
+  payment_number?: string | null
+  party_name?: string | null
+  amount: number
+  due_date?: string | null
+  status: string
+}
 
 // ... (interfaces remain the same)
 
@@ -196,7 +247,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const netBalance = totals.receipts - totals.payments
 
   const handleFormChange = (field: keyof PaymentFormState, value: string) => {
-    setPaymentForm(prev => ({ ...prev, [field]: value }))
+    setPaymentForm((prev: PaymentFormState) => ({ ...prev, [field]: value }))
   }
 
   const handleDueJalaliChange = (value: string) => {
@@ -204,10 +255,10 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     const parsed = parseJalaliInput(value)
     if (parsed) {
       const isoDate = parsed.iso.slice(0, 10)
-      setPaymentForm(prev => ({ ...prev, due_date: isoDate, due_date_jalali: parsed.jalali }))
+      setPaymentForm((prev: PaymentFormState) => ({ ...prev, due_date: isoDate, due_date_jalali: parsed.jalali }))
     } else {
       // Keep raw input for user; clear ISO if invalid
-      setPaymentForm(prev => ({ ...prev, due_date: '', due_date_jalali: value }))
+      setPaymentForm((prev: PaymentFormState) => ({ ...prev, due_date: '', due_date_jalali: value }))
     }
   }
 
@@ -434,7 +485,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
             <p className={retroHeading}>Checks Watch</p>
             <h3 className="text-lg font-semibold mt-2">چک‌های در شرف سررسید</h3>
           </div>
-          <button className={`${retroButton} text-[11px]`} onClick={loadData}>
+          <button className={`${retroButton} text-[11px]`} onClick={() => loadData()}>
             بروزرسانی
           </button>
         </header>

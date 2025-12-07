@@ -17,12 +17,15 @@ services:
     build:
       context: ./backend
     ports:
-      - '8000:8000'
-    env_file:
-      - ./backend/.env
+      - '8881:8000'
     environment:
+      DATABASE_URL: "postgresql+psycopg2://postgres:postgres@db:5432/hesabpak"
       DEMO_SEED: "true"
       SCHEDULER_ENABLED: "true"
+      BACKEND_PORT: "8881"
+      DEVELOPER_USER: "developer"
+      DEVELOPER_PASS: "88808881"
+      DEVELOPER_MOBILE: "88808881"
     depends_on:
       db:
         condition: service_healthy
@@ -38,9 +41,12 @@ services:
     build:
       context: ./frontend
     ports:
-      - '3000:3000'
+      - '8880:3000'
     depends_on:
       - backend
+    environment:
+      FRONTEND_PORT: "8880"
+      BACKEND_PORT: "8881"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000"]
       interval: 10s

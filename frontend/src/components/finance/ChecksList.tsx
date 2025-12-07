@@ -1,7 +1,15 @@
 import React from 'react'
 import { retroBadge, retroTableHeader } from '../retroTheme'
 import { formatNumberFa, isoToJalali } from '../../utils/num'
-import { CheckDue } from '../../modules/FinanceModule'
+// Local shape used for checks list; keep minimal and aligned with API
+type CheckDue = {
+  id: number
+  payment_number?: string | null
+  party_name?: string | null
+  amount: number
+  due_date?: string | null
+  status: string
+}
 
 interface ChecksListProps {
   checks: CheckDue[]

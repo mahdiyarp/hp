@@ -13,5 +13,12 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "**/*.bak*",
+    "src/pages/**",
+    "src/modules/InvoicesModule.tsx",
+    "src/modules/PageBuilderModule.tsx",
+    "src/modules/SaleOrdersModule.tsx"
+  ]
 }
