@@ -140,8 +140,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
         const startT = new Date(startIso).getTime()
         const endT = new Date(endIso).getTime()
         const { sales, cogs } = computePnLWithCost(withItems, startT, endT, costMethod)
-        setComputedSales(sales)
-        setComputedCOGS(cogs)
+        // prefer server values if provided in pnl
+        setComputedSales((pnl as any)?.sales || sales)
+        setComputedCOGS((pnl as any)?.cogs || cogs)
       } catch (err) {
         console.error('FIFO/LIFO compute failed', err)
         newWarnings.push('محاسبه FIFO/LIFO انجام نشد.')
@@ -226,32 +227,15 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
   function openProductLedger(p: StockValuation) {
     try {
-      // Build ledger from invoices for this product within selected range
-      // We reuse invoices computed during last load by fetching again (simpler state mgmt)
       const { startIso, endIso } = resolveRange()
-      apiGet<Array<any>>('/api/invoices').then(invs => {
-        const startT = new Date(startIso).getTime()
-        const endT = new Date(endIso).getTime()
-        const rows: Array<{ date: string; type: 'purchase'|'sale'; qty: number; unit: number; total: number; running: number }> = []
-        const evs: Array<any> = []
-        for (const inv of invs) {
-          if (inv.status !== 'final') continue
-          const t = inv.server_time ? new Date(inv.server_time).getTime() : 0
-          if (!t || t < startT || t > endT) continue
-          for (const it of inv.items || []) {
-            if (it.product_id !== p.product_id) continue
-            evs.push({ t, type: inv.invoice_type, qty: Number(it.quantity||0), unit: Number(it.unit_price||0), total: Number(it.total||0) })
-          }
-        }
-        evs.sort((a,b)=> a.t - b.t)
-        let running = 0
-        for (const e of evs) {
-          if (e.type === 'purchase') running += e.qty
-          if (e.type === 'sale') running -= e.qty
-          rows.push({ date: new Date(e.t).toISOString(), type: e.type, qty: e.qty, unit: e.unit, total: e.total, running })
-        }
-        setProductLedgerOpen({ product_id: p.product_id, name: p.name, entries: rows })
-      })
+      apiGet<Array<{date:string;type:'purchase'|'sale';qty:number;unit:number;total:number;running:number}>>(`/api/ledger/product/${encodeURIComponent(p.product_id)}?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`)
+        .then(rows => {
+          const entries = (rows || []).map(r => ({ ...r, date: r.date }))
+          setProductLedgerOpen({ product_id: p.product_id, name: p.name, entries })
+        })
+        .catch(err => {
+          console.error(err)
+        })
     } catch (e) {
       console.error(e)
     }
