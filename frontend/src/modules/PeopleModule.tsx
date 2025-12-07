@@ -805,7 +805,18 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                     onClick={() => loadPersonLedger(person)}
                   >
                     <td className="px-3 py-2 font-semibold">
-                      {person.name}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{person.name}</span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          بدهکار: {formatNumberFa(person.debit || 0)}
+                        </span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          بستانکار: {formatNumberFa(person.credit || 0)}
+                        </span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          مانده: {formatNumberFa(Math.abs(person.balance || 0))}{(person.balance||0)>0?' بده':''}{(person.balance||0)<0?' بستان':''}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {[(personGroups[person.id]?.l1||''),(personGroups[person.id]?.l2||''),(personGroups[person.id]?.l3||'')].filter(Boolean).join('/') || '—'}

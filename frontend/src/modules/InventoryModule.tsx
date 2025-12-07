@@ -631,7 +631,22 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                     onClick={() => loadProductMovement(prod)}
                   >
                     <td className="px-3 py-2">
-                      {prod.name}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{prod.name}</span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          موجودی: {formatNumberFa(prod.inventory ?? 0)}
+                        </span>
+                        {typeof prod.last_purchase_price === 'number' && (
+                          <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                            آخرین خرید: {formatNumberFa(prod.last_purchase_price)}
+                          </span>
+                        )}
+                        {typeof prod.last_sale_price === 'number' && (
+                          <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                            آخرین فروش: {formatNumberFa(prod.last_sale_price)}
+                          </span>
+                        )}
+                      </div>
                       {prod.description && (
                         <span className="block text-[10px] text-[#7a6b4f] mt-1">
                           {prod.description}
