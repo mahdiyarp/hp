@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { retroHeading } from '../retroTheme'
 import { apiGet, apiPost } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 
 const STORAGE_KEY = 'hesabpak_sidebar_order_v1'
 
@@ -20,6 +21,7 @@ export default function SidebarMenu({
   activeModuleId: string
   onNavigate: (id: string) => void
 }) {
+  const { user } = useAuth()
   const [order, setOrder] = useState<string[]>([])
   const [expandedSettings, setExpandedSettings] = useState(false)
   const collapsed = false
@@ -78,8 +80,13 @@ export default function SidebarMenu({
   }, [modules])
 
   const settingsChildren = useMemo(() => {
-    return modules.filter(m => /system|settings|user|security|integration|auth/i.test(m.id))
-  }, [modules])
+    const all = modules.filter(m => /system|settings|user|security|integration|auth|developer/i.test(m.id))
+    // hide developer for non-developers
+    if (!user || (user.role || '').toLowerCase() !== 'developer') {
+      return all.filter(m => m.id !== 'developer')
+    }
+    return all
+  }, [modules, user])
 
   const nonSettings = useMemo(() => {
     return order.filter(id => !settingsChildren.some(s => s.id === id)).map(id => moduleMap.get(id)).filter(Boolean) as ModuleDef[]

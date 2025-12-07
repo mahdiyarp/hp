@@ -6,6 +6,7 @@ import PeopleModule from './PeopleModule'
 import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import BanksModule from './settings/BanksModule'
+import DeveloperModule from './settings/DeveloperModule'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 export const modules: ModuleDefinition[] = [
@@ -64,5 +65,12 @@ export const modules: ModuleDefinition[] = [
     description: 'نمایش و جستجوی بانک‌ها و شعب ایران؛ بروزرسانی از منابع',
     component: BanksModule,
     badge: 'BANKS',
+  },
+  {
+    id: 'developer',
+    label: 'تنظیمات توسعه‌دهنده',
+    description: 'ابزارهای دیباگ و لاگ‌ها؛ فقط برای دولوپر',
+    component: DeveloperModule,
+    badge: 'DEV',
   },
 ]

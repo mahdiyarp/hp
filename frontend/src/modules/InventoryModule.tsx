@@ -79,6 +79,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
   const [groupL1Filter, setGroupL1Filter] = useState<string>('')
   const [groupL2Filter, setGroupL2Filter] = useState<string>('')
   const [groupL3Filter, setGroupL3Filter] = useState<string>('')
+  const [hideZeroInventory, setHideZeroInventory] = useState<boolean>(() => {
+    const raw = localStorage.getItem('inventory.hideZero')
+    return raw === null ? true : raw === 'true'
+  })
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
@@ -260,13 +264,14 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       } else if (groupFilter !== 'all' && (prod.group ?? 'other') !== groupFilter) {
         return false
       }
+      if (hideZeroInventory && (prod.inventory ?? 0) === 0) return false
       if (search) {
         const hay = `${prod.name} ${prod.group ?? ''}`.toLowerCase()
         if (!hay.includes(search.toLowerCase())) return false
       }
       return true
     })
-  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search])
+  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search, hideZeroInventory])
 
   const [sortKey, setSortKey] = useState<'name'|'group'|'unit'|'inventory'|'last_purchase_price'|'avg_purchase_price'|'last_sale_price'|'avg_sale_price'>(()=>{
     const raw = localStorage.getItem('inventory.sort.key')
@@ -301,6 +306,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       localStorage.setItem('inventory.sort.dir', sortDir)
     } catch {}
   }, [sortKey, sortDir])
+
+  useEffect(() => {
+    try { localStorage.setItem('inventory.hideZero', String(hideZeroInventory)) } catch {}
+  }, [hideZeroInventory])
 
   const totals = useMemo(() => {
     const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
@@ -581,6 +590,10 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
               {formatNumberFa(sorted.length)} کالا مطابق فیلترها نمایش داده شده است.
             </div>
+            <label className="flex items-center gap-2 text-xs mt-1">
+              <input type="checkbox" checked={hideZeroInventory} onChange={e => setHideZeroInventory(e.target.checked)} />
+              عدم نمایش موجودی صفر
+            </label>
           </div>
           <div className="space-y-2">
             <label className={retroHeading}>مرتب‌سازی</label>
