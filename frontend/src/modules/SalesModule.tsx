@@ -750,11 +750,8 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 const suggestedPrice = getSuggestedPrice(selectedProduct, invoiceForm.invoice_type)
 
                 return (
-                  <div
-                    key={idx}
-                    className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm space-y-3"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-3">
+                  <div key={idx} className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-[2fr_0.7fr_0.8fr_1fr_1fr_auto] gap-3 items-end">
                       <div className="space-y-2">
                         <label className={retroHeading}>شرح کالا *</label>
                         <input
@@ -762,9 +759,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           onChange={e => {
                             const value = e.target.value
                             updateItem(idx, 'description', value)
-                            const matched = products.find(
-                              prod => prod.name === value || prod.id === value,
-                            )
+                            const matched = products.find(prod => prod.name === value || prod.id === value)
                             if (matched) {
                               setInvoiceForm(prev => {
                                 const items = prev.items.map((row, rowIndex) =>
@@ -777,10 +772,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                                           row.unit_price && row.unit_price > 0
                                             ? row.unit_price
                                             : (() => {
-                                                const suggestion = getSuggestedPrice(
-                                                  matched,
-                                                  prev.invoice_type,
-                                                )
+                                                const suggestion = getSuggestedPrice(matched, prev.invoice_type)
                                                 return suggestion > 0 ? suggestion : row.unit_price
                                               })(),
                                       }
@@ -805,90 +797,46 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                         {selectedProduct && (
                           <div className="text-[10px] space-y-2 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
                             <div className="space-y-1">
-                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
-                                📦 وضعیت موجودی
-                              </div>
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">📦 وضعیت موجودی</div>
                               <div>
                                 موجودی فعلی:{' '}
                                 <span className="font-semibold">
-                                  {typeof availableInventory === 'number'
-                                    ? formatNumberFa(availableInventory)
-                                    : '---'}
+                                  {typeof availableInventory === 'number' ? formatNumberFa(availableInventory) : '---'}
                                 </span>{' '}
                                 {selectedProduct.unit || 'عدد'}
                               </div>
                               {typeof projectedInventory === 'number' && (
-                                <div className="text-[#7a6b4f]">
-                                  پس از قطعی تقریبی: {formatNumberFa(Math.max(projectedInventory, 0))}{' '}
-                                  {selectedProduct.unit || 'عدد'}
-                                </div>
+                                <div className="text-[#7a6b4f]">پس از قطعی تقریبی: {formatNumberFa(Math.max(projectedInventory, 0))} {selectedProduct.unit || 'عدد'}</div>
                               )}
                               {invoiceForm.invoice_type === 'sale' && saleShortage && (
-                                <div className="text-[#7a0000] font-semibold">
-                                  موجودی ناکافی برای این ردیف است.
-                                </div>
+                                <div className="text-[#7a0000] font-semibold">موجودی ناکافی برای این ردیف است.</div>
                               )}
-                              {invoiceForm.invoice_type === 'sale' &&
-                                !saleShortage &&
-                                typeof availableInventory === 'number' &&
-                                availableInventory <= 5 && (
-                                  <div className="text-[#8a4d2c]">
-                                    ⚠️ موجودی رو به اتمام است.
-                                  </div>
-                                )}
+                              {invoiceForm.invoice_type === 'sale' && !saleShortage && typeof availableInventory === 'number' && availableInventory <= 5 && (
+                                <div className="text-[#8a4d2c]">⚠️ موجودی رو به اتمام است.</div>
+                              )}
                             </div>
                             <div className="space-y-1">
-                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
-                                💰 تاریخچه قیمت‌ها:
-                              </div>
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">💰 تاریخچه قیمت‌ها:</div>
                               {selectedProduct.last_sale_price && (
-                                <div>
-                                  🔹 آخرین فروش:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.last_sale_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>🔹 آخرین فروش: <span className="font-semibold">{formatNumberFa(selectedProduct.last_sale_price)}</span> ریال</div>
                               )}
                               {selectedProduct.avg_sale_price && (
-                                <div>
-                                  📊 میانگین فروش:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.avg_sale_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>📊 میانگین فروش: <span className="font-semibold">{formatNumberFa(selectedProduct.avg_sale_price)}</span> ریال</div>
                               )}
                               {selectedProduct.last_purchase_price && (
-                                <div>
-                                  🔹 آخرین خرید:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.last_purchase_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>🔹 آخرین خرید: <span className="font-semibold">{formatNumberFa(selectedProduct.last_purchase_price)}</span> ریال</div>
                               )}
                               {selectedProduct.avg_purchase_price && (
-                                <div>
-                                  📊 میانگین خرید:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.avg_purchase_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>📊 میانگین خرید: <span className="font-semibold">{formatNumberFa(selectedProduct.avg_purchase_price)}</span> ریال</div>
                               )}
-                              {!selectedProduct.last_sale_price &&
-                                !selectedProduct.avg_sale_price &&
-                                !selectedProduct.last_purchase_price &&
-                                !selectedProduct.avg_purchase_price && (
-                                  <div className="text-[#7a6b4f] italic">
-                                    هنوز تاریخچه قیمتی ندارد
-                                  </div>
-                                )}
+                              {!selectedProduct.last_sale_price && !selectedProduct.avg_sale_price && !selectedProduct.last_purchase_price && !selectedProduct.avg_purchase_price && (
+                                <div className="text-[#7a6b4f] italic">هنوز تاریخچه قیمتی ندارد</div>
+                              )}
                             </div>
                           </div>
                         )}
                       </div>
+
                       <div className="space-y-2">
                         <label className={retroHeading}>تعداد *</label>
                         <input
@@ -899,19 +847,14 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           className={`${retroInput} w-full`}
                         />
                         {selectedProduct && typeof availableInventory === 'number' && (
-                          <div
-                            className={`text-[11px] ${
-                              saleShortage ? 'text-[#7a0000]' : 'text-[#154b5f]'
-                            }`}
-                          >
+                          <div className={`text-[11px] ${saleShortage ? 'text-[#7a0000]' : 'text-[#154b5f]'}`}>
                             {saleShortage
-                              ? `نیاز ${formatNumberFa(item.quantity)} در برابر موجودی ${formatNumberFa(
-                                  availableInventory,
-                                )}`
+                              ? `نیاز ${formatNumberFa(item.quantity)} در برابر موجودی ${formatNumberFa(availableInventory)}`
                               : `موجودی: ${formatNumberFa(availableInventory)} ${selectedProduct.unit || 'عدد'}`}
                           </div>
                         )}
                       </div>
+
                       <div className="space-y-2">
                         <label className={retroHeading}>واحد</label>
                         <input
@@ -921,9 +864,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           placeholder="عدد / بسته ..."
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-3">
                       <div className="space-y-2">
                         <label className={retroHeading}>قیمت واحد (ریال) *</label>
                         <div className="space-y-1">
@@ -935,18 +876,12 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             className={`${retroInput} w-full font-[Yekan] text-center text-lg`}
                             style={{ fontFamily: 'Yekan' }}
                           />
-                          <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">
-                            {formatNumberFa(item.unit_price)}
-                          </div>
+                          <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">{formatNumberFa(item.unit_price)}</div>
                           {item.unit_price > 0 && (
-                            <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">
-                              {priceWords} ریال
-                            </div>
+                            <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">{priceWords} ریال</div>
                           )}
                           {selectedProduct && suggestedPrice > 0 && (
-                            <div className="text-[10px] text-[#1f2e3b] bg-[#e2eef7] px-2 py-1 rounded border border-dashed border-[#154b5f]">
-                              پیشنهاد بر اساس سوابق: {formatNumberFa(suggestedPrice)} ریال
-                            </div>
+                            <div className="text-[10px] text-[#1f2e3b] bg-[#e2eef7] px-2 py-1 rounded border border-dashed border-[#154b5f]">پیشنهاد بر اساس سوابق: {formatNumberFa(suggestedPrice)} ریال</div>
                           )}
                         </div>
                       </div>
@@ -958,9 +893,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             {formatNumberFa(itemSubtotal)}
                           </div>
                           {itemSubtotal > 0 && (
-                            <div className="text-[10px] text-[#154b5f] italic bg-[#e8f2f7] px-2 py-0.5 rounded border border-dashed border-[#154b5f]">
-                              {subtotalWords} ریال
-                            </div>
+                            <div className="text-[10px] text-[#154b5f] italic bg-[#e8f2f7] px-2 py-0.5 rounded border border-dashed border-[#154b5f]">{subtotalWords} ریال</div>
                           )}
                         </div>
                       </div>
