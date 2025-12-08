@@ -45,5 +45,5 @@ jobs:
         with:
           name: headless-smoke
           path: |
-            workspace/logs/headless_console.log
-            workspace/logs/headless_screenshot.png
+            C:/workspace/logs/headless_console.log
+            C:/workspace/logs/headless_screenshot.png
