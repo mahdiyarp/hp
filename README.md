@@ -23,6 +23,7 @@ For local development copy `backend/.env.example` → `backend/.env` and adjust 
 - Python: `pytest`, `black`, `isort` (managed via `pre-commit`).
 - Node: `eslint`, `prettier`, `lint-staged` (configured in `frontend`).
 - CI: GitHub Actions workflow under `.github/workflows/ci.yml`.
+- Headless smoke test workflow under `.github/workflows/headless-smoke.yml`.
 - Optional 2FA (TOTP) for sign-in flows is available via `/api/auth/otp/*` endpoints.
 
 ### Developer Setup
@@ -41,6 +42,10 @@ npm run prepare   # installs husky hooks
 ```
 
 See `docs/architecture.md` for module breakdown and roadmap.
+
+## Headless Smoke Test
+- Run locally: `npm run smoke` (expects frontend at `http://localhost:3000`).
+- CI artifacts: console log and screenshot saved under `workspace/logs/`.
 
 ## Financial Year (FY) UX
 - Active FY is selectable in the header via the FY selector.
