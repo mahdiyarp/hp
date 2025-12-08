@@ -9,6 +9,9 @@ function appendFyParam(path: string): string {
     const targets = [
       '/api/invoices',
       '/api/payments',
+      '/api/reports/pnl',
+      '/api/reports/person',
+      '/api/persons/balances',
     ]
     const isPartyLedger = u.pathname.startsWith('/api/ledger/party/')
     const isProductMovement = /\/api\/products\/.+\/movement$/.test(u.pathname)

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost, apiDelete, apiPut } from '../services/api'
 import { formatNumberFa } from '../utils/num'
+import { useAuth } from '../context/AuthContext'
 import {
   retroButton,
   retroHeading,
@@ -34,42 +35,6 @@ interface PersonBalance {
   balance: number
 }
 
-interface PersonWithBalance extends Person {
-  debit: number
-  credit: number
-  balance: number
-}
-
-type KindFilter = 'all' | 'customer' | 'supplier' | 'other'
-type SortField = 'name' | 'debit' | 'credit' | 'balance' | 'created_at'
-type SortOrder = 'asc' | 'desc'
-
-interface LedgerEntry {
-  id: string
-  description: string
-  debit_account: string
-  credit_account: string
-  amount: number
-  entry_date: string
-  ref_type: string | null
-  ref_id: string | null
-  running_balance: number
-  invoice: {
-    id: number
-    invoice_number: string
-    issue_date: string
-    total_amount: number
-    status: string
-  } | null
-  payment: {
-    id: number
-    amount: number
-    payment_date: string
-    method: string
-    reference: string | null
-  } | null
-}
-
 interface PersonLedger {
   party_id: string
   person: {
@@ -86,6 +51,8 @@ interface PersonLedger {
 }
 
 export default function PeopleModule({ smartDate }: ModuleComponentProps) {
+  const { user } = useAuth()
+  const canEdit = !!user && ['Admin', 'Accountant', 'Manager'].includes(user.role)
   const [people, setPeople] = useState<Person[]>([])
   const [balances, setBalances] = useState<PersonBalance[]>([])
   const [loading, setLoading] = useState(true)

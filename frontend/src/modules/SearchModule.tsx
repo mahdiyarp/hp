@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiPost } from '../services/api'
+import { apiGet, apiPost } from '../services/api'
 import {
   retroBadge,
   retroButton,
@@ -11,6 +11,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import { formatNumberFaSpaced, isoToJalali, toPersianDigits } from '../utils/num'
 
 type SearchIndex = 'products' | 'persons' | 'invoices' | 'payments'
 
@@ -39,6 +40,8 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
   const [results, setResults] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [personBalances, setPersonBalances] = useState<Record<string, number>>({})
+  const [ledgerModal, setLedgerModal] = useState<null | { productId: string; loading: boolean; items: Array<Record<string, any>> }>(null)
 
   const activeIndexes = useMemo(() => selectedIndexes.length > 0 ? selectedIndexes : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[]), [selectedIndexes])
 
@@ -65,6 +68,17 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
       }
       const res = await apiPost<SearchResponse>('/api/search', payload)
       setResults(res)
+      // Preload person balances if persons present
+      try {
+        if (res && res.persons && Array.isArray(res.persons.hits) && res.persons.hits.length) {
+          const bal = await apiGet<{ balances: Record<string, number> }>('/api/persons/balances')
+          if (bal && bal.balances) setPersonBalances(bal.balances)
+        } else {
+          setPersonBalances({})
+        }
+      } catch {
+        // ignore balance fetch errors
+      }
     } catch (err) {
       console.error(err)
       setError('اجرای جستجو با خطا مواجه شد.')
@@ -184,30 +198,182 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                 </header>
                 {hits.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={retroTableHeader}>شناسه</th>
-                          <th className={retroTableHeader}>مقدارهای کلیدی</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {hits.map((hit, index) => (
-                          <tr key={index} className="border-b border-[#d9cfb6] text-left">
-                            <td className="px-3 py-2">
-                              <span className={`${retroBadge} text-left`}>
-                                {(hit.id as string) ?? `#${index + 1}`}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <pre className="text-xs whitespace-pre-wrap leading-5 text-[#2e2720] bg-[#f6f1df] border border-[#bfb69f] p-2 rounded-sm">
-                                {JSON.stringify(hit, null, 2)}
-                              </pre>
-                            </td>
+                    {idx === 'products' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>کالا</th>
+                            <th className={retroTableHeader}>گروه/واحد</th>
+                            <th className={retroTableHeader}>موجودی</th>
+                            <th className={retroTableHeader}>اقدامات</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const inv = Number(h.inventory || 0)
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.name}</div>
+                                      {h.code && <div className="text-xs text-[#7a6b4f]">کد: {toPersianDigits(h.code)}</div>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-left">
+                                  <div className="text-xs text-[#5b4a2f]">{h.group || '-'}</div>
+                                  <div className="text-[11px] text-[#7a6b4f]">واحد: {h.unit || '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`${retroBadge} ${inv < 0 ? '!bg-[#c35c5c]' : inv === 0 ? '!bg-[#bfb69f]' : '!bg-[#3a7d44]'}`}>{formatNumberFaSpaced(inv)}</span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={async () => {
+                                      setLedgerModal({ productId: String(h.id), loading: true, items: [] })
+                                      try {
+                                        const data = await apiGet<any>(`/api/ledger/product/${h.id}`)
+                                        setLedgerModal({ productId: String(h.id), loading: false, items: Array.isArray(data?.entries) ? data.entries : [] })
+                                      } catch {
+                                        setLedgerModal({ productId: String(h.id), loading: false, items: [] })
+                                      }
+                                    }}
+                                  >
+                                    گردش کالا
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'persons' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>طرف حساب</th>
+                            <th className={retroTableHeader}>نوع</th>
+                            <th className={retroTableHeader}>مانده</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const bal = personBalances?.[String(h.id)] ?? 0
+                            const badgeCls = bal > 0 ? '!bg-[#3a7d44]' : bal < 0 ? '!bg-[#c35c5c]' : '!bg-[#bfb69f]'
+                            const balLabel = bal > 0 ? 'بدهکار' : bal < 0 ? 'بستانکار' : 'بی‌تراز'
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="font-semibold text-[#1f2e3b]">{h.name}</div>
+                                  <div className="text-xs text-[#7a6b4f]">{h.mobile || '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`${retroBadge}`}>{h.kind || 'other'}</span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${badgeCls}`}>{balLabel}</span>
+                                    <span className="text-[#1f2e3b]">{formatNumberFaSpaced(Math.abs(bal))}</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'invoices' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>شماره/طرف</th>
+                            <th className={retroTableHeader}>مبلغ/وضعیت</th>
+                            <th className={retroTableHeader}>تاریخ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const amt = Number(h.total || 0)
+                            const type = String(h.invoice_type || '')
+                            const status = String(h.status || '-')
+                            const statusCls = status === 'paid' ? '!bg-[#3a7d44]' : status === 'cancelled' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.invoice_number || h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
+                                      <div className="text-[11px] text-[#7a6b4f]">نوع: {type === 'sale' ? 'فروش' : type === 'purchase' ? 'خرید' : '-'}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${amt >= 0 ? '!bg-[#3a7d44]' : '!bg-[#c35c5c]'}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                    <span className={`${retroBadge} ${statusCls}`}>{status}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'payments' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>شماره/طرف</th>
+                            <th className={retroTableHeader}>مبلغ/جهت</th>
+                            <th className={retroTableHeader}>روش/وضعیت</th>
+                            <th className={retroTableHeader}>تاریخ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const amt = Number(h.amount || 0)
+                            const dir = String(h.direction || '')
+                            const dirCls = dir === 'in' ? '!bg-[#3a7d44]' : dir === 'out' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            const status = String(h.status || '-')
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.payment_number || h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${dirCls}`}>{dir === 'in' ? 'دریافت' : dir === 'out' ? 'پرداخت' : '-'}</span>
+                                    <span className={`${retroBadge}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{h.method || '-'}</span>
+                                    <span className={`${retroBadge}`}>{status}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 ) : (
                   <p className={`text-xs ${retroMuted}`}>
@@ -218,6 +384,45 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
             )
           })}
         </section>
+      )}
+
+      {ledgerModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setLedgerModal(null)}>
+          <div className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-[#1f2e3b]">گردش کالا #{toPersianDigits(ledgerModal.productId)}</h4>
+              <button className={`${retroButton}`} onClick={()=> setLedgerModal(null)}>بستن</button>
+            </div>
+            {ledgerModal.loading ? (
+              <div className="text-xs text-[#7a6b4f]">در حال دریافت گردش...</div>
+            ) : ledgerModal.items.length ? (
+              <div className="overflow-x-auto max-h-[60vh]">
+                <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
+                  <thead>
+                    <tr>
+                      <th className={retroTableHeader}>تاریخ</th>
+                      <th className={retroTableHeader}>نوع</th>
+                      <th className={retroTableHeader}>مقدار</th>
+                      <th className={retroTableHeader}>مانده</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledgerModal.items.map((it:any, idx:number) => (
+                      <tr key={idx} className="border-b border-[#d9cfb6]">
+                        <td className="px-3 py-2">{it.time ? isoToJalali(it.time) : '-'}</td>
+                        <td className="px-3 py-2">{it.kind || '-'}</td>
+                        <td className="px-3 py-2">{formatNumberFaSpaced(it.qty || 0)}</td>
+                        <td className="px-3 py-2">{formatNumberFaSpaced(it.balance || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-xs text-[#7a6b4f]">رکوردی یافت نشد.</div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   )

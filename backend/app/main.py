@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordRequestForm
 from . import db, crud, schemas, security
 from .ocr_parser import parse_invoice_file
@@ -78,6 +80,27 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# Global error handlers with consistent payload
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    try:
+        return JSONResponse(status_code=exc.status_code, content={
+            'detail': exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+            'code': exc.status_code,
+            'path': str(request.url.path),
+        })
+    except Exception:
+        return JSONResponse(status_code=exc.status_code, content={'detail': 'خطای درخواست', 'code': exc.status_code})
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={
+        'detail': 'اعتبارسنجی ورودی نامعتبر است',
+        'errors': exc.errors(),
+        'code': 422,
+        'path': str(request.url.path),
+    })
 
 # app.add_middleware(AuditMiddleware)  # Temporarily disabled due to async issues
 
@@ -1447,6 +1470,17 @@ def reports_pnl(start: Optional[str] = None, end: Optional[str] = None, method: 
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
+    # Default to user's active financial year when no explicit range provided
+    if (s is None or e is None) and getattr(current, 'preferences', None):
+        try:
+            fy_id = getattr(current.preferences, 'active_financial_year_id', None)
+            if fy_id:
+                fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fy_id).first()
+                if fy:
+                    s = s or fy.start_date
+                    e = e or fy.end_date
+        except Exception:
+            pass
     if method:
         out = crud.report_pnl_with_cost(session, start=s, end=e, method=method)
     else:
@@ -1460,6 +1494,16 @@ def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = N
     from datetime import datetime
     s = datetime.fromisoformat(start) if start else None
     e = datetime.fromisoformat(end) if end else None
+    if (s is None or e is None) and getattr(current, 'preferences', None):
+        try:
+            fy_id = getattr(current.preferences, 'active_financial_year_id', None)
+            if fy_id:
+                fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fy_id).first()
+                if fy:
+                    s = s or fy.start_date
+                    e = e or fy.end_date
+        except Exception:
+            pass
     out = crud.report_person_turnover(session, party_id=party_id, party_name=party_name, start=s, end=e)
     return out
 
