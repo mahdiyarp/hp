@@ -1607,19 +1607,34 @@ def api_search(payload: dict, session: Session = Depends(db.get_db), current: mo
                 ]}
             # persons
             if 'persons' in idxs:
-                people = session.query(models.Person).filter(
-                    (models.Person.name.ilike(qlike)) |
-                    (models.Person.name_norm.ilike(qlike)) |
-                    (models.Person.mobile.ilike(qlike))
-                ).limit(limit).all()
-                out['persons'] = {'hits': [
-                    {
-                        'id': pr.id,
-                        'name': pr.name,
-                        'mobile': pr.mobile,
-                        'kind': pr.kind,
-                    } for pr in people
-                ]}
+                # Select only safe columns to avoid issues with legacy DBs missing newer fields
+                try:
+                    people = session.query(
+                        models.Person.id,
+                        models.Person.name,
+                        models.Person.mobile,
+                        models.Person.kind,
+                    ).filter(
+                        (models.Person.name.ilike(qlike)) |
+                        (models.Person.name_norm.ilike(qlike)) |
+                        (models.Person.mobile.ilike(qlike))
+                    ).limit(limit).all()
+                except Exception:
+                    # Last-resort fallback: select by raw SQL for id/name/mobile/kind
+                    from sqlalchemy import text
+                    q = text("SELECT id, name, mobile, kind FROM persons WHERE name ILIKE :q OR mobile ILIKE :q LIMIT :lim")
+                    rows = session.execute(q, {'q': qlike, 'lim': limit}).fetchall()
+                    people = [{'id': r[0], 'name': r[1], 'mobile': r[2], 'kind': r[3]} for r in rows]
+                    out['persons'] = {'hits': people}
+                else:
+                    out['persons'] = {'hits': [
+                        {
+                            'id': getattr(pr, 'id', None),
+                            'name': getattr(pr, 'name', None),
+                            'mobile': getattr(pr, 'mobile', None),
+                            'kind': getattr(pr, 'kind', None),
+                        } for pr in people
+                    ]}
             # invoices
             if 'invoices' in idxs:
                 invs = session.query(models.Invoice).filter(
