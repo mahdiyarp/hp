@@ -204,6 +204,360 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     setInvoiceForm(prev => ({ ...prev, items: [...prev.items, { ...emptyItem }] }))
   }
 
+  const pickPriceCandidate = useCallback((candidates: Array<number | null | undefined>) => {
+    for (const value of candidates) {
+      if (typeof value === 'number' && value > 0) {
+        return value
+      }
+    }
+    return 0
+  }, [])
+
+  const getSuggestedPrice = useCallback(
+    (product: ProductOption | undefined, invoiceType: InvoiceFormState['invoice_type']) => {
+      if (!product) return 0
+      if (invoiceType === 'purchase') {
+        return pickPriceCandidate([
+          product.last_purchase_price,
+          product.avg_purchase_price,
+          product.avg_sale_price,
+          product.last_sale_price,
+        ])
+      }
+      return pickPriceCandidate([
+        product.last_sale_price,
+        product.avg_sale_price,
+        product.avg_purchase_price,
+        product.last_purchase_price,
+      ])
+    },
+    [pickPriceCandidate],
+  )
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<{ invoice_id: number }>
+      if (custom.detail?.invoice_id) {
+        openInvoiceDetail(custom.detail.invoice_id)
+      }
+    }
+    window.addEventListener('open-invoice-detail', handler)
+    return () => window.removeEventListener('open-invoice-detail', handler)
+  }, [])
+
+  useEffect(() => {
+    loadInvoices()
+    loadAuxData()
+  }, [])
+
+  async function loadAuxData() {
+    setAuxLoading(true)
+    try {
+      const [personsRes, productsRes] = await Promise.all([
+        apiGet<PersonOption[]>('/api/persons').catch(() => []),
+        apiGet<ProductOption[]>('/api/products?limit=200').catch(() => []),
+      ])
+      setPersons(personsRes ?? [])
+      setProducts(productsRes ?? [])
+    } catch (err) {
+      console.warn('Failed to load invoice aux data', err)
+    } finally {
+      setAuxLoading(false)
+    }
+  }
+
+  async function loadInvoices(showSpinner = true) {
+    if (showSpinner) setLoading(true)
+    setError(null)
+    try {
+      const data = await apiGet<Invoice[]>('/api/invoices?limit=200')
+      setInvoices(data)
+    } catch (err) {
+      console.error(err)
+      setError('امکان دریافت فاکتورها وجود ندارد.')
+    } finally {
+      if (showSpinner) setLoading(false)
+    }
+  }
+
+  const updateItem = (index: number, field: keyof InvoiceItemForm, value: string) => {
+    setInvoiceForm(prev => {
+      const items = prev.items.map((item, idx) =>
+        idx === index
+          ? {
+              ...item,
+              [field]:
+                field === 'quantity' || field === 'unit_price'
+                  ? Number(value)
+                  : value,
+            }
+          : item,
+      )
+      return { ...prev, items }
+    })
+  }
+
+  const removeItem = (index: number) => {
+    setInvoiceForm(prev => {
+      if (prev.items.length === 1) return prev
+      const items = prev.items.filter((_, idx) => idx !== index)
+      return { ...prev, items }
+    })
+  }
+
+  const filtered = useMemo(() => {
+    const result = invoices
+      .filter(inv => {
+        if (statusFilter !== 'all' && inv.status !== statusFilter) return false
+        if (typeFilter !== 'all' && inv.invoice_type !== typeFilter) return false
+        if (search) {
+          const q = search.trim()
+          if (!q) return true
+          const haystack = `${inv.invoice_number ?? ''} ${inv.party_name ?? ''}`.toLowerCase()
+          if (!haystack.includes(q.toLowerCase())) return false
+        }
+        return true
+      })
+      .sort((a, b) => {
+        if (recentlyViewedInvoiceId) {
+          if (a.id === recentlyViewedInvoiceId) return -1
+          if (b.id === recentlyViewedInvoiceId) return 1
+        }
+        const aTime = new Date(a.server_time).getTime()
+        const bTime = new Date(b.server_time).getTime()
+        return bTime - aTime
+      })
+      .slice(0, invoiceListLimit)
+    return result
+  }, [invoices, statusFilter, typeFilter, search, invoiceListLimit, recentlyViewedInvoiceId])
+
+  const totals = useMemo(() => {
+    const all = invoices.reduce(
+      (acc, inv) => {
+        if (inv.invoice_type === 'sale') acc.sales += inv.total || 0
+        if (inv.invoice_type === 'purchase') acc.purchases += inv.total || 0
+        if (inv.status === 'final') acc.finalized += 1
+        if (inv.status === 'draft') acc.drafts += 1
+        return acc
+      },
+      { sales: 0, purchases: 0, finalized: 0, drafts: 0 },
+    )
+    return all
+  }, [invoices])
+
+  const computedSubtotal = useMemo(() => {
+    return invoiceForm.items.reduce((acc, item) => {
+      const qty = Number(item.quantity || 0)
+      const price = Number(item.unit_price || 0)
+      return acc + qty * price
+    }, 0)
+  }, [invoiceForm.items])
+
+  const computeClientTimestamp = () => {
+    const now = new Date()
+    if (smartDate.isoDate) {
+      const parts = smartDate.isoDate.split('-').map(Number)
+      if (parts.length === 3 && parts.every(n => !Number.isNaN(n))) {
+        const [year, month, day] = parts
+        now.setFullYear(year, month - 1, day)
+      }
+    }
+    return now.toISOString()
+  }
+
+  const detailTimeDelta = useMemo(
+    () =>
+      invoiceDetail
+        ? computeTimeDeltaSeconds(invoiceDetail.server_time, invoiceDetail.client_time)
+        : null,
+    [invoiceDetail],
+  )
+
+  const openInvoiceDetail = useCallback(async (invoiceId: number) => {
+    setDetailLoading(true)
+    setDetailError(null)
+    setDetailSuccess(null)
+    setDetailId(invoiceId)
+    setRecentlyViewedInvoiceId(invoiceId)
+    try {
+      const detail = await apiGet<InvoiceDetail>(`/api/invoices/${invoiceId}`)
+      setInvoiceDetail(detail)
+    } catch (err) {
+      console.error(err)
+      setDetailError('جزئیات فاکتور در دسترس نیست.')
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
+  const closeInvoiceDetail = () => {
+    setInvoiceDetail(null)
+    setDetailError(null)
+    setDetailSuccess(null)
+    setDetailId(null)
+    setRecentlyViewedInvoiceId(null)
+  }
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem('hesabpak_global_focus')
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed?.type === 'invoice' && parsed.id !== undefined) {
+        sessionStorage.removeItem('hesabpak_global_focus')
+        const numericId = Number(parsed.id)
+        if (!Number.isNaN(numericId)) {
+          openInvoiceDetail(numericId)
+        }
+      }
+    } catch (err) {
+      console.warn('Invalid global focus payload', err)
+    }
+  }, [openInvoiceDetail])
+
+  const finalizeInvoice = async () => {
+    if (!invoiceDetail) return
+    setFinalizing(true)
+    setDetailError(null)
+    setDetailSuccess(null)
+    try {
+      const clientIso = computeClientTimestamp()
+      const updated = await apiPost<InvoiceDetail>(
+        `/api/invoices/${invoiceDetail.id}/finalize`,
+        { client_time: clientIso },
+      )
+      setInvoiceDetail(updated)
+      await loadInvoices(false)
+      setDetailSuccess('فاکتور با موفقیت قطعی شد.')
+    } catch (err) {
+      console.error(err)
+      setDetailError('تأیید نهایی فاکتور انجام نشد.')
+    } finally {
+      setFinalizing(false)
+    }
+  }
+
+  const exportInvoice = async (format: 'pdf' | 'csv' | 'xlsx') => {
+    if (!invoiceDetail) return
+    setExporting(true)
+    try {
+      const res = await apiPost<{ download_url?: string }>(
+        `/api/exports/invoice/${invoiceDetail.id}?format=${format}`,
+        {},
+      )
+      if (res?.download_url) {
+        window.open(res.download_url, '_blank', 'noopener')
+      } else {
+        setDetailError('لینک دانلود ایجاد نشد.')
+      }
+    } catch (err) {
+      console.error(err)
+      setDetailError('امکان ایجاد خروجی وجود ندارد.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const openPrintPreview = () => {
+    if (!invoiceDetail) return
+    window.open(`/api/prints/invoice/${invoiceDetail.id}`, '_blank', 'noopener')
+  }
+
+  const submitInvoice = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!invoiceForm.party_name.trim()) {
+      setFormError('نام طرف حساب را وارد کنید.')
+      return
+    }
+    if (invoiceForm.items.some(item => !item.description.trim())) {
+      setFormError('توضیح هر ردیف کالا باید وارد شود.')
+      return
+    }
+    if (invoiceForm.items.some(item => item.quantity <= 0 || item.unit_price <= 0)) {
+      setFormError('مقدار و قیمت هر ردیف باید بزرگ‌تر از صفر باشد.')
+      return
+    }
+    if (invoiceForm.invoice_type === 'sale') {
+      const insufficient: string[] = []
+      invoiceForm.items.forEach(item => {
+        if (!item.product_id) return
+        const product = products.find(p => p.id === item.product_id)
+        if (!product || typeof product.inventory !== 'number') return
+        if (item.quantity > product.inventory) {
+          insufficient.push(
+            `${product.name} (موجودی: ${formatNumberFa(product.inventory ?? 0)})`,
+          )
+        }
+      })
+      if (insufficient.length > 0) {
+        setFormError(`موجودی کافی برای این کالاها وجود ندارد: ${insufficient.join('، ')}`)
+        return
+      }
+    }
+    setCreating(true)
+    setFormError(null)
+    try {
+      const clientIso = computeClientTimestamp()
+      const payload = {
+        invoice_type: invoiceForm.invoice_type,
+        mode: 'manual',
+        party_name: invoiceForm.party_name.trim(),
+        note: invoiceForm.note.trim() || undefined,
+        client_time: clientIso,
+        client_calendar: smartDate.jalali ? 'jalali' : 'gregorian',
+        items: invoiceForm.items.map(item => ({
+          description: item.description.trim(),
+          quantity: Number(item.quantity),
+          unit: item.unit.trim() || undefined,
+          unit_price: Number(item.unit_price),
+          product_id: item.product_id || undefined,
+        })),
+      }
+      const created = await apiPost<Invoice>('/api/invoices/manual', payload)
+      const selectedType = invoiceForm.invoice_type
+      let successMessage =
+        selectedType === 'proforma' ? 'پیش‌فاکتور با موفقیت ثبت شد.' : 'فاکتور با موفقیت ثبت شد.'
+      if (autoFinalize && selectedType !== 'proforma') {
+        try {
+          await apiPost<Invoice>(`/api/invoices/${created.id}/finalize`, {
+            client_time: clientIso,
+          })
+          successMessage = 'فاکتور ثبت و قطعی شد.'
+        } catch (finalErr) {
+          console.error(finalErr)
+          setFormError('فاکتور ثبت شد اما تأیید نهایی با خطا مواجه شد.')
+        }
+      }
+      await loadInvoices(false)
+      setFormSuccess(successMessage)
+      setShowForm(false)
+      if (selectedType === 'sale' || selectedType === 'purchase') {
+        setTimeout(() => {
+          setNextActionModal({
+            invoiceType: selectedType,
+            invoiceData: {
+              id: created.id,
+              invoice_number: created.invoice_number,
+              party_name: invoiceForm.party_name,
+              total: created.total || 0,
+              note: invoiceForm.note,
+            }
+          })
+        }, 100)
+      } else {
+        resetForm(selectedType)
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        setFormError(err.message)
+      } else {
+        setFormError('صدور فاکتور با خطا روبه‌رو شد.')
+      }
+    } finally {
+      setCreating(false)
+    }
+  }
+
 
   if (loading) {
     return (
