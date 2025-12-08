@@ -52,6 +52,12 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   const [cashAll, setCashAll] = useState<CashReport | null>(null)
   const [cashMethods, setCashMethods] = useState<Record<string, number>>({})
   const [stock, setStock] = useState<StockValuation[]>([])
+  const [hideZeroStock, setHideZeroStock] = useState<boolean>(() => {
+    try { return localStorage.getItem('reports.stock.hideZero') !== 'false' } catch { return true }
+  })
+  const [hideNegativeStock, setHideNegativeStock] = useState<boolean>(() => {
+    try { return localStorage.getItem('reports.stock.hideNegative') === 'true' } catch { return false }
+  })
   const [computedSales, setComputedSales] = useState(0)
   const [computedCOGS, setComputedCOGS] = useState(0)
   const [salesTrend, setSalesTrend] = useState<Array<{ date: string; total: number }>>([])
@@ -65,6 +71,14 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   useEffect(() => {
     try { localStorage.setItem('reports.costMethod', costMethod) } catch {}
   }, [costMethod])
+
+  useEffect(() => {
+    try { localStorage.setItem('reports.stock.hideZero', String(hideZeroStock)) } catch {}
+  }, [hideZeroStock])
+
+  useEffect(() => {
+    try { localStorage.setItem('reports.stock.hideNegative', String(hideNegativeStock)) } catch {}
+  }, [hideNegativeStock])
 
   function resolveRange(): { startIso: string; endIso: string; days: number } {
     // end inclusive -> add 1 day when calling backend daily endpoints
@@ -232,10 +246,23 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   }
 
   const stockTotals = useMemo(() => {
-    const count = stock.length
-    const totalValue = stock.reduce((acc, item) => acc + (item.total_value || 0), 0)
+    const filtered = stock.filter(it => {
+      if (hideZeroStock && (it.inventory ?? 0) === 0) return false
+      if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
+      return true
+    })
+    const count = filtered.length
+    const totalValue = filtered.reduce((acc, item) => acc + (item.total_value || 0), 0)
     return { count, totalValue }
-  }, [stock])
+  }, [stock, hideZeroStock, hideNegativeStock])
+
+  const filteredStock = useMemo(() => {
+    return stock.filter(it => {
+      if (hideZeroStock && (it.inventory ?? 0) === 0) return false
+      if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
+      return true
+    })
+  }, [stock, hideZeroStock, hideNegativeStock])
 
   if (loading) {
     return (
@@ -398,8 +425,18 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
             تعداد کالا: {formatNumberFa(stockTotals.count)} | ارزش کل:{' '}
             {formatNumberFa(stockTotals.totalValue)} ریال
           </p>
+          <div className="flex items-center gap-4 mt-2 text-xs">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={hideZeroStock} onChange={e=> setHideZeroStock(e.target.checked)} />
+              عدم نمایش موجودی صفر
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={hideNegativeStock} onChange={e=> setHideNegativeStock(e.target.checked)} />
+              عدم نمایش موجودی منفی
+            </label>
+          </div>
         </header>
-        {stock.length > 0 ? (
+        {filteredStock.length > 0 ? (
           <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
             <thead>
               <tr>
@@ -410,7 +447,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
               </tr>
             </thead>
             <tbody>
-              {stock.slice(0, 50).map(item => (
+              {filteredStock.slice(0, 50).map(item => (
                 <tr key={item.product_id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer" onClick={() => openProductLedger(item)}>
                   <td className="px-3 py-2">{item.name}</td>
                   <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>

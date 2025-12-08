@@ -813,17 +813,29 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                   </td>
                   <td className="px-3 py-2">{pay.method ?? 'نامشخص'}</td>
                   <td className="px-3 py-2">
-                    {pay.party_name ?? 'نامشخص'}
-                    {pay.party_name && (
-                      <button
-                        onClick={() => openPartyLedger(pay.party_name!)}
-                        className="ml-2 text-[10px] underline text-[#1f2e3b] hover:text-[#5b4a2f]"
-                      >گردش</button>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{pay.party_name ?? 'نامشخص'}</span>
+                      <span
+                        className={`${retroBadge} text-[10px] ${pay.direction === 'in' ? '!border-green-700 !text-green-800' : '!border-red-700 !text-red-800'}`}
+                        title={pay.direction === 'in' ? 'دریافت از طرف حساب (کاهش طلب)' : 'پرداخت به طرف حساب (کاهش بدهی)'}
+                      >
+                        {pay.direction === 'in' ? 'دریافت از' : 'پرداخت به'}
+                      </span>
+                      {pay.party_name && (
+                        <button
+                          onClick={() => openPartyLedger(pay.party_name!)}
+                          className="ml-1 text-[10px] underline text-[#1f2e3b] hover:text-[#5b4a2f]"
+                        >گردش</button>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(pay.amount)}</td>
+                  <td className="px-3 py-2 text-left">
+                    <span className={`${pay.direction === 'in' ? 'text-green-700' : 'text-red-700'} font-[Yekan]`}>
+                      {formatNumberFa(pay.amount)}
+                    </span>
+                  </td>
                   <td className="px-3 py-2">
-                    <span className={`${retroBadge}`}>{pay.status}</span>
+                    <span className={`${retroBadge} text-[10px] ${pay.status === 'posted' ? '!border-green-700 !text-green-800' : pay.status === 'draft' ? '!border-gray-600 !text-gray-700' : ''}`}>{pay.status}</span>
                   </td>
                   <td className="px-3 py-2 text-left">
                     {isoToJalali(pay.server_time)}

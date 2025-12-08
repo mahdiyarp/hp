@@ -1596,9 +1596,22 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                       {invoiceTypeTitles[inv.invoice_type as InvoiceFormState['invoice_type']] || inv.invoice_type}
                     </span>
                   </td>
-                  <td className="px-3 py-2">{inv.party_name ?? 'نامشخص'}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{inv.party_name ?? 'نامشخص'}</span>
+                      <span
+                        className={`${retroBadge} text-[10px] ${inv.invoice_type === 'sale' ? '!border-green-700 !text-green-800' : inv.invoice_type === 'purchase' ? '!border-blue-700 !text-blue-800' : ''}`}
+                        title={inv.invoice_type === 'sale' ? 'مطالبات از مشتری' : inv.invoice_type === 'purchase' ? 'بدهی به تأمین‌کننده' : ''}
+                      >
+                        {inv.invoice_type === 'sale' ? 'طلب' : inv.invoice_type === 'purchase' ? 'بدهی' : '—'}
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-left">
-                    {formatCurrencyFa(inv.total || 0, 'ریال', false).numeric} <span className="text-xs">ریال</span>
+                    <span className={`${inv.invoice_type === 'sale' ? 'text-green-700' : inv.invoice_type === 'purchase' ? 'text-blue-700' : ''} font-[Yekan]`}>
+                      {formatCurrencyFa(inv.total || 0, 'ریال', false).numeric}
+                    </span>
+                    <span className="text-xs ml-1">ریال</span>
                   </td>
                   <td className="px-3 py-2">
                     <span className={`${retroBadge}`}>{statusFa[inv.status] ?? inv.status}</span>
