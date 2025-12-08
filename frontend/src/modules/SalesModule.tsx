@@ -711,15 +711,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className={retroHeading}>توضیحات</label>
-              <textarea
-                value={invoiceForm.note}
-                onChange={e => setInvoiceForm(prev => ({ ...prev, note: e.target.value }))}
-                className={`${retroInput} w-full h-24`}
-                placeholder="یادداشت‌های فاکتور"
-              />
-            </div>
+            {/* توضیحات منتقل شد به پایین، قبل از دکمه‌ها */}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -876,7 +868,9 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             className={`${retroInput} w-full font-[Yekan] text-center text-lg`}
                             style={{ fontFamily: 'Yekan' }}
                           />
-                          <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">{formatNumberFa(item.unit_price)}</div>
+                          {item.unit_price > 0 && (
+                            <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">{formatNumberFa(item.unit_price)}</div>
+                          )}
                           {item.unit_price > 0 && (
                             <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">{priceWords} ریال</div>
                           )}
@@ -889,11 +883,11 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                       <div className="space-y-2">
                         <label className={retroHeading}>کل (تعداد × قیمت)</label>
                         <div className="space-y-1">
-                          <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-3 py-2 rounded font-bold text-center font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+                          <div className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-3 py-2 rounded font-bold text-center font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
                             {formatNumberFa(itemSubtotal)}
                           </div>
                           {itemSubtotal > 0 && (
-                            <div className="text-[10px] text-[#154b5f] italic bg-[#e8f2f7] px-2 py-0.5 rounded border border-dashed border-[#154b5f]">{subtotalWords} ریال</div>
+                            <div className="text-[10px] text-[#1f2e3b] italic bg-[#f6f1df] px-2 py-0.5 rounded border border-dashed border-[#1f2e3b]">{subtotalWords} ریال</div>
                           )}
                         </div>
                       </div>
@@ -914,12 +908,12 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               })}
             </div>
 
-            <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-4 py-3 rounded text-center space-y-1">
-              <p className={retroHeading}>💰 جمع کل فاکتور</p>
+            <div className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-4 py-3 rounded text-center space-y-1">
+              <p className={retroHeading}>جمع کل فاکتور</p>
               <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
                 {formatNumberFa(computedSubtotal || 0)}
               </p>
-              <p className="text-xs text-[#154b5f] italic">
+              <p className="text-xs text-[#1f2e3b] italic">
                 {computedSubtotal > 0 ? numberToPersianWords(Math.trunc(computedSubtotal)) + ' ریال' : ''}
               </p>
             </div>
@@ -958,6 +952,16 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 {formSuccess}
               </div>
             )}
+
+            <div className="space-y-2">
+              <label className={retroHeading}>توضیحات</label>
+              <textarea
+                value={invoiceForm.note}
+                onChange={e => setInvoiceForm(prev => ({ ...prev, note: e.target.value }))}
+                className={`${retroInput} w-full h-24`}
+                placeholder="یادداشت‌های فاکتور"
+              />
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
