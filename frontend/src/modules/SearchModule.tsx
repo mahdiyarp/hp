@@ -45,6 +45,13 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
 
   const activeIndexes = useMemo(() => selectedIndexes.length > 0 ? selectedIndexes : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[]), [selectedIndexes])
 
+  const navigateModule = (moduleId: string) => {
+    try {
+      const evt = new CustomEvent('switch-module', { detail: { module: moduleId } })
+      window.dispatchEvent(evt)
+    } catch {}
+  }
+
   const toggleIndex = (idx: SearchIndex) => {
     setSelectedIndexes(prev =>
       prev.includes(idx) ? prev.filter(item => item !== idx) : [...prev, idx],
@@ -194,7 +201,21 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                     <p className={retroHeading}>نتایج</p>
                     <h3 className="text-lg font-semibold mt-1">{INDEX_LABELS[idx as SearchIndex]}</h3>
                   </div>
-                  <span className={retroBadge}>تعداد: {hits.length}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={retroBadge}>تعداد: {hits.length}</span>
+                    {idx === 'products' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('inventory')}>باز کردن انبار</button>
+                    )}
+                    {idx === 'persons' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('people')}>باز کردن طرف‌ها</button>
+                    )}
+                    {idx === 'invoices' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('sales')}>باز کردن فروش</button>
+                    )}
+                    {idx === 'payments' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('finance')}>باز کردن مالی</button>
+                    )}
+                  </div>
                 </header>
                 {hits.length > 0 ? (
                   <div className="overflow-x-auto">
@@ -236,7 +257,19 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                       setLedgerModal({ productId: String(h.id), loading: true, items: [] })
                                       try {
                                         const data = await apiGet<any>(`/api/ledger/product/${h.id}`)
-                                        setLedgerModal({ productId: String(h.id), loading: false, items: Array.isArray(data?.entries) ? data.entries : [] })
+                                        let items: any[] = []
+                                        if (Array.isArray(data)) {
+                                          items = data
+                                        } else if (data && Array.isArray(data.entries)) {
+                                          items = data.entries
+                                        }
+                                        const mapped = items.map((it:any) => ({
+                                          time: it.time || it.date || null,
+                                          kind: it.kind || it.type || '-',
+                                          qty: typeof it.qty === 'number' ? it.qty : (typeof it.quantity === 'number' ? it.quantity : 0),
+                                          balance: typeof it.balance === 'number' ? it.balance : (typeof it.running_qty === 'number' ? it.running_qty : 0),
+                                        }))
+                                        setLedgerModal({ productId: String(h.id), loading: false, items: mapped })
                                       } catch {
                                         setLedgerModal({ productId: String(h.id), loading: false, items: [] })
                                       }
