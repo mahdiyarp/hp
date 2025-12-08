@@ -106,3 +106,65 @@ def test_pnl_fifo_lifo_cogs_difference():
     # Gross profit should differ accordingly
     assert d_fifo.get('gross_profit') == 2000
     assert d_lifo.get('gross_profit') == 1000
+
+
+def seed_partial_layers_scenario():
+    session = DB.SessionLocal()
+    try:
+        session.query(models.InvoiceItem).delete()
+        session.query(models.Invoice).delete()
+        session.query(models.Product).delete()
+        session.commit()
+
+        prod = models.Product(
+            id='LAYERS1', name='کالا لایه‌ای', name_norm='kala layeri', code='P-LYR-001', unit='عدد',
+            group='آزمایشی', description=None, inventory=0,
+        )
+        session.add(prod)
+        session.commit()
+
+        now = datetime.utcnow().replace(tzinfo=timezone.utc)
+        t1 = now - timedelta(days=20)
+        t2 = now - timedelta(days=15)
+        t3 = now - timedelta(days=10)
+        t4 = now - timedelta(days=5)
+
+        # Purchases: 5 @100, 10 @200
+        inv_p1 = models.Invoice(invoice_type='purchase', mode='manual', party_name='تأمین‌کننده', server_time=t1, status='final', subtotal=500, total=500)
+        session.add(inv_p1); session.flush()
+        session.add(models.InvoiceItem(invoice_id=inv_p1.id, product_id=prod.id, description='خرید ۱', quantity=5, unit='عدد', unit_price=100, total=500))
+
+        inv_p2 = models.Invoice(invoice_type='purchase', mode='manual', party_name='تأمین‌کننده', server_time=t2, status='final', subtotal=2000, total=2000)
+        session.add(inv_p2); session.flush()
+        session.add(models.InvoiceItem(invoice_id=inv_p2.id, product_id=prod.id, description='خرید ۲', quantity=10, unit='عدد', unit_price=200, total=2000))
+
+        # Sales: 8 units then 4 units @ 300
+        inv_s1 = models.Invoice(invoice_type='sale', mode='manual', party_name='مشتری', server_time=t3, status='final', subtotal=2400, total=2400)
+        session.add(inv_s1); session.flush()
+        session.add(models.InvoiceItem(invoice_id=inv_s1.id, product_id=prod.id, description='فروش ۱', quantity=8, unit='عدد', unit_price=300, total=2400))
+
+        inv_s2 = models.Invoice(invoice_type='sale', mode='manual', party_name='مشتری', server_time=t4, status='final', subtotal=1200, total=1200)
+        session.add(inv_s2); session.flush()
+        session.add(models.InvoiceItem(invoice_id=inv_s2.id, product_id=prod.id, description='فروش ۲', quantity=4, unit='عدد', unit_price=300, total=1200))
+
+        session.commit()
+        return {
+            'start': (now - timedelta(days=30)).date().isoformat(),
+            'end': (now - timedelta(days=1)).date().isoformat(),
+        }
+    finally:
+        session.close()
+
+
+def test_pnl_fifo_lifo_partial_layers():
+    rng = seed_partial_layers_scenario()
+    # Total sales = 2400 + 1200 = 3600
+    r_fifo = client.get(f"/api/reports/pnl?start={rng['start']}&end={rng['end']}&method=FIFO")
+    r_lifo = client.get(f"/api/reports/pnl?start={rng['start']}&end={rng['end']}&method=LIFO")
+    assert r_fifo.status_code == 200 and r_lifo.status_code == 200
+    d_fifo = r_fifo.json(); d_lifo = r_lifo.json()
+    assert d_fifo.get('sales') == 3600 and d_lifo.get('sales') == 3600
+    # FIFO COGS: first sale 8 => 5@100 + 3@200 = 1100; second sale 4 => 4@200 = 800; total 1900
+    assert d_fifo.get('cogs') in (1900, 1900.0)
+    # LIFO COGS: first sale 8 => 8@200 = 1600; second sale 4 => remaining 2@200 + 2@100 = 400+200 = 600; total 2200
+    assert d_lifo.get('cogs') in (2200, 2200.0)

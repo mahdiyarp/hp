@@ -92,15 +92,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [newUser, setNewUser] = useState({ username: '', email: '', full_name: '', password: '', role_id: 2 })
   const [newRole, setNewRole] = useState({ name: '', description: '' })
 
-  // SMS state
-  const [smsTest, setSmsTest] = useState({ to: '', message: 'کد تست حساب‌پاک', provider: '' })
-  const [smsReg, setSmsReg] = useState({ username: '', full_name: '', mobile: '', role_id: 2 })
-  const [smsConfig, setSmsConfig] = useState({ api_key: '', sender_name: '', provider: 'ippanel', enabled: false, auto_sms_enabled: false })
+  // SMS state removed; migrated to Developer settings (sms.ir)
   
   // System Settings state
   const [allSettings, setAllSettings] = useState<SystemSetting[]>([])
   const [settingsByCategory, setSettingsByCategory] = useState<{ [key: string]: SystemSetting[] }>({})
-  const [selectedCategory, setSelectedCategory] = useState<string>('sms')
+  const [selectedCategory, setSelectedCategory] = useState<string>('general')
   const [sidebarSide, setSidebarSide] = useState<string>('')
   const [savingSidebarSide, setSavingSidebarSide] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
@@ -156,19 +153,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         console.error(err)
         warn.push('لیست نقش‌ها قابل دریافت نیست.')
       }
-      // Load current user's SMS config (user id from localStorage cache if present)
-      try {
-        const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
-        const uid = Number.isFinite(meId) && meId > 0 ? meId : null
-        const cfg = await apiGet<typeof smsConfig>(`/api/users/${uid ?? 0}/sms-config`)
-        if (cfg && typeof cfg === 'object') setSmsConfig({
-          api_key: (cfg as any).api_key || '',
-          sender_name: (cfg as any).sender_name || '',
-          provider: (cfg as any).provider || 'ippanel',
-          enabled: !!(cfg as any).enabled,
-          auto_sms_enabled: !!(cfg as any).auto_sms_enabled,
-        })
-      } catch {}
+      // SMS config handling removed from SystemModule
       try {
         const allPerms = await apiGet<Permission[]>('/api/permissions')
         setPerms(allPerms)
@@ -375,44 +360,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     }
   }
 
-  async function saveSmsConfig() {
-    try {
-      const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
-      // Try update first; if not exists, create
-      try {
-        await apiPut(`/api/users/${meId}/sms-config`, smsConfig)
-      } catch (err) {
-        await apiPost(`/api/users/${meId}/sms-config`, smsConfig)
-      }
-      alert('تنظیمات پیامک ذخیره شد')
-    } catch (err) {
-      console.error(err)
-      alert('ذخیره تنظیمات پیامک ناموفق بود')
-    }
-  }
-
-  async function sendTestSms() {
-    try {
-      const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
-      await apiPost(`/api/users/${meId}/sms-test`, { ...smsTest })
-      alert('ارسال شد')
-    } catch (err) {
-      console.error(err)
-      setError('ارسال پیامک ناموفق بود.')
-    }
-  }
-
-  async function registerUserViaSms() {
-    try {
-      await apiPost('/api/sms/register-user', { ...smsReg })
-      alert('کاربر ایجاد و پیامک ارسال شد')
-      setSmsReg({ username: '', full_name: '', mobile: '', role_id: 2 })
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('ثبت کاربر با پیامک ناموفق بود.')
-    }
-  }
+  // SMS utility functions removed
 
   async function updateSetting(key: string, newValue: string) {
     try {
@@ -527,31 +475,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         </div>
       </section>
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header>
-          <p className={retroHeading}>SMS Gateway</p>
-          <h3 className="text-lg font-semibold mt-2">ارسال پیامک و ثبت کاربر</h3>
-        </header>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <p className={retroHeading}>ارسال تست</p>
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="شماره گیرنده" value={smsTest.to} onChange={e=>setSmsTest({...smsTest, to: e.target.value})} />
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="متن پیامک" value={smsTest.message} onChange={e=>setSmsTest({...smsTest, message: e.target.value})} />
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام پیکربندی (اختیاری)" value={smsTest.provider} onChange={e=>setSmsTest({...smsTest, provider: e.target.value})} />
-            <button className={retroButton} onClick={sendTestSms}>ارسال</button>
-          </div>
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <p className={retroHeading}>ثبت کاربر با پیامک</p>
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام کاربری" value={smsReg.username} onChange={e=>setSmsReg({...smsReg, username: e.target.value})} />
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام کامل" value={smsReg.full_name} onChange={e=>setSmsReg({...smsReg, full_name: e.target.value})} />
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="موبایل" value={smsReg.mobile} onChange={e=>setSmsReg({...smsReg, mobile: e.target.value})} />
-            <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={smsReg.role_id} onChange={e=>setSmsReg({...smsReg, role_id: parseInt(e.target.value)})}>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            <button className={retroButton} onClick={registerUserViaSms}>ثبت کاربر</button>
-          </div>
-        </div>
-      </section>
+      {/* SMS Gateway moved to Developer settings. Removed from SystemModule to avoid undefined state. */}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -656,38 +580,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             </div>
           </div>
 
-          {/* Card: ارسال پیامک و ثبت کاربر */}
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <div className="flex items-center justify-between">
-              <p className={`${retroHeading} text-[#7a6b4f]`}>ارسال پیامک و ثبت کاربر</p>
-              <span className={`${retroBadge}`}>OTP</span>
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="موبایل" value={smsReg.mobile} onChange={e=>setSmsReg({...smsReg, mobile: e.target.value})} />
-              <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={smsReg.role_id} onChange={e=>setSmsReg({...smsReg, role_id: parseInt(e.target.value)})}>
-                {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-              <button className={retroButton} onClick={registerUserViaSms}>ثبت کاربر</button>
-            </div>
-            <p className={retroMuted}>پس از ثبت، لینک و OTP به موبایل ارسال می‌شود.</p>
-
-            <div className="mt-4 border-t border-[#d9cfb6] pt-4 space-y-2">
-              <p className={`${retroHeading} text-[#7a6b4f]`}>تنظیمات پیامک</p>
-              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="IPPanel API Key" value={smsConfig.api_key} onChange={e=>setSmsConfig({...smsConfig, api_key: e.target.value})} />
-              <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام فرستنده (Sender)" value={smsConfig.sender_name} onChange={e=>setSmsConfig({...smsConfig, sender_name: e.target.value})} />
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={smsConfig.enabled} onChange={e=>setSmsConfig({...smsConfig, enabled: e.target.checked})} />
-                  فعال‌سازی سرویس پیامک
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={smsConfig.auto_sms_enabled} onChange={e=>setSmsConfig({...smsConfig, auto_sms_enabled: e.target.checked})} />
-                  ارسال خودکار پیامک
-                </label>
-              </div>
-              <button className={retroButton} onClick={saveSmsConfig}>ذخیره تنظیمات پیامک</button>
-            </div>
-          </div>
+          {/* Card: ارسال پیامک و ثبت کاربر — removed (migrated to Developer settings) */}
 
           {/* Card: مدیریت کاربران */}
           <div className={`${retroPanel} p-4 space-y-3`}>
@@ -776,42 +669,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         )}
       </section>
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header>
-          <p className={retroHeading}>Integrations</p>
-          <h3 className="text-lg font-semibold mt-2">یکپارچه‌سازی‌ها</h3>
-        </header>
-        {integrations.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>نام</th>
-                <th className={retroTableHeader}>سرویس</th>
-                <th className={retroTableHeader}>وضعیت</th>
-                <th className={retroTableHeader}>آخرین همگام‌سازی</th>
-              </tr>
-            </thead>
-            <tbody>
-              {integrations.map(intg => (
-                <tr key={intg.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">{intg.name}</td>
-                  <td className="px-3 py-2">{intg.provider}</td>
-                  <td className="px-3 py-2">
-                    <span className={`${retroBadge} ${intg.enabled ? '' : 'opacity-50'}`}>
-                      {intg.enabled ? 'فعال' : 'غیرفعال'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-left">
-                    {intg.last_synced_at ? isoToJalali(intg.last_synced_at) : '---'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-xs text-[#7a6b4f]">هیچ یکپارچه‌سازی ثبت نشده است.</p>
-        )}
-      </section>
+      {/* SMS gateway UI moved to DeveloperModule (sms.ir) */}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header>

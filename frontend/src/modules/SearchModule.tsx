@@ -28,6 +28,8 @@ const INDEX_LABELS: Record<SearchIndex, string> = {
   payments: 'دریافت/پرداخت',
 }
 
+const GLOBAL_SEARCH_QUERY_KEY = 'hesabpak_global_search_query'
+
 export default function SearchModule({ smartDate }: ModuleComponentProps) {
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(10)
@@ -58,9 +60,9 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
     )
   }
 
-  const runSearch = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    if (!query.trim()) {
+  const runSearchWith = async (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) {
       setError('متن جستجو را وارد کنید.')
       return
     }
@@ -68,7 +70,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
     setError(null)
     try {
       const payload = {
-        q: query,
+        q: trimmed,
         indexes: activeIndexes,
         limit,
         filters: undefined,
@@ -94,6 +96,25 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
       setLoading(false)
     }
   }
+
+  const runSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    await runSearchWith(query)
+  }
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(GLOBAL_SEARCH_QUERY_KEY)
+      if (saved && saved.trim()) {
+        setQuery(saved)
+        sessionStorage.removeItem(GLOBAL_SEARCH_QUERY_KEY)
+        // Fire and forget; no need to await here
+        void runSearchWith(saved)
+      }
+    } catch {}
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-8">
@@ -202,7 +223,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                     <h3 className="text-lg font-semibold mt-1">{INDEX_LABELS[idx as SearchIndex]}</h3>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={retroBadge}>تعداد: {hits.length}</span>
+                    <span className={`${retroBadge} !bg-[#1f2e3b] !text-[#faf4de]`}>تعداد: {hits.length}</span>
                     {idx === 'products' && (
                       <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('inventory')}>باز کردن انبار</button>
                     )}
@@ -291,6 +312,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                             <th className={retroTableHeader}>طرف حساب</th>
                             <th className={retroTableHeader}>نوع</th>
                             <th className={retroTableHeader}>مانده</th>
+                            <th className={retroTableHeader}>اقدام</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -312,6 +334,23 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                     <span className={`${retroBadge} ${badgeCls}`}>{balLabel}</span>
                                     <span className="text-[#1f2e3b]">{formatNumberFaSpaced(Math.abs(bal))}</span>
                                   </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={() => {
+                                      navigateModule('people')
+                                      setTimeout(() => {
+                                        try {
+                                          const personId = String(h.id || h.person_id || h.code || '')
+                                          const evt = new CustomEvent('open-person-history', { detail: { person_id: personId } })
+                                          window.dispatchEvent(evt)
+                                        } catch {}
+                                      }, 50)
+                                    }}
+                                  >
+                                    گردش
+                                  </button>
                                 </td>
                               </tr>
                             )

@@ -1,11 +1,17 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../../components/layout/AppShell'
-import { retroHeading, retroPanelPadded } from '../../components/retroTheme'
-import { apiGet } from '../../services/api'
+import { retroHeading, retroPanel, retroPanelPadded, retroButton, retroInput, retroTableHeader } from '../../components/retroTheme'
+import { apiGet, apiPost, apiPatch } from '../../services/api'
+import { toPersianDigits } from '../../utils/num'
 
 export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
   const [pingResult, setPingResult] = useState<string>('')
   const [serverTime, setServerTime] = useState<string>('')
+  // sms.ir settings
+  const [smsir, setSmsir] = useState({ api_key: '', line_number: '', enabled: false, otp_template_id: '' })
+  const [otpTest, setOtpTest] = useState({ mobile: '', code: '' })
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
 
   async function pingApi() {
     try {
@@ -22,6 +28,58 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
       setServerTime(resp?.server_time || '—')
     } catch {
       setServerTime('Unavailable')
+    }
+  }
+
+  useEffect(() => {
+    // Load sms.ir settings from admin settings store
+    ;(async () => {
+      try {
+        const settings = await apiGet<Array<{ key: string; value: string | null }>>('/api/admin/settings')
+        const getVal = (k: string) => (settings.find(s => s.key === k)?.value ?? '')
+        setSmsir({
+          api_key: String(getVal('smsir_api_key')),
+          line_number: String(getVal('smsir_line_number')),
+          otp_template_id: String(getVal('smsir_otp_template_id')),
+          enabled: String(getVal('smsir_enabled')).toLowerCase() === 'true',
+        })
+      } catch (e) {
+        // ignore
+      }
+    })()
+  }, [])
+
+  async function saveSmsIr() {
+    setSaving(true)
+    try {
+      const payloads = [
+        { key: 'smsir_api_key', value: smsir.api_key },
+        { key: 'smsir_line_number', value: smsir.line_number },
+        { key: 'smsir_otp_template_id', value: smsir.otp_template_id },
+        { key: 'smsir_enabled', value: smsir.enabled ? 'true' : 'false' },
+      ]
+      for (const p of payloads) {
+        await apiPatch(`/api/admin/settings/${p.key}`, { value: p.value })
+      }
+      alert('تنظیمات پیامک (sms.ir) ذخیره شد')
+    } catch (e) {
+      console.error(e)
+      alert('ذخیره تنظیمات پیامک ناموفق بود')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function testOtpSend() {
+    setTesting(true)
+    try {
+      const res = await apiPost('/api/smsir/test-otp', { ...otpTest })
+      alert(`نتیجه ارسال: ${JSON.stringify(res)}`)
+    } catch (e) {
+      console.error(e)
+      alert('ارسال کد با خطا مواجه شد')
+    } finally {
+      setTesting(false)
     }
   }
   return (
@@ -43,9 +101,37 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
           <div className="text-[11px] text-[#7a6b4f]">{pingResult || '—'}</div>
           <div className="text-[11px] text-[#7a6b4f]">Server time: {serverTime || '—'}</div>
         </div>
-        <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-          <p className={retroHeading}>اطلاعات سیستم</p>
-          <p className="text-xs text-[#7a6b4f]">می‌توان بعداً ابزارهای تست API و snapshot اضافه کرد.</p>
+        <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-3">
+          <p className={retroHeading}>تنظیمات پیامک (sms.ir)</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label className={retroHeading}>API Key</label>
+              <input className={`${retroInput} w-full`} value={smsir.api_key} onChange={e=>setSmsir({...smsir, api_key: e.target.value})} placeholder="کلید دسترسی" />
+            </div>
+            <div>
+              <label className={retroHeading}>شماره ارسال (Line)</label>
+              <input className={`${retroInput} w-full`} value={smsir.line_number} onChange={e=>setSmsir({...smsir, line_number: e.target.value})} placeholder="شماره خط ارسال" />
+            </div>
+            <div>
+              <label className={retroHeading}>OTP Template ID</label>
+              <input className={`${retroInput} w-full`} value={smsir.otp_template_id} onChange={e=>setSmsir({...smsir, otp_template_id: e.target.value})} placeholder="شناسه الگو OTP" />
+            </div>
+            <div className="flex items-end">
+              <label className="text-xs text-[#7a6b4f] flex items-center gap-2"><input type="checkbox" checked={smsir.enabled} onChange={e=>setSmsir({...smsir, enabled: e.target.checked})} /> فعال‌سازی</label>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button className={`${retroButton}`} disabled={saving} onClick={saveSmsIr}>{saving? 'در حال ذخیره...' : 'ذخیره'}</button>
+          </div>
+
+          <div className="mt-3">
+            <p className={retroHeading}>تست ارسال OTP</p>
+            <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+              <input className={`${retroInput}`} placeholder="شماره موبایل" value={otpTest.mobile} onChange={e=>setOtpTest({...otpTest, mobile: e.target.value})} />
+              <input className={`${retroInput}`} placeholder="کد یکبارمصرف" value={otpTest.code} onChange={e=>setOtpTest({...otpTest, code: e.target.value})} />
+            </div>
+            <button className={`${retroButton} mt-2`} disabled={testing} onClick={testOtpSend}>{testing? 'در حال ارسال...' : 'ارسال کد تست'}</button>
+          </div>
         </div>
       </div>
     </section>

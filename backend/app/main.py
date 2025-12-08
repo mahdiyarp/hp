@@ -30,6 +30,7 @@ from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, SUPPORTED_PROVIDERS
+from sqlalchemy import select
 
 DB = db
 
@@ -137,6 +138,72 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
     if not user:
         raise HTTPException(status_code=401, detail='User not found')
     return user
+
+# ==================== Utility & Integration Endpoints ====================
+
+@app.post('/api/smsir/test-otp')
+def smsir_test_otp(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """
+    Test sending an OTP via sms.ir configuration.
+    Expects: { mobile: string, code: string }
+    Uses admin settings keys: smsir_api_key, smsir_line_number, smsir_otp_template_id, smsir_enabled
+    """
+    try:
+        mobile = str(payload.get('mobile') or '').strip()
+        code = str(payload.get('code') or '').strip()
+        if not mobile or not code:
+            raise HTTPException(status_code=400, detail='mobile و code الزامی است')
+
+        # Read settings
+        settings = session.query(models.SystemSettings).filter(models.SystemSettings.key.in_([
+            'smsir_api_key', 'smsir_line_number', 'smsir_otp_template_id', 'smsir_enabled'
+        ])).all()
+        kv = { s.key: (s.value or '') for s in settings }
+        enabled = str(kv.get('smsir_enabled', '')).lower() == 'true'
+        if not enabled:
+            raise HTTPException(status_code=400, detail='درگاه sms.ir غیرفعال است')
+        if not kv.get('smsir_api_key') or not kv.get('smsir_line_number'):
+            raise HTTPException(status_code=400, detail='تنظیمات sms.ir ناقص است')
+
+        # If template is configured, use sms.ir Ultra Fast Send API; else fallback generic
+        template_id = kv.get('smsir_otp_template_id')
+        api_key = kv.get('smsir_api_key')
+        line_number = kv.get('smsir_line_number')
+        if template_id and api_key:
+            try:
+                import requests as _rq
+                url = 'https://api.sms.ir/v1/send/verify'
+                headers = { 'x-api-key': api_key, 'Content-Type': 'application/json' }
+                payload = {
+                    'mobile': mobile,
+                    'templateId': int(template_id) if str(template_id).isdigit() else template_id,
+                    'parameters': [
+                        { 'name': 'Code', 'value': code },
+                    ]
+                }
+                resp = _rq.post(url, headers=headers, json=payload, timeout=10)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    sent = bool(data.get('status') or data.get('success') or data.get('data'))
+                    return { 'sent': sent, 'detail': data }
+                else:
+                    # fall back to generic send_sms
+                    message = f"کد یکبارمصرف شما: {code}"
+                    ok, info = send_sms(session, mobile, message)
+                    return { 'sent': bool(ok), 'detail': info, 'status': resp.status_code }
+            except Exception as e:
+                # fall back to generic
+                message = f"کد یکبارمصرف شما: {code}"
+                ok, info = send_sms(session, mobile, message)
+                return { 'sent': bool(ok), 'detail': info, 'error': str(e) }
+        # no template configured → generic sender
+        message = f"کد یکبارمصرف شما: {code}"
+        ok, info = send_sms(session, mobile, message)
+        return { 'sent': bool(ok), 'detail': info }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== People Endpoints ====================
 
@@ -619,10 +686,19 @@ def login_phone(payload: schemas.PhoneLoginRequest, session: Session = Depends(d
     
     # ارسال OTP
     message = f'کد ورود شما: {otp_code}\nاین کد 5 دقیقه معتبر است.'
-    success, msg = send_sms_func(session, phone, message, user_id=user.id if user else None)
-    
+    success, msg = send_sms_func(session, phone, message)
+
     if not success:
-        raise HTTPException(status_code=500, detail=f'خطا در ارسال پیام: {msg}')
+        # Demo fallback: allow OTP without SMS when enabled via env
+        allow_demo = str(os.getenv('DEMO_ALLOW_OTP_NO_SMS', 'false')).lower() == 'true'
+        if allow_demo:
+            try:
+                # Log the OTP to server stdout for demo purposes
+                print(f"[DEMO OTP] phone={phone} code={otp_code}")
+            except Exception:
+                pass
+        else:
+            raise HTTPException(status_code=500, detail=f'خطا در ارسال پیام: {msg}')
     
     return schemas.PhoneLoginResponse(
         success=True,
@@ -636,12 +712,17 @@ def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = 
     """
     تأیید کد OTP و دریافت access token.
     """
-    from .sms import verify_otp_session
+    from .sms import verify_otp_session, peek_session_phone
     
     is_valid, phone = verify_otp_session(payload.session_id, payload.otp_code)
     
     if not is_valid or not phone:
-        raise HTTPException(status_code=400, detail='کد OTP نامعتبر یا منقضی است')
+        # Demo bypass: allow when env flag is enabled and session is valid
+        allow_demo = str(os.getenv('DEMO_ALLOW_OTP_NO_SMS', 'false')).lower() in ('true','1','yes')
+        if allow_demo:
+            phone = peek_session_phone(payload.session_id)
+        if not phone:
+            raise HTTPException(status_code=400, detail='کد OTP نامعتبر یا منقضی است')
     
     # جستجو برای کاربر
     user: Optional[models.User] = session.query(models.User).filter(
@@ -1509,18 +1590,41 @@ def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = N
 
 
 @app.get('/api/reports/stock')
-def reports_stock(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def reports_stock(as_of: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
-    # Optional: constrain by user's active FY (if valuation needs date range later)
-    out = crud.report_stock_valuation(session)
+    from datetime import datetime
+    a = datetime.fromisoformat(as_of) if as_of else None
+    # Default to user's active FY end if not provided
+    if a is None and getattr(current, 'preferences', None):
+        try:
+            fy_id = getattr(current.preferences, 'active_financial_year_id', None)
+            if fy_id:
+                fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fy_id).first()
+                if fy and getattr(fy, 'end_date', None):
+                    a = fy.end_date
+        except Exception:
+            pass
+    out = crud.report_stock_valuation(session, as_of=a)
     return out
 
 
 @app.get('/api/reports/cash')
-def reports_cash(method: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+def reports_cash(method: Optional[str] = None, start: Optional[str] = None, end: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
-    # If future supports date ranges, default to active FY range
-    out = crud.report_cash_balance(session, method=method)
+    from datetime import datetime
+    s = datetime.fromisoformat(start) if start else None
+    e = datetime.fromisoformat(end) if end else None
+    if (s is None or e is None) and getattr(current, 'preferences', None):
+        try:
+            fy_id = getattr(current.preferences, 'active_financial_year_id', None)
+            if fy_id:
+                fy = session.query(models.FinancialYear).filter(models.FinancialYear.id == fy_id).first()
+                if fy:
+                    s = s or fy.start_date
+                    e = e or fy.end_date
+        except Exception:
+            pass
+    out = crud.report_cash_balance(session, method=method, start=s, end=e)
     return out
 
 

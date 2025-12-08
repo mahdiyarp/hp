@@ -71,10 +71,15 @@ export async function refreshTokens() {
 
 export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
   const access = getAccessToken()
+  const refresh = getRefreshToken()
   const headers = new Headers(init?.headers || {})
   if (access) headers.set('Authorization', 'Bearer ' + access)
   const res = await fetch(input, { ...init, headers })
   if (res.status === 401) {
+    // Only attempt refresh if we actually have a refresh token
+    if (!refresh) {
+      return res
+    }
     try {
       await refreshTokens()
       const access2 = getAccessToken()
@@ -87,6 +92,38 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
     }
   }
   return res
+}
+
+// ===== Mobile Login (SMS OTP) =====
+export async function loginByPhoneRequest(phone: string): Promise<{ success: boolean; session_id: string; message?: string }> {
+  const res = await fetch('/api/auth/login-phone', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg = (data && data.detail) ? data.detail : 'درخواست ورود ناموفق'
+    throw new Error(msg)
+  }
+  return data as { success: boolean; session_id: string; message?: string }
+}
+
+export async function verifyPhoneOtp(session_id: string, otp_code: string): Promise<{ success: boolean; access_token: string; token_type: string }> {
+  const res = await fetch('/api/auth/verify-phone-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id, otp_code }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const msg = (data && data.detail) ? data.detail : 'تایید کد ناموفق'
+    throw new Error(msg)
+  }
+  const access = (data as any).access_token
+  const refresh = (data as any).refresh_token || ''
+  if (access) setTokens(access, refresh)
+  return data as { success: boolean; access_token: string; token_type: string }
 }
 
 export async function requestOtpSetup() {
@@ -126,4 +163,6 @@ export default {
   requestOtpSetup,
   verifyOtp,
   disableOtp,
+  loginByPhoneRequest,
+  verifyPhoneOtp,
 }

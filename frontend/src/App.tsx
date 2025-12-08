@@ -56,6 +56,7 @@ export default function App() {
   const [version, setVersion] = useState<string | null>(null)
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
   const { user, modules: userModules, logout } = useAuth()
+  const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
 
   async function syncTime() {
     const before = new Date()
@@ -191,6 +192,19 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent
+      const d = ce.detail || {}
+      if (typeof d?.message === 'string' && typeof d?.status === 'number') {
+        setApiError({ status: d.status, message: d.message })
+        setTimeout(() => setApiError(null), 5000)
+      }
+    }
+    window.addEventListener('api-error', handler)
+    return () => window.removeEventListener('api-error', handler)
+  }, [])
+
+  useEffect(() => {
     if (user && sync && !smartDateInitialized) {
       void initializeSmartDate()
     }
@@ -213,6 +227,9 @@ export default function App() {
   if (!user) {
     return (
       <>
+        {apiError && (
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+        )}
         <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 text-gray-800 flex items-center justify-center p-6">
           <div className="max-w-5xl w-full flex flex-col-reverse md:flex-row items-center justify-between gap-10">
             <div className="md:w-1/2 space-y-4 text-right">
@@ -250,6 +267,9 @@ export default function App() {
     return (
       <FYProvider>
         <>
+          {apiError && (
+            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+          )}
           <AppShell
             modules={accessibleModules.length > 0 ? accessibleModules : modules}
             sync={sync}
@@ -266,6 +286,9 @@ export default function App() {
   return (
     <>
       <FYProvider>
+        {apiError && (
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+        )}
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>

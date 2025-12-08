@@ -1360,28 +1360,74 @@ def report_person_turnover(session: Session, party_id: Optional[str] = None, par
     return {'party_id': party_id, 'party_name': party_name, 'invoices_total': int(invoices_total), 'payments_total': int(payments_total)}
 
 
-def report_stock_valuation(session: Session):
-    # For each product, compute inventory * last known price (from price history) as approximation
+def report_stock_valuation(session: Session, as_of: Optional[datetime] = None):
+    """Compute stock valuation.
+    - If as_of is None: approximate using current product.inventory and latest price history.
+    - If as_of is provided: compute quantity up to as_of via product ledger and use last price effective at or before as_of.
+    """
     out = []
     prods = session.query(models.Product).all()
+    if not as_of:
+        for p in prods:
+            last_price = None
+            ph = (
+                session.query(models.PriceHistory)
+                .filter(models.PriceHistory.product_id == p.id)
+                .order_by(models.PriceHistory.effective_at.desc())
+                .first()
+            )
+            if ph:
+                last_price = ph.price
+            total = (p.inventory or 0) * (last_price or 0)
+            out.append({
+                'product_id': p.id,
+                'name': p.name,
+                'inventory': int(p.inventory or 0),
+                'unit_price': int(last_price) if last_price else None,
+                'total_value': int(total),
+            })
+        return out
+
+    # Date-bounded valuation
     for p in prods:
-        last_price = None
-        ph = session.query(models.PriceHistory).filter(models.PriceHistory.product_id == p.id).order_by(models.PriceHistory.effective_at.desc()).first()
-        if ph:
-            last_price = ph.price
-        total = (p.inventory or 0) * (last_price or 0)
-        out.append({'product_id': p.id, 'name': p.name, 'inventory': int(p.inventory or 0), 'unit_price': int(last_price) if last_price else None, 'total_value': int(total)})
+        rows = product_ledger(session, product_id=p.id, start=None, end=as_of)
+        qty = 0
+        if rows:
+            # product_ledger returns rows sorted by date with 'running' field
+            last = rows[-1]
+            qty = int(last.get('running') or last.get('running_qty') or 0)
+        ph = (
+            session.query(models.PriceHistory)
+            .filter(models.PriceHistory.product_id == p.id)
+            .filter(models.PriceHistory.effective_at <= as_of)
+            .order_by(models.PriceHistory.effective_at.desc())
+            .first()
+        )
+        last_price = int(ph.price) if ph and ph.price is not None else None
+        total = (qty or 0) * (last_price or 0)
+        out.append({
+            'product_id': p.id,
+            'name': p.name,
+            'inventory': int(qty or 0),
+            'unit_price': last_price,
+            'total_value': int(total),
+            'as_of': as_of,
+        })
     return out
 
 
-def report_cash_balance(session: Session, method: Optional[str] = None):
+def report_cash_balance(session: Session, method: Optional[str] = None, start: Optional[datetime] = None, end: Optional[datetime] = None):
     q = session.query(models.Payment).filter(models.Payment.status == 'posted')
+    if start:
+        q = q.filter(models.Payment.server_time >= start)
+    if end:
+        q = q.filter(models.Payment.server_time <= end)
     if method:
         q = q.filter(models.Payment.method.ilike(f"%{method}%"))
     # balance = sum(in receipts) - sum(out payments)
     receipts = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'in').all())
     outs = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'out').all())
-    return {'method': method or 'all', 'balance': int(receipts - outs)}
+    return {'method': method or 'all', 'balance': int(receipts - outs), 'start': start, 'end': end}
 
 
 def dashboard_summary(session: Session):

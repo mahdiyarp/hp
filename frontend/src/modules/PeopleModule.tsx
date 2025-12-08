@@ -128,6 +128,29 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
     loadBalances()
   }, [])
 
+  // Listen for cross-module deep link to open a person's history
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const ce = e as CustomEvent<{ person_id: string }>
+        const pid = ce.detail?.person_id
+        if (!pid) return
+        const p = balances.find(b => String(b.person.id) === String(pid)) || null
+        if (p) {
+          openPersonHistory(p.person as any)
+        } else {
+          // Fallback: try load people if not present yet
+          loadBalances().then(() => {
+            const after = balances.find(b => String(b.person.id) === String(pid)) || null
+            if (after) openPersonHistory(after.person as any)
+          })
+        }
+      } catch {}
+    }
+    window.addEventListener('open-person-history', handler as EventListener)
+    return () => window.removeEventListener('open-person-history', handler as EventListener)
+  }, [balances])
+
   useEffect(() => {
     try { localStorage.setItem('hp_kind_options', JSON.stringify(kindOptions)) } catch {}
   }, [kindOptions])

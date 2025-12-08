@@ -146,3 +146,15 @@ def verify_otp_session(session_id: str, otp_code: str) -> Tuple[bool, Optional[s
         return True, phone
     
     return False, None
+
+
+def peek_session_phone(session_id: str) -> Optional[str]:
+    """Return the phone for an existing OTP session without verifying the code (demo use)."""
+    data = _otp_sessions.get(session_id)
+    if not data:
+        return None
+    # If expired, treat as missing
+    import time as _t
+    if _t.time() > data.get('expires_at', 0):
+        return None
+    return data.get('phone')

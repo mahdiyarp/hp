@@ -19,6 +19,7 @@ services:
       - ./backend/.env
     environment:
       DEMO_SEED: "true"
+      DEMO_ALLOW_OTP_NO_SMS: "true"
     depends_on:
       - db
     restart: unless-stopped

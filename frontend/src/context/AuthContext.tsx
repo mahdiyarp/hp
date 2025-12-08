@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import authService, { clearTokens } from '../services/auth'
+import authService, { clearTokens, getAccessToken, getRefreshToken } from '../services/auth'
 
 type User = { id: number; username: string; role: string; otp_enabled: boolean }
 
@@ -36,6 +36,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // try to fetch /api/auth/me
     async function load() {
+      // Gate network calls until توکن داریم
+      const hasAnyToken = !!getAccessToken() || !!getRefreshToken()
+      if (!hasAnyToken) return
       try {
         const res = await authService.fetchWithAuth('/api/auth/me')
         if (!res.ok) return

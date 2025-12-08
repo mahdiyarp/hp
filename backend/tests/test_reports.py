@@ -75,6 +75,34 @@ def test_pnl_fifo_lifo_authenticated_basic_structure():
         assert 'gross_profit' in data
 
 
+def test_cash_report_with_range_defaults_and_params():
+    headers = _ensure_test_user_and_login()
+    # With explicit range
+    start = (datetime.utcnow() - timedelta(days=90)).date().isoformat()
+    end = datetime.utcnow().date().isoformat()
+    r = client.get(f'/api/reports/cash?start={start}&end={end}', headers=headers)
+    assert r.status_code == 200
+    data = r.json()
+    assert 'balance' in data
+    # Without range (should still return structure, defaulting to FY if configured)
+    r2 = client.get('/api/reports/cash', headers=headers)
+    assert r2.status_code == 200
+    data2 = r2.json()
+    assert 'balance' in data2
+
+
+def test_stock_report_as_of_param_structure():
+    headers = _ensure_test_user_and_login()
+    as_of = datetime.utcnow().date().isoformat()
+    r = client.get(f'/api/reports/stock?as_of={as_of}', headers=headers)
+    assert r.status_code == 200
+    payload = r.json()
+    assert isinstance(payload, list)
+    if payload:
+        sample = payload[0]
+        assert 'product_id' in sample and 'inventory' in sample and 'total_value' in sample
+
+
 def test_product_ledger_authenticated_empty_or_list():
     headers = _ensure_test_user_and_login()
     start = (datetime.utcnow() - timedelta(days=365)).date().isoformat()
