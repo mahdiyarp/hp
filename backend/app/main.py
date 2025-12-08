@@ -1511,6 +1511,7 @@ def reports_person(party_id: Optional[str] = None, party_name: Optional[str] = N
 @app.get('/api/reports/stock')
 def reports_stock(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
+    # Optional: constrain by user's active FY (if valuation needs date range later)
     out = crud.report_stock_valuation(session)
     return out
 
@@ -1518,6 +1519,7 @@ def reports_stock(session: Session = Depends(db.get_db), current: models.User = 
 @app.get('/api/reports/cash')
 def reports_cash(method: Optional[str] = None, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
     require_permissions(['finance_report'])(current)
+    # If future supports date ranges, default to active FY range
     out = crud.report_cash_balance(session, method=method)
     return out
 

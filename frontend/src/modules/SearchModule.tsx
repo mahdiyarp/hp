@@ -385,6 +385,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                             <th className={retroTableHeader}>مبلغ/جهت</th>
                             <th className={retroTableHeader}>روش/وضعیت</th>
                             <th className={retroTableHeader}>تاریخ</th>
+                            <th className={retroTableHeader}>اقدام</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -417,6 +418,22 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={() => {
+                                      navigateModule('finance')
+                                      setTimeout(() => {
+                                        try {
+                                          const evt = new CustomEvent('open-payment-detail', { detail: { payment_id: Number(h.id || h.payment_id) } })
+                                          window.dispatchEvent(evt)
+                                        } catch {}
+                                      }, 50)
+                                    }}
+                                  >
+                                    نمایش
+                                  </button>
                                 </td>
                               </tr>
                             )

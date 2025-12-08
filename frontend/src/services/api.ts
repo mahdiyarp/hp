@@ -32,8 +32,10 @@ type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT'
 async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText || 'Request failed'
+    let payload: any = null
     try {
       const data = await res.json()
+      payload = data
       if (typeof data?.detail === 'string') {
         detail = data.detail
       } else if (data && typeof data === 'object') {
@@ -42,6 +44,11 @@ async function parseResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore body parse errors
     }
+    // Broadcast a global error event for UI toast handling
+    try {
+      const evt = new CustomEvent('api-error', { detail: { status: res.status, message: detail, payload } })
+      window.dispatchEvent(evt)
+    } catch {}
     throw new Error(detail)
   }
   if (res.status === 204) {
