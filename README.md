@@ -16,6 +16,45 @@ docker compose up --build
 Backend swagger UI (once running): `http://localhost:8000/docs`  
 Frontend app: `http://localhost:3000`
 
+## Dev Quickstart (Windows)
+
+1. Install Docker Desktop and ensure Compose is available.
+2. Start services:
+
+```powershell
+docker compose up -d --build frontend; docker compose up -d --build backend
+```
+
+3. Seed demo data (users, NFTs, products, invoices):
+
+```powershell
+python.exe backend\scripts\seed_demo.py
+```
+
+4. Open the app:
+
+- Frontend: `http://localhost:8080`
+- Backend Swagger: `http://localhost:8000/docs`
+
+Notes:
+- Developer shortcut login is available via `POST /api/auth/login-dev` used by frontend.
+- The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
+- Organization features are derived from the user's NFT assets via `/api/org/features`.
+
+### Environment Flags
+
+- `DEV_FEATURES_ENABLED` (default: off): Enables dev-only endpoints like `/api/auth/login-dev` and `/api/dev/assistant/*`. Accepts `true|1|dev|yes`.
+- `VITE_DEV_AUTOLOGIN` (frontend, default: `false`): When `true`, the client attempts silent developer login on startup if no token exists.
+- `ALLOW_CREATE_ALL_IN_SEED` (default: off): When enabled or when using SQLite, `backend/scripts/seed_demo.py` will call `create_all` to ensure new tables exist.
+
+### Database Migrations
+
+- Apply migrations (including the new `nft_assets` table):
+
+```powershell
+docker compose exec backend alembic upgrade head
+```
+
 For local development copy `backend/.env.example` → `backend/.env` and adjust secrets.
 
 ## Tooling

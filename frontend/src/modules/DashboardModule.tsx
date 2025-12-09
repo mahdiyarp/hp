@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet } from '../services/api'
+import { fetchWithAuth } from '../services/auth'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
 import {
@@ -78,10 +79,7 @@ interface Product {
   inventory: number | null
 }
 
-interface TrendPoint {
-  date: string
-  total: number
-}
+interface TrendPoint { label: string; value: number }
 
 interface OldStockItem {
   product_id: string
@@ -115,6 +113,11 @@ export default function DashboardModule({
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [trend, setTrend] = useState<TrendPoint[]>([])
+  const [trendRange, setTrendRange] = useState<'today' | '3days' | 'custom'>('today')
+  const [customFrom, setCustomFrom] = useState<string>('')
+  const [customTo, setCustomTo] = useState<string>('')
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true)
+  const [refreshMs, setRefreshMs] = useState<number>(30000)
   const [oldStock, setOldStock] = useState<OldStockItem[]>([])
   const [checksDue, setChecksDue] = useState<CheckDue[]>([])
   const [prices, setPrices] = useState<PriceFeed | null>(null)
@@ -136,7 +139,8 @@ export default function DashboardModule({
         apiGet<DashboardSummary>('/api/dashboard/summary'),
         apiGet<Invoice[]>(`/api/invoices?limit=50`),
         apiGet<Product[]>(`/api/products?limit=50`),
-        apiGet<{ series: TrendPoint[] }>('/api/dashboard/sales-trends?days=30'),
+        // replaced by live endpoint below
+        Promise.resolve({ series: [] as TrendPoint[] }),
         apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=50`),
         apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=50`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
@@ -177,11 +181,34 @@ export default function DashboardModule({
         newWarnings.push('فهرست محصولات اخیر قابل دسترس نیست.')
       }
 
-      if (trendRes.status === 'fulfilled') {
-        setTrend(trendRes.value.series ?? [])
-      } else {
-        newWarnings.push('روند فروش قابل نمایش نیست.')
-      }
+      try { await loadTrend() } catch { newWarnings.push('روند فروش قابل نمایش نیست.') }
+  async function loadTrend() {
+    let fromIso = ''
+    let toIso = ''
+    const now = new Date()
+    const end = new Date(now)
+    const start = new Date(now)
+    if (trendRange === 'today') {
+      start.setHours(0,0,0,0)
+    } else if (trendRange === '3days') {
+      start.setDate(start.getDate() - 2)
+      start.setHours(0,0,0,0)
+    } else {
+      fromIso = customFrom
+      toIso = customTo
+    }
+    if (!fromIso) fromIso = start.toISOString()
+    if (!toIso) toIso = end.toISOString()
+    const res = await fetchWithAuth(`/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange==='today'?'hour':'day'}`)
+    const data = await res.json().catch(()=>({}))
+    setTrend(Array.isArray(data.points) ? data.points : [])
+  }
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const id = setInterval(() => { loadTrend().catch(()=>{}) }, Math.max(10000, refreshMs))
+    return () => clearInterval(id)
+  }, [autoRefresh, refreshMs, trendRange, customFrom, customTo])
 
       if (oldStockRes.status === 'fulfilled') {
         setOldStock(oldStockRes.value)
@@ -225,7 +252,7 @@ export default function DashboardModule({
     return { start, end }
   }, [financialData])
 
-  const maxTrend = useMemo(() => trend.reduce((acc, cur) => Math.max(acc, cur.total), 0), [trend])
+  const maxTrend = useMemo(() => trend.reduce((acc, cur) => Math.max(acc, cur.value), 0), [trend])
 
   const handleSuggestion = (label: string | null) => {
     if (!label) return
@@ -433,23 +460,27 @@ export default function DashboardModule({
               به‌روزرسانی
             </button>
           </header>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('today'); loadTrend()}}>امروز</button>
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('3days'); loadTrend()}}>۳ روز</button>
+            <input className="input text-xs" type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} title="شروع بازه" placeholder="شروع بازه" />
+            <input className="input text-xs" type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)} title="پایان بازه" placeholder="پایان بازه" />
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('custom'); loadTrend()}}>اعمال بازه</button>
+            <label className="flex items-center gap-2 ml-2">
+              <input type="checkbox" checked={autoRefresh} onChange={e=>setAutoRefresh(e.target.checked)} />
+              <span>بروزرسانی خودکار</span>
+            </label>
+            <input className="input text-xs w-24" type="number" min={10000} step={5000} value={refreshMs} onChange={e=>setRefreshMs(Number(e.target.value)||30000)} title="فاصله بروزرسانی (ms)" placeholder="ms" />
+          </div>
           {trend.length > 0 ? (
             <div className="h-48 flex items-end gap-1">
               {trend.map(point => {
-                const ratio = maxTrend > 0 ? point.total / maxTrend : 0
+                const ratio = maxTrend > 0 ? point.value / maxTrend : 0
                 const barHeight = Math.max(6, ratio * 100)
                 return (
-                  <div key={point.date} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full bg-[#154b5f] transition-all duration-300"
-                      style={{ height: `${barHeight}%` }}
-                      title={`${point.date} : ${formatNumberFa(point.total)} ریال`}
-                    ></div>
-                    <span className="text-[10px] text-[#7a6b4f]">
-                      {new Intl.DateTimeFormat('fa-IR', { month: 'numeric', day: '2-digit' }).format(
-                        new Date(point.date),
-                      )}
-                    </span>
+                  <div key={point.label} className="flex-1 flex flex-col items-center gap-2">
+                    <div className={`w-full bg-[#154b5f] transition-all duration-300`} style={{ height: `${barHeight}%` }} title={`${point.label} : ${formatNumberFa(point.value)} ریال`}></div>
+                    <span className="text-[10px] text-[#7a6b4f]">{point.label}</span>
                   </div>
                 )
               })}

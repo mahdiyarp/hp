@@ -100,6 +100,30 @@ def create_user(session: Session, user: schemas.UserCreate):
     return db_user
 
 
+# ==================== NFT Assets ====================
+
+def create_nft_asset(session: Session, owner_user_id: Optional[int], token_id: str, chain: str = 'hesabpak', contract_address: Optional[str] = None, metadata: Optional[dict] = None) -> models.NftAsset:
+    existing = session.query(models.NftAsset).filter(models.NftAsset.token_id == token_id).first()
+    if existing:
+        return existing
+    asset = models.NftAsset(
+        token_id=token_id,
+        chain=chain,
+        contract_address=contract_address,
+        metadata_json=metadata or {},
+        owner_user_id=owner_user_id,
+        is_active=True
+    )
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return asset
+
+
+def get_user_nft_assets(session: Session, user_id: int) -> List[models.NftAsset]:
+    return session.query(models.NftAsset).filter(models.NftAsset.owner_user_id == user_id, models.NftAsset.is_active == True).all()
+
+
 def make_hash_id(obj: dict) -> str:
     # canonical JSON over selected attributes + timestamp
     payload = json.dumps(obj, sort_keys=True, separators=(',', ':'))

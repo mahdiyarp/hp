@@ -80,7 +80,7 @@ export default function SidebarMenu({
   }, [modules])
 
   const settingsChildren = useMemo(() => {
-    const all = modules.filter(m => /system|settings|user|security|integration|auth|developer|bank|banks|branch/i.test(m.id))
+    const all = modules.filter(m => /system|settings|user|security|integration|auth|developer|bank|banks|branch|access-control|roles|permissions/i.test(m.id))
     // hide developer for non-developers
     if (!user || (user.role || '').toLowerCase() !== 'developer') {
       return all.filter(m => m.id !== 'developer')

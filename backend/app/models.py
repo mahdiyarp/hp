@@ -334,6 +334,21 @@ class DeveloperApiKey(Base):
     user = relationship('User', backref='api_keys')
 
 
+class NftAsset(Base):
+    __tablename__ = 'nft_assets'
+    id = Column(Integer, primary_key=True, index=True)
+    token_id = Column(String(128), nullable=False, unique=True, index=True)
+    chain = Column(String(64), nullable=False, default='hesabpak')
+    contract_address = Column(String(128), nullable=True)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    owner_user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    owner_user = relationship('User', backref='nft_assets')
+
+
 class BlockchainEntry(Base):
     __tablename__ = 'blockchain_entries'
     id = Column(Integer, primary_key=True, index=True)

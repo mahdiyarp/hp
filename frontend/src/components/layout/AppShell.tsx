@@ -27,6 +27,8 @@ export interface ModuleDefinition {
   component: React.ComponentType<ModuleComponentProps>
   badge?: string
   icon?: React.ReactNode
+  hidden?: boolean
+  feature?: string
 }
 
 interface AppShellProps {
@@ -34,6 +36,7 @@ interface AppShellProps {
   sync: SyncRecord | null
   user: { username: string; role: string } | null
   onLogout: () => void
+  orgFeatures?: string[]
 }
 
 const SMART_DATE_ISO_KEY = 'hesabpak_selected_date'
@@ -44,19 +47,20 @@ function normalizeIsoDate(value: string | null | undefined) {
   return value.length >= 10 ? value.slice(0, 10) : value
 }
 
-export default function AppShell({ modules, sync, user, onLogout }: AppShellProps) {
+export default function AppShell({ modules, sync, user, onLogout, orgFeatures }: AppShellProps) {
   const { t } = useI18n()
+  const visibleModules = useMemo(() => modules.filter(m => !m.hidden && (!m.feature || (orgFeatures || []).includes(m.feature))), [modules, orgFeatures])
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
-    modules.forEach(m => map.set(m.id, m))
+    visibleModules.forEach(m => map.set(m.id, m))
     return map
-  }, [modules])
+  }, [visibleModules])
 
   const initialModuleId = useMemo(() => {
     const hash = window.location.hash.replace('#', '')
     if (hash && moduleMap.has(hash)) return hash
-    return modules[0]?.id ?? ''
-  }, [moduleMap, modules])
+    return visibleModules[0]?.id ?? ''
+  }, [moduleMap, visibleModules])
 
   const [activeModuleId, setActiveModuleId] = useState(initialModuleId)
   // حذف قابلیت کوچک‌سازی منو؛ همیشه باز است
@@ -132,7 +136,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     setSmartDate({ isoDate: storedIso, jalali: storedJalali })
   }, [])
 
-  const activeModule = moduleMap.get(activeModuleId) ?? modules[0]
+  const activeModule = moduleMap.get(activeModuleId) ?? visibleModules[0]
   const ActiveComponent = activeModule?.component
 
   const fyCtx = useFY()
@@ -163,7 +167,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
       </div>
 
       <SidebarMenu
-        modules={modules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
+        modules={visibleModules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
         activeModuleId={activeModuleId}
         onNavigate={navigate}
       />

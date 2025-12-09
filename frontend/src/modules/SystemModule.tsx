@@ -79,6 +79,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [activities, setActivities] = useState<ActivityLog[]>([])
+  // moved to AccessControlModule
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [perms, setPerms] = useState<Permission[]>([])
@@ -91,6 +92,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [showUserForm, setShowUserForm] = useState(false)
   const [newUser, setNewUser] = useState({ username: '', email: '', full_name: '', password: '', role_id: 2 })
   const [newRole, setNewRole] = useState({ name: '', description: '' })
+  const showLegacyAccess = false
 
   // SMS state removed; migrated to Developer settings (sms.ir)
   
@@ -139,28 +141,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         console.error(err)
         warn.push('لاگ‌های فعالیت برای نقش شما در دسترس نیست.')
       }
-      try {
-        const userList = await apiGet<User[]>('/api/users')
-        setUsers(userList)
-      } catch (err) {
-        console.error(err)
-        warn.push('لیست کاربران قابل دریافت نیست.')
-      }
-      try {
-        const roleList = await apiGet<Role[]>('/api/roles')
-        setRoles(roleList)
-      } catch (err) {
-        console.error(err)
-        warn.push('لیست نقش‌ها قابل دریافت نیست.')
-      }
-      // SMS config handling removed from SystemModule
-      try {
-        const allPerms = await apiGet<Permission[]>('/api/permissions')
-        setPerms(allPerms)
-      } catch (err) {
-        console.error(err)
-        warn.push('permissions قابل دریافت نیست.')
-      }
+      // Roles/Users/Permissions moved to AccessControlModule
       try {
         const settings = await apiGet<SystemSetting[]>('/api/admin/settings')
         try {
@@ -421,8 +402,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header>
-          <p className={retroHeading}>Roles & Permissions</p>
-          <h3 className="text-lg font-semibold mt-2">نقش‌ها و دسترسی‌ها</h3>
+          {showLegacyAccess && (
+            <>
+              <p className={retroHeading}>Roles & Permissions</p>
+              <h3 className="text-lg font-semibold mt-2">نقش‌ها و دسترسی‌ها</h3>
+            </>
+          )}
         </header>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className={`${retroPanel} p-4 space-y-3`}>
@@ -468,7 +453,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
               </div>
             )}
             <div className="flex gap-2">
-              <button className={retroButton} onClick={saveRolePermissions} disabled={!selectedRoleId}>ذخیره</button>
+              {showLegacyAccess && (
+                <button className={retroButton} onClick={saveRolePermissions} disabled={!selectedRoleId}>ذخیره</button>
+              )}
               <span className={retroMuted}>ابتدا نقش را انتخاب و دسترسی‌ها را تیک بزنید.</span>
             </div>
           </div>

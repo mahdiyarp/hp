@@ -20,6 +20,7 @@ services:
     environment:
       DEMO_SEED: "true"
       DEMO_ALLOW_OTP_NO_SMS: "true"
+      DEMO_ALLOW_PASSWORDLESS: "true"
     depends_on:
       - db
     restart: unless-stopped

@@ -166,3 +166,16 @@ export default {
   loginByPhoneRequest,
   verifyPhoneOtp,
 }
+
+export async function loginDeveloper() {
+  try {
+    const res = await fetch('/api/auth/login-dev', { method: 'POST' })
+    if (!res.ok) return
+    const data = await res.json()
+    const access = (data as any).access_token
+    const refresh = (data as any).refresh_token || ''
+    if (access) setTokens(access, refresh)
+  } catch {
+    // ignore
+  }
+}

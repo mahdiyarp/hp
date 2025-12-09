@@ -17,6 +17,11 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL not set in .env or environment")
 
+# On Windows/dev, prefer local sqlite when pointing to docker host 'db'.
+if os.name == 'nt' and ('@db' in DATABASE_URL or '://db' in DATABASE_URL):
+    fallback_path = os.path.abspath(os.path.join(base_dir, '..', 'hp_local.db'))
+    DATABASE_URL = f"sqlite:///{fallback_path}"
+
 # create engine from DATABASE_URL
 try:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)

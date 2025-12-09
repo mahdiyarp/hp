@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import RegisterForm from './RegisterForm'
 import {
   retroButton,
   retroHeading,
@@ -12,7 +11,6 @@ import {
 
 export default function LoginForm() {
   const { login } = useAuth()
-  const [showRegister, setShowRegister] = useState(false)
   const [mode, setMode] = useState<'password' | 'mobile'>('password')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -70,20 +68,6 @@ export default function LoginForm() {
 
   return (
     <div className="w-full max-w-md">
-      {showRegister ? (
-        <>
-          <RegisterForm onSuccess={() => setShowRegister(false)} />
-          <div className="mt-4 text-center">
-            <button
-              className="text-sm text-[#154b5f] hover:underline"
-              onClick={() => setShowRegister(false)}
-              type="button"
-            >
-              پہلے سے صارف ہیں؟ یہاں ورود کریں
-            </button>
-          </div>
-        </>
-      ) : (
         <>
           <form onSubmit={onSubmit} className={`${retroPanelPadded} space-y-5`}>
             <header className="space-y-2 text-right">
@@ -255,23 +239,7 @@ export default function LoginForm() {
             </div>
           </form>
 
-          <div className="mt-4 text-center space-y-2">
-            <p className={`text-[11px] ${retroMuted}`}>
-              صارف نہیں ہیں؟
-            </p>
-            <button
-              className={`${retroButton} !bg-[#2d5b2d] w-full`}
-              onClick={() => setShowRegister(true)}
-              type="button"
-            >
-              موبائل سے صارف بنائیں
-            </button>
-            <p className={`text-[11px] text-center ${retroMuted}`}>
-              در صورت فراموشی رمز عبور با مدیر سیستم تماس بگیرید۔
-            </p>
-          </div>
         </>
-      )}
     </div>
   )
 }

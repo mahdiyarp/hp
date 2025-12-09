@@ -74,3 +74,17 @@ docker compose -f docker-compose.demo.yml up --build
 - مهاجرت کش به Redis و ایجاد worker برای revalidation؛
 - ساخت UI مدیریت بکاپ و سال مالی؛
 - افزودن تست‌های e2e با Cypress.
+
+## پرچم‌های محیطی توسعه
+
+- `DEV_FEATURES_ENABLED` (پیش‌فرض غیرفعال): فعال‌سازی endpointهای صرفاً توسعه مانند `/api/auth/login-dev` و `/api/dev/assistant/*`. مقادیر قابل‌قبول: `true|1|dev|yes`.
+- `VITE_DEV_AUTOLOGIN` (فرانت‌اند، پیش‌فرض `false`): در صورت `true` بودن و نبود توکن، ورود خودکار توسعه‌دهنده انجام می‌شود.
+- `ALLOW_CREATE_ALL_IN_SEED` (پیش‌فرض غیرفعال): در صورت فعال‌سازی یا هنگام استفاده از SQLite، اسکریپت `backend/scripts/seed_demo.py` برای اطمینان از ایجاد جداول جدید از `create_all` استفاده می‌کند.
+
+## مهاجرت دیتابیس
+
+اجرای مهاجرت‌ها (از جمله جدول `nft_assets`):
+
+```powershell
+docker compose exec backend alembic upgrade head
+```

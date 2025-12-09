@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../../components/layout/AppShell'
 import { retroHeading, retroPanel, retroPanelPadded, retroButton, retroInput, retroTableHeader } from '../../components/retroTheme'
 import { apiGet, apiPost, apiPatch } from '../../services/api'
+import { fetchWithAuth } from '../../services/auth'
 import { toPersianDigits } from '../../utils/num'
 
 export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
@@ -12,6 +13,11 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
   const [otpTest, setOtpTest] = useState({ mobile: '', code: '' })
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  // AI Assistant
+  const [aiInput, setAiInput] = useState('')
+  const [aiReply, setAiReply] = useState<string>('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [assistantEnabled, setAssistantEnabled] = useState<boolean>(false)
 
   async function pingApi() {
     try {
@@ -49,6 +55,19 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
     })()
   }, [])
 
+  useEffect(() => {
+    // Try to enable dev assistant on load (non-blocking)
+    ;(async () => {
+      try {
+        const res = await fetchWithAuth('/api/dev/assistant/toggle', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: true })
+        })
+        const data = await res.json().catch(()=>({}))
+        setAssistantEnabled(!!data.assistant_enabled)
+      } catch {}
+    })()
+  }, [])
+
   async function saveSmsIr() {
     setSaving(true)
     try {
@@ -73,6 +92,10 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
   async function testOtpSend() {
     setTesting(true)
     try {
+      if (!otpTest.mobile.trim() || !otpTest.code.trim()) {
+        alert('لطفاً موبایل و کد را وارد کنید')
+        return
+      }
       const res = await apiPost('/api/smsir/test-otp', { ...otpTest })
       alert(`نتیجه ارسال: ${JSON.stringify(res)}`)
     } catch (e) {
@@ -80,6 +103,28 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
       alert('ارسال کد با خطا مواجه شد')
     } finally {
       setTesting(false)
+    }
+  }
+
+  async function askAssistant() {
+    setAiLoading(true)
+    setAiReply('')
+    try {
+      if (!aiInput.trim()) {
+        setAiReply('لطفاً متن سوال را وارد کنید')
+        return
+      }
+      const res = await fetchWithAuth('/api/dev/assistant/run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic: 'dev', details: aiInput })
+      })
+      const json = await res.json().catch(()=>({}))
+      const msg = (json && (json.message || json.reply)) || ''
+      const data = json && json.data ? JSON.stringify(json.data, null, 2) : ''
+      setAiReply([msg, data].filter(Boolean).join('\n'))
+    } catch (e) {
+      setAiReply('خطا در ارتباط با دستیار هوش مصنوعی')
+    } finally {
+      setAiLoading(false)
     }
   }
   return (
@@ -91,7 +136,7 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
         <p className="text-[11px] text-[#7a6b4f] mt-1">تاریخ مرجع: {smartDate.jalali ?? '—'} | {smartDate.isoDate ?? '—'}</p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-2">
           <p className={retroHeading}>دیباگ سریع</p>
           <div className="flex gap-2">
@@ -131,6 +176,18 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
               <input className={`${retroInput}`} placeholder="کد یکبارمصرف" value={otpTest.code} onChange={e=>setOtpTest({...otpTest, code: e.target.value})} />
             </div>
             <button className={`${retroButton} mt-2`} disabled={testing} onClick={testOtpSend}>{testing? 'در حال ارسال...' : 'ارسال کد تست'}</button>
+          </div>
+        </div>
+        <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-3">
+          <p className={retroHeading}>دستیار هوش مصنوعی</p>
+          <div className="space-y-2">
+            <div className="text-[11px] text-[#7a6b4f]">وضعیت: {assistantEnabled ? 'فعال' : 'غیرفعال'}</div>
+            <textarea className={"input w-full"} rows={4} value={aiInput} onChange={e=>setAiInput(e.target.value)} placeholder="سوال یا دستور خود را اینجا بنویسید" />
+            <div className="flex gap-2">
+              <button className={retroButton} disabled={aiLoading || !aiInput.trim()} onClick={askAssistant}>{aiLoading ? 'در حال پردازش…' : 'ارسال'}</button>
+              <button className={retroButton} onClick={()=>{setAiInput(''); setAiReply('')}}>پاک کردن</button>
+            </div>
+            <div className="text-xs text-[#7a6b4f] whitespace-pre-wrap min-h-[4rem] border border-[#d7caa4] bg-[#fffaf0] p-2">{aiReply || 'پاسخ در اینجا نمایش داده می‌شود'}</div>
           </div>
         </div>
       </div>

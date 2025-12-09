@@ -1,3 +1,38 @@
+from sqlalchemy.orm import Session
+from . import models
+
+def run_dev_assistant_analysis(session: Session, req) -> 'AssistantResponse':
+    """Professional developer assistant: summarizes status and proposes actions.
+    Offline, rule-based analysis with deterministic outputs.
+    """
+    from .schemas import AssistantResponse
+    topic = (getattr(req, 'topic', '') or '').strip()
+    details = (getattr(req, 'details', '') or '').strip()
+    # Collect quick system snapshot for developer
+    users = session.query(models.User).count()
+    invoices = session.query(models.Invoice).count()
+    payments = session.query(models.Payment).count()
+    products = session.query(models.Product).count()
+    persons = session.query(models.Person).count()
+    nfts = session.query(models.NftAsset).count() if hasattr(models, 'NftAsset') else 0
+    summary = {
+        'users': users, 'invoices': invoices, 'payments': payments,
+        'products': products, 'persons': persons, 'nfts': nfts
+    }
+    suggestions = [
+        'بررسی endpoint های NFT و ویژگی‌های سازمانی',
+        'اجرای تست‌های پرداخت و فاکتور با FY فعال',
+        'بازبینی لاگ‌های فعالیت و گزارش خطاها',
+        'تایید لاگین دولوپر و نمایش ماژول‌های ویژه'
+    ]
+    # Lightweight topic routing
+    if 'otp' in topic.lower():
+        suggestions.insert(0, 'تست OTP و تنظیمات پیامک را بررسی کنید')
+    return AssistantResponse(
+        ok=True,
+        message='تحلیل دولوپر آماده است',
+        data={'summary': summary, 'suggestions': suggestions, 'topic': topic, 'details': details}
+    )
 import re
 from typing import Optional, Dict, Any
 from . import db, models, crud

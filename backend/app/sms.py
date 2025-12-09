@@ -10,7 +10,7 @@ from . import models
 from .security import decrypt_value
 
 
-SUPPORTED_PROVIDERS = {"ippanel"}
+SUPPORTED_PROVIDERS = {"ippanel", "sms.ir"}
 
 # OTP sessions: {session_id: {phone, otp_code, expires_at, attempts}}
 _otp_sessions = {}
@@ -22,17 +22,17 @@ def _get_sms_config(session: Session) -> dict:
     
     # SMS provider حاصل کریں
     provider_setting = session.query(models.SystemSettings).filter(
-        models.SystemSettings.key == 'sms_provider',
+        models.SystemSettings.key.in_(['sms_provider','smsir_provider']),
         models.SystemSettings.category == 'sms'
-    ).first()
+    ).order_by(models.SystemSettings.key.desc()).first()
     
-    config['provider'] = provider_setting.value if provider_setting else 'ippanel'
+    config['provider'] = (provider_setting.value if provider_setting else 'sms.ir')
     
     # API key حاصل کریں (encrypted ہو سکتا ہے)
     api_key_setting = session.query(models.SystemSettings).filter(
-        models.SystemSettings.key == 'sms_api_key',
+        models.SystemSettings.key.in_(['sms_api_key','smsir_api_key']),
         models.SystemSettings.category == 'sms'
-    ).first()
+    ).order_by(models.SystemSettings.key.desc()).first()
     
     if api_key_setting:
         if api_key_setting.is_secret:
@@ -42,9 +42,9 @@ def _get_sms_config(session: Session) -> dict:
     
     # Sender number حاصل کریں
     sender_setting = session.query(models.SystemSettings).filter(
-        models.SystemSettings.key == 'sms_sender',
+        models.SystemSettings.key.in_(['sms_sender','smsir_line_number','smsir_sender']),
         models.SystemSettings.category == 'sms'
-    ).first()
+    ).order_by(models.SystemSettings.key.desc()).first()
     
     config['sender'] = sender_setting.value if sender_setting else ''
     
@@ -61,12 +61,12 @@ def send_sms(session: Session, to: str, message: str) -> Tuple[bool, str]:
     if not config.get('api_key'):
         return False, "SMS API کنفیگریشن دستیاب نہیں"
     
-    provider = (config.get('provider') or "ippanel").lower()
+    provider = (config.get('provider') or "sms.ir").lower()
     api_key = config.get('api_key')
     sender = config.get('sender', '')
     
     try:
-        if provider == "ippanel":
+        if provider in ("ippanel", "sms.ir"):
             # iPanel API - https://ippanelcom.github.io/Edge-Document/
             url = "https://api.ippanel.com/api/v1/sms/send"
             params = {

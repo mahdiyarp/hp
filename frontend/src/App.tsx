@@ -4,6 +4,7 @@ import LoginForm from './components/LoginForm'
 import AppShell from './components/layout/AppShell'
 import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
+import { getOrgFeatures } from './services/org'
 import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
 
@@ -57,6 +58,7 @@ export default function App() {
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
   const { user, modules: userModules, logout } = useAuth()
   const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
+  const [orgFeatures, setOrgFeatures] = useState<string[] | null>(null)
 
   async function syncTime() {
     const before = new Date()
@@ -210,6 +212,19 @@ export default function App() {
     }
   }, [user, sync, smartDateInitialized])
 
+  useEffect(() => {
+    // Load organization features once authenticated
+    if (!user) return
+    ;(async () => {
+      try {
+        const res = await getOrgFeatures()
+        setOrgFeatures(res.features || [])
+      } catch {
+        setOrgFeatures([])
+      }
+    })()
+  }, [user])
+
   // Fallback timeout - if smart date init takes too long, continue anyway
   useEffect(() => {
     if (user) {
@@ -275,6 +290,7 @@ export default function App() {
             sync={sync}
             user={user ? { username: user.username, role: user.role } : null}
             onLogout={logout}
+            orgFeatures={orgFeatures || undefined}
           />
           {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
         </>
