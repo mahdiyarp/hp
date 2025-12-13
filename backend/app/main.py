@@ -302,8 +302,17 @@ async def api_papi_proxy(full_path: str, request: Request, session: Session = De
 # ===== Immutable audit export (Merkle proof) =====
 @app.get('/api/audit/otp/proof')
 def api_audit_otp_proof(entity_id: str, entry_id: int, session: Session = Depends(db.get_db)):
+    # basic input validation
+    if not isinstance(entity_id, str) or len(entity_id.strip()) < 6 or len(entity_id.strip()) > 32:
+        raise HTTPException(status_code=400, detail='invalid entity_id')
     try:
-        proof = export_merkle_proof(session, entity_type='otp', entity_id=entity_id, entry_id=entry_id)
+        entry_id_int = int(entry_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='invalid entry_id')
+    if entry_id_int < 0:
+        raise HTTPException(status_code=400, detail='invalid entry_id')
+    try:
+        proof = export_merkle_proof(session, entity_type='otp', entity_id=entity_id.strip(), entry_id=entry_id_int)
         if 'error' in proof:
             raise HTTPException(status_code=404, detail=proof['error'])
         return proof

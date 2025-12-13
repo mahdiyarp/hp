@@ -61,7 +61,7 @@ export default function App() {
   const { user, modules: userModules, logout } = useAuth()
   const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
   const [orgFeatures, setOrgFeatures] = useState<string[] | null>(null)
-  const [toast, setToast] = useState<{ type:'success'|'error'|'info'; message:string }|null>(null)
+  const [toast, setToast] = useState<{ type:'success'|'error'|'info'|'warning'; message:string; duration?:number; position?:'bl'|'br'|'tl'|'tr' }|null>(null)
 
   async function syncTime() {
     const before = new Date()
@@ -164,8 +164,10 @@ export default function App() {
       const ce = e as CustomEvent
       const d = ce.detail || {}
       if (typeof d?.message === 'string') {
-        setToast({ type: (d.type as any) || 'info', message: String(d.message) })
-        const id = setTimeout(() => setToast(null), 3000)
+        const duration = Number(d?.duration) || 3000
+        const position = (d?.position as any) || 'bl'
+        setToast({ type: (d.type as any) || 'info', message: String(d.message), duration, position })
+        const id = setTimeout(() => setToast(null), duration)
         return () => clearTimeout(id)
       }
     }
@@ -283,7 +285,7 @@ export default function App() {
             orgFeatures={orgFeatures || undefined}
           />
           {toast && (
-            <div className={`fixed bottom-4 left-4 z-50 px-3 py-2 text-sm border-2 shadow-[4px_4px_0_#111827] ${toast.type==='success' ? 'bg-[#d1fae5] text-[#065f46] border-[#065f46]' : toast.type==='error' ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#7f1d1d]' : 'bg-[#f3f4f6] text-[#374151] border-[#374151]'}`}>
+            <div className={`fixed ${toast.position==='bl' ? 'bottom-4 left-4' : toast.position==='br' ? 'bottom-4 right-4' : toast.position==='tl' ? 'top-4 left-4' : 'top-4 right-4'} z-50 px-3 py-2 text-sm border-2 shadow-[4px_4px_0_#111827] ${toast.type==='success' ? 'bg-[#d1fae5] text-[#065f46] border-[#065f46]' : toast.type==='error' ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#7f1d1d]' : toast.type==='warning' ? 'bg-[#fef3c7] text-[#92400e] border-[#92400e]' : 'bg-[#f3f4f6] text-[#374151] border-[#374151]'}`}>
               {toast.message}
             </div>
           )}

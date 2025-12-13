@@ -44,4 +44,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: headless-artifacts
-          path: /workspace/logs
+          path: |
+            /workspace/logs
+            /workspace/logs/audit_card.png

@@ -38,7 +38,10 @@ function AuditStatusCard() {
   }
   return (
     <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
-      <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
+        <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={refreshStatus} disabled={busy}>بروزرسانی</button>
+      </div>
       {latest ? (
         <div className="mt-2 text-xs space-y-1">
           <div>آخرین Batch: {new Date(latest.ts).toLocaleString()}</div>
