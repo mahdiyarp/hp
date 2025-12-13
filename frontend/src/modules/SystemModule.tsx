@@ -240,7 +240,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
 
   async function exportFY(fid: number) {
     try {
-      const res = await fetch(`/api/financial-years/${fid}/export`)
+      const res = await authService.fetchWithAuth(`/api/financial-years/${fid}/export`)
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')

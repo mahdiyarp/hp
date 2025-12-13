@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { retroBadge, retroButton, retroHeading, retroPanel, retroMuted } from '../retroTheme'
 import { useI18n } from '../../i18n/I18nContext'
+import StatusBar from '../StatusBar'
 import SidebarMenu from './SidebarMenu'
 import type { SyncRecord } from '../../App'
 import GlobalSearch from '../GlobalSearch'
@@ -49,7 +50,14 @@ function normalizeIsoDate(value: string | null | undefined) {
 
 export default function AppShell({ modules, sync, user, onLogout, orgFeatures }: AppShellProps) {
   const { t } = useI18n()
-  const visibleModules = useMemo(() => modules.filter(m => !m.hidden && (!m.feature || (orgFeatures || []).includes(m.feature))), [modules, orgFeatures])
+  const visibleModules = useMemo(() => {
+    const allowAll = !!(user && (user.role === 'Admin' || /Developer/i.test(user.role)))
+    return modules.filter(m => {
+      if (m.hidden) return false
+      if (allowAll) return true
+      return !m.feature || (orgFeatures || []).includes(m.feature)
+    })
+  }, [modules, orgFeatures, user])
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
     visibleModules.forEach(m => map.set(m.id, m))
@@ -222,6 +230,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
                       ? `سال مالی: ${activeFy.name ?? activeFy.label ?? activeFy.id}`
                       : 'سال مالی: نامشخص'}
                   </span>
+                    <StatusBar />
                 </div>
             </div>
           </div>

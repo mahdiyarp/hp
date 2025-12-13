@@ -1,0 +1,81 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [ "copilot/sales-one-row-layout", "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Build
+        env:
+          VITE_DEV_AUTOLOGIN: 'true'
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_DEV_AUTOLOGIN: 'true'
+        run: npm run build
+
+      - name: Start preview server
+        working-directory: frontend
+        run: nohup npm run preview &
+
+      - name: Wait for server
+        run: |
+          for i in {1..30}; do
+            if curl -sSf http://localhost:3000/api/version >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "Server did not start" && exit 1
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Run headless smoke
+        run: npm run smoke

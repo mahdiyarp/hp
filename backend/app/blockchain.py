@@ -5,9 +5,13 @@ Blockchain utilities for immutable audit trail
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 from sqlalchemy.orm import Session
 from . import models
+import os
+
+AUDIT_DIR = os.path.join(os.path.dirname(__file__), '..', 'logs')
+MERKLE_HISTORY = os.path.join(AUDIT_DIR, 'merkle_batches.jsonl')
 
 
 def hash_data(data: dict) -> str:
@@ -130,6 +134,71 @@ def verify_entry_chain(
             return False, f'Chain broken at entry {i}: previous_hash mismatch'
     
     return True, 'Chain integrity verified'
+
+
+def _ensure_audit_dir():
+    os.makedirs(AUDIT_DIR, exist_ok=True)
+    if not os.path.exists(MERKLE_HISTORY):
+        with open(MERKLE_HISTORY, 'a', encoding='utf-8'):
+            pass
+
+def _merkle_root(hashes: List[str]) -> str:
+    if not hashes:
+        return hash_data({'empty': True})
+    layer = hashes[:]
+    while len(layer) > 1:
+        next_layer: List[str] = []
+        for i in range(0, len(layer), 2):
+            left = layer[i]
+            right = layer[i+1] if i+1 < len(layer) else left
+            next_layer.append(hash_data({'l': left, 'r': right}))
+        layer = next_layer
+    return layer[0]
+
+def build_merkle_batch(session: Session, entity_type: str = 'otp', limit: int = 100) -> Dict:
+    """
+    Build a merkle batch over the latest blockchain entries for an entity_type.
+    Persist batch metadata to a JSONL file for later verification/export.
+    """
+    _ensure_audit_dir()
+    entries = (
+        session.query(models.BlockchainEntry)
+        .filter(models.BlockchainEntry.entity_type == entity_type)
+        .order_by(models.BlockchainEntry.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    ids = [e.id for e in entries]
+    hashes = [e.data_hash for e in entries]
+    root = _merkle_root(hashes)
+    payload = {
+        'ts': datetime.utcnow().isoformat() + 'Z',
+        'entity_type': entity_type,
+        'count': len(ids),
+        'entry_ids': ids,
+        'merkle_root': root,
+    }
+    with open(MERKLE_HISTORY, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    return payload
+
+def get_latest_merkle_batch(entity_type: str = 'otp') -> Optional[Dict]:
+    try:
+        _ensure_audit_dir()
+        if not os.path.exists(MERKLE_HISTORY):
+            return None
+        last = None
+        with open(MERKLE_HISTORY, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    obj = json.loads(line)
+                    if obj.get('entity_type') == entity_type:
+                        last = obj
+                except Exception:
+                    continue
+        return last
+    except Exception:
+        return None
 
 
 def get_all_entries_for_user(

@@ -1,7 +1,7 @@
 """SMS API کنفیگریشن - iPanel کے ساتھ
 
-Revision ID: 0033
-Revises: 0032
+Revision ID: 0033_sms_config_migration
+Revises: 0032_add_dashboard_reports_modules
 Create Date: 2025-11-15
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0033'
-down_revision = '0032'
+revision = '0033_sms_config_migration'
+down_revision = '0032_add_dashboard_reports_modules'
 branch_labels = None
 depends_on = None
 

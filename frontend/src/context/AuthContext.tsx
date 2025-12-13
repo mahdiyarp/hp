@@ -41,24 +41,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!hasAnyToken) return
       try {
         const res = await authService.fetchWithAuth('/api/auth/me')
-        if (!res.ok) return
-        const data = await res.json()
-        setUser({ id: data.id, username: data.username, role: data.role, otp_enabled: data.otp_enabled })
-        try { localStorage.setItem('hesabpak_user_id', String(data.id)) } catch {}
-        
-        // Fetch user's modules and permissions
+        if (!res.ok) {
+          // If unauthorized but we have a token, retry once shortly
+          if (res.status === 401 && getAccessToken()) {
+            await new Promise(r => setTimeout(r, 300))
+            const retry = await authService.fetchWithAuth('/api/auth/me')
+            if (!retry.ok) return
+            const data = await retry.json()
+            setUser({ id: data.id, username: data.username, role: data.role, otp_enabled: data.otp_enabled })
+            try { localStorage.setItem('hesabpak_user_id', String(data.id)) } catch {}
+          } else {
+            return
+          }
+        } else {
+          const data = await res.json()
+          setUser({ id: data.id, username: data.username, role: data.role, otp_enabled: data.otp_enabled })
+          try { localStorage.setItem('hesabpak_user_id', String(data.id)) } catch {}
+        }
+
+        // Fetch user's modules and permissions with light retry
         const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
-        if (modsRes.ok) {
-          const mods = await modsRes.json()
+        if (!modsRes.ok && modsRes.status === 401 && getAccessToken()) {
+          await new Promise(r => setTimeout(r, 300))
+        }
+        const modsRes2 = modsRes.ok ? modsRes : await authService.fetchWithAuth('/api/current-user/modules')
+        if (modsRes2.ok) {
+          const mods = await modsRes2.json()
           const finalMods = Array.isArray(mods) ? mods : []
           setModules(finalMods)
-          // Debug: log role and modules to help trace UI issues (can be removed)
-          try { console.debug('[Auth] loaded user role/modules', { role: data.role, modules: finalMods }) } catch (e) {}
+          try { console.debug('[Auth] loaded user role/modules', { modules: finalMods }) } catch {}
         }
-        
+
         const permsRes = await authService.fetchWithAuth('/api/current-user/permissions')
-        if (permsRes.ok) {
-          const perms = await permsRes.json()
+        const permsFinal = (permsRes.ok ? permsRes : (permsRes.status === 401 && getAccessToken() ? await (async () => { await new Promise(r => setTimeout(r, 300)); return authService.fetchWithAuth('/api/current-user/permissions') })() : null))
+        if (permsFinal && permsFinal.ok) {
+          const perms = await permsFinal.json()
           setPermissions(Array.isArray(perms) ? perms : [])
         }
       } catch (e) {
@@ -68,6 +85,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
     load()
+    // React to token updates via custom event to avoid full reload
+    const handler = () => { load() }
+    window.addEventListener('auth-updated', handler)
+    // Also react to storage changes (e.g., another tab) for robustness
+    const storageHandler = (e: StorageEvent) => {
+      if (e.key && (e.key.includes('hesabpak') || e.key.includes('access_token') || e.key.includes('refresh_token'))) {
+        load()
+      }
+    }
+    window.addEventListener('storage', storageHandler)
+    return () => {
+      window.removeEventListener('auth-updated', handler)
+      window.removeEventListener('storage', storageHandler)
+    }
   }, [])
 
   const login = async (u: string, p: string, otp?: string) => {

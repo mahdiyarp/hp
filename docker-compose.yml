@@ -15,15 +15,25 @@ services:
     container_name: hesabpak_backend
     ports:
       - '8000:8000'
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - ./backend/.env
     environment:
       DEMO_SEED: "true"
       DEMO_ALLOW_OTP_NO_SMS: "true"
       DEMO_ALLOW_PASSWORDLESS: "true"
+      DEV_FEATURES_ENABLED: "true"
     depends_on:
       - db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8000/health || curl -fsS http://localhost:8000/health || exit 1" ]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
 
   frontend:
     build:
@@ -33,6 +43,14 @@ services:
       - '3000:3000'
     depends_on:
       - backend
+    environment:
+      VITE_DEV_AUTOLOGIN: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000 || curl -fsS http://localhost:3000 || exit 1" ]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
 
 volumes:
   db_data:

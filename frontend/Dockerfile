@@ -8,10 +8,13 @@ COPY tsconfig.json tsconfig.json
 COPY vite.config.ts vite.config.ts
 COPY postcss.config.cjs postcss.config.cjs
 COPY tailwind.config.cjs tailwind.config.cjs
-RUN npm install
+# Ensure devDependencies (like Vite) are installed in builder
+RUN npm install --include=dev
 
 # Copy source and build
 COPY . .
+# Enable optional developer autologin in build-time env when desired
+ENV VITE_DEV_AUTOLOGIN=true
 RUN npm run build
 
 ### Production image

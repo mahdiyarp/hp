@@ -122,6 +122,34 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   const [formGroupL1, setFormGroupL1] = useState('')
   const [formGroupL2, setFormGroupL2] = useState('')
   const [formGroupL3, setFormGroupL3] = useState('')
+  // live suggestions for name field
+  const [suggestions, setSuggestions] = useState<Array<{id:string,name:string,mobile?:string, source?: 'local'|'public'}>>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [suggestionQuery, setSuggestionQuery] = useState('')
+  const fetchSuggestions = async (q: string) => {
+    const term = (q||'').trim()
+    if (!term) { setSuggestions([]); setSuggestionsOpen(false); return }
+    setSuggestionsLoading(true)
+    // debounce
+    const current = term
+    setTimeout(async () => {
+      if ((suggestionQuery||'').trim() !== current) return
+      try {
+        const [local, pub] = await Promise.all([
+          apiGet<Array<any>>(`/api/people/search?q=${encodeURIComponent(current)}`).catch(()=>[]),
+          apiGet<Array<any>>(`/api/public/counterparties?q=${encodeURIComponent(current)}`).catch(()=>[]),
+        ])
+        const mapLocal = (local||[]).map((x:any)=> ({ id: String(x.id||x.name), name: x.name, mobile: x.mobile, source: 'local' as const }))
+        const mapPub = (pub||[]).map((x:any)=> ({ id: String(x.id||x.name), name: x.name, mobile: x.mobile, source: 'public' as const }))
+        const merged = [...mapLocal, ...mapPub]
+        setSuggestions(merged)
+        setSuggestionsOpen(true)
+      } finally {
+        setSuggestionsLoading(false)
+      }
+    }, 300)
+  }
 
   useEffect(() => {
     loadPeople()
@@ -527,10 +555,39 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                 <input
                   className={`${retroInput} w-full`}
                   value={personForm.name}
-                  onChange={e => handleFormChange('name', e.target.value)}
+                  onChange={async e => {
+                    const v = e.target.value
+                    handleFormChange('name', v)
+                    setSuggestionQuery(v)
+                    await fetchSuggestions(v)
+                  }}
                   placeholder="مانند: شرکت الف"
                   required
                 />
+                {suggestionsOpen && (
+                  <div className="border border-[#c5bca5] bg-[#faf4de] mt-1 rounded shadow-[3px_3px_0_#c5bca5] max-h-40 overflow-auto">
+                    {suggestionsLoading ? (
+                      <div className="text-xs text-[#7a6b4f] px-3 py-2">در حال جستجو...</div>
+                    ) : suggestions.length ? (
+                      suggestions.map(s => (
+                        <div key={`${s.source}-${s.id}`} className="px-3 py-2 text-sm flex items-center justify-between hover:bg-[#f6f1df] cursor-pointer" onClick={() => {
+                          setPersonForm(prev=> ({ ...prev, name: s.name, mobile: s.mobile || prev.mobile }))
+                          setSuggestionsOpen(false)
+                        }}>
+                          <div>
+                            <div className="font-semibold">{s.name}</div>
+                            {(s.mobile || s.source) && (
+                              <div className="text-[11px] text-[#7a6b4f]">{s.mobile ? s.mobile : ''} {s.source ? `• ${s.source}` : ''}</div>
+                            )}
+                          </div>
+                          <button type="button" className={`${retroButton} text-[11px]`} onClick={(e)=>{ e.stopPropagation(); setPersonForm(prev=> ({ ...prev, name: s.name, mobile: s.mobile || prev.mobile })); setSuggestionsOpen(false) }}>انتخاب</button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-[#7a6b4f] px-3 py-2">موردی یافت نشد.</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { apiGet } from '../services/api';
 
 type FYState = {
   activeFyId: number | null;
@@ -18,7 +19,7 @@ export function FYProvider({ children }: { children: React.ReactNode }) {
   const reload = async () => {
     try {
       // فقط لیست سال‌های مالی را می‌گیریم؛ activeFyId از localStorage خوانده می‌شود
-      const list = await fetch('/api/financial-years').then(r => r.json());
+      const list = await apiGet<any[]>('/api/financial-years');
       setYears((list || []).map((y: any) => ({ id: y.id, name: y.name })));
       const stored = localStorage.getItem('hesabpak_active_fy_id');
       if (stored) setActiveFyId(Number(stored));

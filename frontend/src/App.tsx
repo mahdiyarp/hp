@@ -4,9 +4,11 @@ import LoginForm from './components/LoginForm'
 import AppShell from './components/layout/AppShell'
 import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
+import { apiGet, apiPost } from './services/api'
 import { getOrgFeatures } from './services/org'
 import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
+import ThemeToggle from './components/ThemeToggle'
 
 export type SyncRecord = {
   serverUtc: string
@@ -62,8 +64,7 @@ export default function App() {
 
   async function syncTime() {
     const before = new Date()
-    const resp = await fetch('/api/time/now')
-    const server = (await resp.json()) as TimeNowResponse
+    const server = await apiGet<TimeNowResponse>('/api/time/now')
     const after = new Date()
     // choose client time as arrival time (after)
     const clientUtc = after.toISOString()
@@ -82,11 +83,7 @@ export default function App() {
     setSync(record)
     // optionally persist to server
     try {
-      await fetch('/api/time/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ client_time: clientUtc }),
-      })
+      await apiPost('/api/time/sync', { client_time: clientUtc })
     } catch (e) {
       // ignore
     }
@@ -94,18 +91,7 @@ export default function App() {
 
   async function initializeSmartDate() {
     try {
-      const token = getAccessToken()
-      if (!token) {
-        setSmartDateInitialized(true)
-        return
-      }
-
-      const resp = await fetch('/api/financial/auto-context', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (resp.ok) {
-        const data = (await resp.json()) as AutoContextResponse
+      const data = (await apiGet<AutoContextResponse>('/api/financial/auto-context'))
         const today = data.context?.current_jalali?.formatted
         let todayIso = new Date().toISOString().split('T')[0]
         if (typeof today === 'string') {
@@ -119,7 +105,7 @@ export default function App() {
           localStorage.setItem('hesabpak_selected_jalali', today)
         }
         console.log('Smart date auto-initialized:', { today, todayIso })
-      }
+      
     } catch (error) {
       console.error('Failed to initialize smart date:', error)
     } finally {
@@ -135,61 +121,27 @@ export default function App() {
         if (isPlainObject(parsed)) {
           const legacy = parsed as StoredSyncRecord
           const fallbackIso = new Date().toISOString()
-          const epochCandidate =
-            typeof legacy.epochMs === 'number'
-              ? legacy.epochMs
-              : typeof legacy.epoch_ms === 'number'
-                ? legacy.epoch_ms
-                : null
-          const latencyCandidate = typeof legacy.latencyMs === 'number' ? legacy.latencyMs : null
-          setSync({
-            serverUtc:
-              typeof legacy.serverUtc === 'string'
-                ? legacy.serverUtc
-                : typeof legacy.server_utc === 'string'
-                  ? legacy.server_utc
-                  : fallbackIso,
-            serverOffsetSeconds: Number(
-              legacy.serverOffsetSeconds ?? legacy.server_offset_seconds ?? 0,
-            ),
-            serverOffset:
-              typeof legacy.serverOffset === 'string'
-                ? legacy.serverOffset
-                : typeof legacy.server_offset === 'string'
-                  ? legacy.server_offset
-                  : null,
-            serverLocal:
-              typeof legacy.serverLocal === 'string'
-                ? legacy.serverLocal
-                : typeof legacy.server_local === 'string'
-                  ? legacy.server_local
-                  : null,
-            jalali: typeof legacy.jalali === 'string' ? legacy.jalali : null,
+          const epochCandidate = typeof legacy.epoch_ms === 'number' ? legacy.epoch_ms : null
+          const latencyCandidate = null
+          const record: SyncRecord = {
+            serverUtc: typeof legacy.server_utc === 'string' ? legacy.server_utc : fallbackIso,
+            serverOffsetSeconds: Number(legacy.server_offset_seconds ?? 0),
+            serverOffset: typeof legacy.server_offset === 'string' ? legacy.server_offset : null,
+            serverLocal: typeof legacy.server_local === 'string' ? legacy.server_local : null,
+            jalali: null,
             epochMs: epochCandidate,
             latencyMs: latencyCandidate,
-            clientUtc:
-              typeof legacy.clientUtc === 'string'
-                ? legacy.clientUtc
-                : typeof legacy.client_utc === 'string'
-                  ? legacy.client_utc
-                  : fallbackIso,
-          })
+            clientUtc: typeof legacy.client_utc === 'string' ? legacy.client_utc : fallbackIso,
+          }
+          setSync(record)
         }
       } catch (e) {
         console.warn('Failed to parse stored sync record', e)
       }
     }
-    // perform an immediate sync
     void syncTime()
-    // fetch version
-    void fetch('/api/version')
-      .then(async r => {
-        if (!r.ok) return null
-        return (await r.json()) as VersionResponse
-      })
-      .then(data => {
-        if (data?.version) setVersion(data.version)
-      })
+    void apiGet<VersionResponse>('/api/version')
+      .then(data => { if (data?.version) setVersion(data.version) })
       .catch(() => {})
   }, [])
 
@@ -272,12 +224,35 @@ export default function App() {
 
   // Show dashboard when user is logged in and smart date is initialized OR time has passed
   if (smartDateInitialized) {
-    // Filter modules based on user's accessible modules.
-    // If the logged-in user is a Developer, expose all modules (Developer
-    // is considered the highest-level role). Otherwise, if `userModules`
-    // is empty show the minimal starter menu to avoid overwhelming new users.
-    // نمایش ثابت: همهٔ ماژول‌های تعریف‌شده در اسلایدبار
-    const accessibleModules = modules
+    // گیتینگ پویا: اگر بک‌اند ماژول‌های کاربر را برگرداند، با JWT ادغام می‌کنیم.
+    // در غیر این‌صورت، ماژول‌های پیش‌فرض را نشان می‌دهیم تا تجربه تم کلاسیک حفظ شود.
+    // ماژول‌های قابل‌دسترس را بر اساس لیست بک‌اند (AuthContext.modules) فیلتر می‌کنیم
+    // اگر بک‌اند لیست ندهد، همان ماژول‌های پیش‌فرض را نشان می‌دهیم تا تم کلاسیک حفظ شود.
+    // تشخیص سریع کاربر دولوپر از روی JWT
+    const isDeveloper = (() => {
+      try {
+        const tok = getAccessToken()
+        if (!tok) return false
+        const parts = tok.split('.')
+        if (parts.length !== 3) return false
+        const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const pad = b64.length % 4
+        const payload = atob(pad === 2 ? b64 + '==' : pad === 3 ? b64 + '=' : b64)
+        const p = JSON.parse(payload)
+        const sub = String(p.sub || '')
+        const role = String(p.role || p['x-role'] || '')
+        return sub === '09123506545' || sub === 'developer' || role === 'Admin'
+      } catch { return false }
+    })()
+
+    const accessibleModules = (Array.isArray(userModules) && userModules.length > 0)
+      ? modules.map(m => ({
+          ...m,
+          // اگر آی‌دی ماژول در لیست دسترسی کاربر باشد، نمایش داده شود
+          // در غیر این‌صورت به‌صورت پنهان علامت بزنیم تا AppShell آن را فیلتر کند.
+          hidden: isDeveloper ? false : !userModules.includes(m.id),
+        }))
+      : modules
     
     return (
       <FYProvider>

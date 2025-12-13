@@ -105,6 +105,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   })
   const [savingSms, setSavingSms] = useState(false)
   const [testSmsText, setTestSmsText] = useState('سلام! این یک پیام تستی است.')
+  const [testSmsTo, setTestSmsTo] = useState('')
   const [userSms, setUserSms] = useState<Record<number, UserSmsSettingsPayload>>({})
   const [savingUserSmsId, setSavingUserSmsId] = useState<number | null>(null)
   const [activityPage, setActivityPage] = useState(1)
@@ -267,9 +268,15 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   async function saveSmsSettings() {
     setSavingSms(true)
     try {
-      await apiPut('/api/admin/settings/system.sms.settings', {
-        value: JSON.stringify(smsSettings),
-      })
+      // Store sms.ir keys individually so backend picks them up
+      const kv: Record<string, string> = {}
+      if (smsSettings.api_key) kv['smsir_api_key'] = String(smsSettings.api_key)
+      if (smsSettings.sender) kv['smsir_line_number'] = String(smsSettings.sender)
+      if ((smsSettings as any).otp_template_id) kv['smsir_otp_template_id'] = String((smsSettings as any).otp_template_id)
+      kv['smsir_enabled'] = String((smsSettings.provider ?? '').toLowerCase() === 'sms.ir')
+      for (const [key, value] of Object.entries(kv)) {
+        await apiPut(`/api/admin/settings/${key}`, { value })
+      }
     } catch (e) {
       // ignore
     } finally {
@@ -278,15 +285,39 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   }
 
   async function sendTestSms() {
+    setSavingSms(true)
     try {
-      await apiPost('/api/sms/test', {
-        provider: smsSettings.provider,
-        sender: smsSettings.sender,
-        text: testSmsText,
+      if ((smsSettings.provider ?? '').toLowerCase() === 'sms.ir' && (smsSettings.api_key || '').length > 0) {
+        const res = await apiPost<any>('/api/smsir/test-otp', { mobile: testSmsTo, code: '123456' })
+        const msg = res?.detail ? 'ارسال OTP (sms.ir) انجام شد' : 'ارسال OTP انجام شد'
+        alert(msg)
+      } else {
+        // برای درگاه‌های عمومی یا زمانی که sms.ir تنظیم نشده، از تست عمومی استفاده کن
+        const res = await apiPost<{ sent?: boolean; detail?: string }>('/api/sms/test', { mobile: testSmsTo, message: testSmsText })
+        alert(res?.detail || 'پیام تستی ارسال شد')
+      }
+    } catch (e: any) {
+      const msg = typeof e?.message === 'string' ? e.message : 'ارسال پیام تستی ناموفق بود.'
+      alert(msg)
+    } finally {
+      setSavingSms(false)
+    }
+  }
+
+  async function sendGenericSms() {
+    // ارسال متن دلخواه از مسیر عمومی بک‌اند
+    setSavingSms(true)
+    try {
+      const res = await apiPost<{ sent?: boolean; detail?: string }>('/api/sms/send', {
+        mobile: testSmsTo,
+        message: testSmsText,
       })
-      alert('پیام تستی ارسال شد (در صورت تنظیم درست درگاه).')
-    } catch (e) {
-      alert('ارسال پیام تستی ناموفق بود.')
+      alert(res?.detail || (res?.sent ? 'پیام ارسال شد' : 'ارسال ناموفق بود'))
+    } catch (e: any) {
+      const msg = typeof e?.message === 'string' ? e.message : 'ارسال عمومی پیامک ناموفق بود.'
+      alert(msg)
+    } finally {
+      setSavingSms(false)
     }
   }
 
@@ -694,15 +725,43 @@ export default function AccessControlModule({}: ModuleComponentProps) {
             </div>
           </div>
           <div>
-            <p className={retroBadge}>ارسال تست</p>
+            <p className={retroBadge}>ارسال تست (SMS.ir)</p>
             <div className="mt-2 space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <select className="input w-full" value={smsSettings.provider ?? ''}
+                  onChange={e => setSmsSettings(s => ({ ...s, provider: e.target.value }))}>
+                  <option value="">انتخاب درگاه…</option>
+                  <option value="sms.ir">SMS.ir</option>
+                  <option value="mock">Mock (توسعه)</option>
+                </select>
+                <input className="input w-full" placeholder="شماره خط ارسال (line_number)"
+                  value={smsSettings.sender ?? ''}
+                  onChange={e => setSmsSettings(s => ({ ...s, sender: e.target.value }))} />
+                <input className="input w-full" placeholder="API Key"
+                  value={smsSettings.api_key ?? ''}
+                  onChange={e => setSmsSettings(s => ({ ...s, api_key: e.target.value }))} />
+                <input className="input w-full" placeholder="Secret Key"
+                  value={smsSettings.secret_key ?? ''}
+                  onChange={e => setSmsSettings(s => ({ ...s, secret_key: e.target.value }))} />
+                <input className="input w-full" placeholder="OTP Template ID (sms.ir)"
+                  value={(smsSettings as any).otp_template_id ?? ''}
+                  onChange={e => setSmsSettings(s => ({ ...s, otp_template_id: e.target.value }))} />
+              </div>
               <textarea className="input w-full" rows={3} value={testSmsText}
                 onChange={e => setTestSmsText(e.target.value)} />
+              <input className="input w-full" placeholder="شماره گیرنده (مثال: 0912xxxxxxx)"
+                value={testSmsTo}
+                onChange={e => setTestSmsTo(e.target.value)} />
               <div className="flex gap-2">
                 <button className={retroButton} onClick={saveSmsSettings} disabled={savingSms}>
                   {savingSms ? 'در حال ذخیره…' : 'ذخیره تنظیمات'}
                 </button>
-                <button className={retroButton} onClick={sendTestSms}>ارسال تست</button>
+                <button className={retroButton} onClick={sendTestSms} disabled={savingSms}>
+                  {savingSms ? 'در حال ارسال…' : 'ارسال OTP تستی'}
+                </button>
+                <button className={retroButton} onClick={sendGenericSms} disabled={savingSms}>
+                  {savingSms ? 'در حال ارسال…' : 'ارسال متن دلخواه'}
+                </button>
               </div>
             </div>
           </div>

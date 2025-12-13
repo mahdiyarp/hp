@@ -23,7 +23,7 @@ export default function SidebarMenu({
 }) {
   const { user } = useAuth()
   const [order, setOrder] = useState<string[]>([])
-  const [expandedSettings, setExpandedSettings] = useState(false)
+  const [expandedSettings, setExpandedSettings] = useState(true)
   const collapsed = false
 
   useEffect(() => {

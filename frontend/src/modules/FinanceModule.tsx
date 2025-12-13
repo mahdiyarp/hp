@@ -129,6 +129,39 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     return raw === 'asc' || raw === 'desc' ? raw : 'desc'
   })
 
+  function PartySelectorInline({ onSelect }: { onSelect: (p: {id:string, name:string, mobile?:string})=>void }) {
+    const [q, setQ] = useState('')
+    const [items, setItems] = useState<Array<{id:string,name:string,mobile?:string}>>([])
+    const [loading, setLoading] = useState(false)
+    async function search(s: string) {
+      setLoading(true)
+      try { const res = await apiGet<Array<any>>(`/api/people/search?q=${encodeURIComponent(s)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) }
+    }
+    useEffect(()=>{ search('') },[])
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <input className={`${retroInput} flex-1`} placeholder="جستجوی طرف‌حساب" value={q} onChange={e=>{ setQ(e.target.value); search(e.target.value) }} />
+          <button className={retroButton} onClick={async()=>{ try { const p = await apiPost('/api/people/from-user', {}); onSelect(p as any) } catch {} }}>از کاربر</button>
+          <button className={retroButton} onClick={async()=>{
+            const name = prompt('نام طرف‌حساب؟'); if (!name) return
+            const mobile = prompt('شماره موبایل (اختیاری)؟') || undefined
+            try { const p = await apiPost('/api/people/quick-create', { name, mobile, kind:'customer' }); onSelect(p as any) } catch {}
+          }}>ایجاد سریع</button>
+          <button className={retroButton} onClick={async()=>{ setLoading(true); try { const res = await apiGet<Array<any>>(`/api/public/counterparties?q=${encodeURIComponent(q)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) } }}>نمایه‌های پابلیک</button>
+        </div>
+        <div className="border rounded p-2 max-h-32 overflow-auto">
+          {loading? <div className="text-xs">در حال جستجو…</div>: items.map((i)=> (
+            <div key={i.id} className="flex justify-between py-1">
+              <span className="text-sm">{i.name} {i.mobile? `— ${i.mobile}`: ''}</span>
+              <button className={retroButton} onClick={()=>onSelect(i)}>انتخاب</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   useEffect(() => {
     loadData()
     loadPersons()
@@ -520,6 +553,9 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                   required
                   list="payment-persons"
                 />
+                <div className="mt-2">
+                  <PartySelectorInline onSelect={(p)=> setPaymentForm(prev=> ({ ...prev, party_name: p.name }))} />
+                </div>
                 <datalist id="payment-persons">
                   {persons.map(person => (
                     <option key={person.id} value={person.name}>

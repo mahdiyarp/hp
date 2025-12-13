@@ -2,7 +2,7 @@
 Add accounting fields to persons
 
 Revision ID: 0030_add_person_accounting_fields
-Revises: 0029_icc_shop_integration
+Revises: 0029
 Create Date: 2025-12-07
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '0030_add_person_accounting_fields'
-down_revision = '0029_icc_shop_integration'
+down_revision = '0029'
 branch_labels = None
 depends_on = None
 

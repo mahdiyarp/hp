@@ -1,6 +1,6 @@
 """add useful search indexes
 
-Revision ID: add_search_indexes_20251208
+Revision ID: 20251208_add_search_indexes
 Revises: 
 Create Date: 2025-12-08
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'add_search_indexes_20251208'
-down_revision = None
+revision = '20251208_add_search_indexes'
+down_revision = '0033_merge_heads'
 branch_labels = None
 depends_on = None
 

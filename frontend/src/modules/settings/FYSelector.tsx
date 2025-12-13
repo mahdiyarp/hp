@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiGet, apiPatch } from '../../services/api';
 
 type FinancialYear = {
   id: number;
@@ -22,8 +23,7 @@ export default function FYSelector() {
       try {
         const storedFy = localStorage.getItem('hesabpak_active_fy_id');
         setActiveFyId(storedFy ? Number(storedFy) : null);
-        const fyRes = await fetch('/api/financial-years');
-        const list = await fyRes.json();
+        const list = await apiGet<any[]>('/api/financial-years');
         setYears(list || []);
       } catch (e: any) {
         setError(e?.message || 'خطا در دریافت سال‌های مالی');
@@ -47,15 +47,7 @@ export default function FYSelector() {
         setSaving(false);
         return;
       }
-      const res = await fetch(`/api/users/${uid}/preferences`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active_financial_year_id: fid })
-      });
-      if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || 'خطا در ثبت تنظیمات');
-      }
+      await apiPatch(`/api/users/${uid}/preferences`, { active_financial_year_id: fid })
       setActiveFyId(fid);
       try { localStorage.setItem('hesabpak_active_fy_id', String(fid)); } catch {}
       // Trigger a lightweight UI refresh so lists reflect new FY

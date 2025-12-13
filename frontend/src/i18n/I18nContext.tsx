@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, ReactNode, useEffect, useState } from 'react'
 import { translations, type LanguageCode, type TranslationKey } from './translations'
-import { getAccessToken } from '../services/auth'
+import { apiGet, apiPut } from '../services/api'
 
 interface I18nContextType {
   language: LanguageCode
@@ -28,22 +28,20 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         }
 
         // Then try to fetch from server
-        const token = getAccessToken()
-        if (token) {
-          try {
-            const resp = await fetch('/api/users/preferences', {
-              headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (resp.ok) {
-              const data = await resp.json()
-              const serverLang = data.language as LanguageCode
-              if (serverLang && (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')) {
-                setLanguageState(serverLang)
-              }
-            }
-          } catch (e) {
-            console.debug('Could not fetch language preference from server')
+        try {
+          // Gate on access token to avoid early 401 during login
+          const hasToken = !!localStorage.getItem('hesabpak_access_token')
+          if (!hasToken) {
+            // Wait briefly for auth context to populate tokens
+            await new Promise(r => setTimeout(r, 300))
           }
+          const data = await apiGet<{ language?: LanguageCode }>('/api/users/preferences')
+          const serverLang = data?.language as LanguageCode
+          if (serverLang && (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')) {
+            setLanguageState(serverLang)
+          }
+        } catch (e) {
+          console.debug('Could not fetch language preference from server')
         }
       } finally {
         setIsLoading(false)
@@ -59,17 +57,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
     // Try to save to server
     try {
-      const token = getAccessToken()
-      if (token) {
-        await fetch('/api/users/preferences', {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ language: lang })
-        })
-      }
+      await apiPut('/api/users/preferences', { language: lang })
     } catch (e) {
       console.debug('Could not save language preference to server')
     }

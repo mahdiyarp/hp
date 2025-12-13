@@ -141,7 +141,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [invoiceListLimit, setInvoiceListLimit] = useState(20) // تعداد فاکتورهای نمایشی
+  const [invoiceListLimit, setInvoiceListLimit] = useState(5) // تعداد فاکتورهای نمایشی (دیفالت 5)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [search, setSearch] = useState('')
@@ -198,6 +198,39 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const launchForm = (type: InvoiceFormState['invoice_type']) => {
     resetForm(type)
     setShowForm(true)
+  }
+
+  function PartySelectorInline({ onSelect }: { onSelect: (p: {id:string, name:string, mobile?:string})=>void }) {
+    const [q, setQ] = useState('')
+    const [items, setItems] = useState<Array<{id:string,name:string,mobile?:string}>>([])
+    const [loading, setLoading] = useState(false)
+    async function search(s: string) {
+      setLoading(true)
+      try { const res = await apiGet<Array<any>>(`/api/people/search?q=${encodeURIComponent(s)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) }
+    }
+    useEffect(()=>{ search('') },[])
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <input className={`${retroInput} flex-1`} placeholder="جستجوی طرف‌حساب" value={q} onChange={e=>{ setQ(e.target.value); search(e.target.value) }} />
+          <button className={retroButton} onClick={async()=>{ try { const p = await apiPost('/api/people/from-user', {}); onSelect(p as any) } catch {} }}>از کاربر</button>
+          <button className={retroButton} onClick={async()=>{
+            const name = prompt('نام طرف‌حساب؟'); if (!name) return
+            const mobile = prompt('شماره موبایل (اختیاری)؟') || undefined
+            try { const p = await apiPost('/api/people/quick-create', { name, mobile, kind:'customer' }); onSelect(p as any) } catch {}
+          }}>ایجاد سریع</button>
+          <button className={retroButton} onClick={async()=>{ setLoading(true); try { const res = await apiGet<Array<any>>(`/api/public/counterparties?q=${encodeURIComponent(q)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) } }}>نمایه‌های پابلیک</button>
+        </div>
+        <div className="border rounded p-2 max-h-40 overflow-auto">
+          {loading? <div className="text-xs">در حال جستجو…</div>: items.map((i)=> (
+            <div key={i.id} className="flex justify-between py-1">
+              <span className="text-sm">{i.name} {i.mobile? `— ${i.mobile}`: ''}</span>
+              <button className={retroButton} onClick={()=>onSelect(i)}>انتخاب</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   const addItem = () => {
@@ -578,6 +611,167 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         </div>
       )}
 
+      {(detailLoading || invoiceDetail || detailError) && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className={retroHeading}>جزئیات فاکتور</p>
+              {invoiceDetail ? (
+                <>
+                  <h3 className="text-lg font-semibold mt-1">
+                    {toPersianDigits(invoiceDetail.invoice_number || `#${invoiceDetail.id}`)}
+                  </h3>
+                  <p className={`text-xs ${retroMuted} mt-2`}>
+                    طرف حساب: {invoiceDetail.party_name ?? 'نامشخص'} | وضعیت: {invoiceDetail.status}
+                  </p>
+                </>
+              ) : (
+                <h3 className="text-lg font-semibold mt-1">در انتظار بارگذاری...</h3>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {invoiceDetail && (
+                <>
+                  {(invoiceDetail as any).tracking_code && (
+                    <button
+                      className={`${retroButton} !bg-purple-700 text-[11px]`}
+                      onClick={() => {
+                        const code = (invoiceDetail as any).tracking_code
+                        window.open(`/trace/${code}`, '_blank')
+                      }}
+                    >
+                      🔍 ردگیری
+                    </button>
+                  )}
+                  {invoiceDetail.status !== 'final' && (
+                    <button
+                      className={`${retroButton} !bg-[#2d5b2d] text-[11px]`}
+                      onClick={finalizeInvoice}
+                      disabled={finalizing}
+                    >
+                      {finalizing ? 'در حال تأیید...' : 'تأیید نهایی'}
+                    </button>
+                  )}
+                  <button
+                    className={`${retroButton} !bg-[#1f2e3b] text-[11px]`}
+                    onClick={openPrintPreview}
+                  >
+                    نسخه چاپی
+                  </button>
+                  <button
+                    className={`${retroButton} text-[11px]`}
+                    disabled={exporting}
+                    onClick={() => exportInvoice('pdf')}
+                  >
+                    {exporting ? '...' : 'خروجی PDF'}
+                  </button>
+                  <button
+                    className={`${retroButton} text-[11px]`}
+                    disabled={exporting}
+                    onClick={() => exportInvoice('xlsx')}
+                  >
+                    خروجی Excel
+                  </button>
+                </>
+              )}
+              <button className={`${retroButton} !bg-[#c35c5c] text-[11px]`} onClick={closeInvoiceDetail}>
+                بستن
+              </button>
+            </div>
+          </header>
+          {detailLoading && !invoiceDetail && (
+            <div className="text-center py-6 text-sm text-[#7a6b4f]">در حال دریافت جزئیات...</div>
+          )}
+          {detailError && (
+            <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+              {detailError}
+            </div>
+          )}
+          {detailSuccess && (
+            <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
+              {detailSuccess}
+            </div>
+          )}
+          {invoiceDetail && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-[#2e2720]">
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 rounded-sm">
+                  <p className={retroHeading}>مهر زمانی سرور</p>
+                  <p className="mt-1">{isoToJalali(invoiceDetail.server_time)}</p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    UTC: {invoiceDetail.server_time.slice(0, 19).replace('T', ' ')}
+                  </p>
+                </div>
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 rounded-sm">
+                  <p className={retroHeading}>مهر زمانی کلاینت</p>
+                  <p className="mt-1">
+                    {invoiceDetail.client_time ? isoToJalali(invoiceDetail.client_time) : '---'}
+                  </p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    {invoiceDetail.client_time
+                      ? `UTC: ${invoiceDetail.client_time.slice(0, 19).replace('T', ' ')}`
+                      : '---'}
+                  </p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    اختلاف ثبت: {detailTimeDelta === null ? '---' : `${formatNumberFa(detailTimeDelta)} ثانیه`}
+                  </p>
+                </div>
+              </div>
+              {invoiceDetail.note && (
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
+                  یادداشت: {invoiceDetail.note}
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                  <thead>
+                    <tr>
+                      <th className={retroTableHeader}>شرح</th>
+                      <th className={retroTableHeader}>تعداد</th>
+                      <th className={retroTableHeader}>واحد</th>
+                      <th className={retroTableHeader}>قیمت واحد</th>
+                      <th className={retroTableHeader}>مبلغ ردیف</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(invoiceDetail.items ?? []).map(item => {
+                      const itemTotal = (item.quantity ?? 0) * (item.unit_price ?? 0)
+                      return (
+                        <tr key={item.id} className="border-b border-[#d9cfb6]">
+                          <td className="px-3 py-2">{item.description}</td>
+                          <td className="px-3 py-2 text-left font-[Yekan]">{formatNumberFa(item.quantity)}</td>
+                          <td className="px-3 py-2 text-left">{item.unit ?? '-'}</td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-[Yekan]">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</div>
+                            {item.unit_price > 0 && (
+                              <div className="text-[10px] text-[#7a6b4f] italic">{numberToPersianWords(Math.trunc(item.unit_price))} ریال</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-bold font-[Yekan] text-[#154b5f]">{formatCurrencyFa(itemTotal, 'ریال', false).numeric}</div>
+                            {itemTotal > 0 && (
+                              <div className="text-[10px] text-[#154b5f] italic">{numberToPersianWords(Math.trunc(itemTotal))} ریال</div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-sm text-[#2e2720] rounded-sm space-y-1">
+                <p>جمع کل قبل از مالیات: {formatPrice(invoiceDetail.subtotal ?? 0, 'ریال')}</p>
+                <p>مبلغ کل نهایی: {formatPrice(invoiceDetail.total ?? 0, 'ریال')}</p>
+              </div>
+
+              {invoiceDetail && (
+                <RelatedPayments invoiceId={invoiceDetail.id} invoiceNumber={invoiceDetail.invoice_number} />
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
@@ -687,6 +881,9 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 {auxLoading && (
                   <p className="text-[10px] text-[#7a6b4f] mt-1">در حال بارگذاری لیست مخاطبین...</p>
                 )}
+                <div className="mt-2">
+                  <PartySelectorInline onSelect={(p)=> setInvoiceForm(f=> ({...f, party_name: p.name}))} />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className={retroHeading}>نوع فاکتور</label>
@@ -1009,14 +1206,16 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
           </div>
           <div className="space-y-2">
             <label className={retroHeading}>تعداد نمایشی</label>
-            <input
-              type="number"
-              min={5}
-              max={100}
+            <select
               value={invoiceListLimit}
-              onChange={e => setInvoiceListLimit(Math.max(5, parseInt(e.target.value) || 20))}
+              onChange={e => setInvoiceListLimit(parseInt(e.target.value))}
               className={`${retroInput} w-full`}
-            />
+            >
+              <option value={5}>۵</option>
+              <option value={10}>۱۰</option>
+              <option value={20}>۲۰</option>
+              <option value={50}>۵۰</option>
+            </select>
           </div>
           <div className="space-y-2 lg:col-span-2">
             <label className={retroHeading}>جستجو</label>

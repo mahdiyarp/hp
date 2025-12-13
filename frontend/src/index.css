@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --hp-bg: #0b0f19;
+  --hp-card: #121826;
+  --hp-text: #e5e7eb;
+  --hp-accent: #22c55e;
+}
+
+html, body, #root { height: 100%; background: var(--hp-bg); color: var(--hp-text); }
+.hp-card { background: var(--hp-card); border-radius: 12px; border: 1px solid #1f2937; }
+.hp-btn { background: var(--hp-accent); color: #0b0f19; border-radius: 10px; padding: 0.5rem 0.9rem; font-weight: 600; }
+.hp-input { background: #0f172a; color: var(--hp-text); border: 1px solid #1f2937; border-radius: 10px; }
+
 /* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
 @font-face {
   font-family: 'Yekan';

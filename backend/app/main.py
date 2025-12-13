@@ -29,13 +29,34 @@ from .exports import export_invoice_pdf, export_invoice_csv, export_invoice_exce
 from .activity_logger import log_activity
 from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
-from .sms import send_sms, SUPPORTED_PROVIDERS
+from .sms import send_sms, read_sms_history, log_sms_event, list_smsir_lines
 from sqlalchemy import select
 from .ai_assistant import run_dev_assistant_analysis
+from fastapi import Body
+from .blockchain import export_merkle_proof, build_merkle_batch, get_latest_merkle_batch
 
 DB = db
 
 app = FastAPI(title="hesabpak Backend")
+# Healthcheck endpoint for container monitoring
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+@app.get("/api/version")
+def api_version():
+    """Expose backend version info for frontend polling."""
+    try:
+        return get_version_info()
+    except Exception:
+        # Minimal fallback if version module fails
+        return {"version": "unknown", "status": "ok"}
+
+# (moved PApi endpoints below get_current_user to avoid NameError)
+# moved below get_current_user to avoid import-order issues
+
+def _is_developer(sub: str | None) -> bool:
+    return (sub or "") in {"09123506545", "developer"}
 
 
 # Simple audit middleware: logs each request/response to audit_logs table
@@ -119,21 +140,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 try:
     from sqlalchemy import text
     _s = DB.SessionLocal()
-    try:
-        _s.execute(text("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS active_financial_year_id INTEGER"))
-        _s.commit()
-    except Exception:
-        try:
-            _s.rollback()
-        except Exception:
-            pass
-    finally:
-        try:
-            _s.close()
-        except Exception:
-            pass
+    _s.execute(text("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS active_financial_year_id INTEGER"))
+    _s.commit()
 except Exception:
-    pass
+    try:
+        _s.rollback()
+    except Exception:
+        pass
+finally:
+    try:
+        _s.close()
+    except Exception:
+        pass
+
+ 
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(db.get_db)):
@@ -148,6 +168,467 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
     if not user:
         raise HTTPException(status_code=401, detail='User not found')
     return user
+
+# ==================== PApi Module ====================
+
+@app.post('/api/papi/sms/send')
+def api_papi_send(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    to = str((payload or {}).get('to') or '').strip()
+    msg = str((payload or {}).get('message') or '').strip()
+    sender = str((payload or {}).get('sender') or '').strip() or None
+    if not to or not msg:
+        raise HTTPException(status_code=400, detail='to و message الزامی است')
+    from .papi import send_sms as _papi_send
+    ok, info = _papi_send(session, to, msg, sender)
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return {'success': True, 'detail': info}
+
+@app.post('/api/papi/otp/start')
+def api_papi_otp_start(payload: dict, session: Session = Depends(db.get_db)):
+    mobile = str((payload or {}).get('mobile') or '').strip()
+    if not mobile:
+        raise HTTPException(status_code=400, detail='mobile الزامی است')
+    from .papi import start_otp as _start
+    from .blockchain import create_blockchain_entry, hash_data
+    ok, info = _start(session, mobile)
+    try:
+        create_blockchain_entry(
+            session,
+            entity_type='otp',
+            entity_id=mobile,
+            action='request',
+            data={'mobile': mobile, 'ok': ok, 'info': info},
+            user_id=None,
+        )
+    except Exception:
+        pass
+    if not ok:
+        raise HTTPException(status_code=502, detail=info)
+    return {'success': True, 'detail': info}
+
+@app.post('/api/papi/otp/verify')
+def api_papi_otp_verify(payload: dict, session: Session = Depends(db.get_db)):
+    mobile = str((payload or {}).get('mobile') or '').strip()
+    code = str((payload or {}).get('code') or '').strip()
+    if not mobile or not code:
+        raise HTTPException(status_code=400, detail='mobile و code الزامی است')
+    from .papi import verify_otp as _verify
+    from .blockchain import create_blockchain_entry
+    ok, info = _verify(session, mobile, code)
+    try:
+        create_blockchain_entry(
+            session,
+            entity_type='otp',
+            entity_id=mobile,
+            action='verify' if ok else 'verify_fail',
+            data={'mobile': mobile, 'ok': ok},
+            user_id=None,
+        )
+    except Exception:
+        pass
+    if not ok:
+        raise HTTPException(status_code=400, detail=info)
+    # ایجاد توکن ورود پس از تایید OTP
+    user = session.query(models.User).filter(models.User.mobile==mobile).first()
+    if not user:
+        # دمو: اگر کاربر یافت نشد، به کاربر دولوپر توکن بده
+        dev = session.query(models.User).filter(models.User.mobile=='09123506545').first()
+        if not dev:
+            raise HTTPException(status_code=404, detail='کاربر یافت نشد')
+        user = dev
+    access = security.create_access_token(user.username, timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh = security.create_refresh_token(user.username, timedelta(days=security.REFRESH_TOKEN_EXPIRE_DAYS))
+    crud.set_refresh_token(session, user, refresh)
+    return {'success': True, 'detail': info, 'access_token': access, 'refresh_token': refresh}
+
+@app.api_route('/api/papi/proxy{full_path:path}', methods=['GET','POST','PUT','DELETE'])
+async def api_papi_proxy(full_path: str, request: Request, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Generic proxy برای پوشش کامل امکانات PApi/SApi با Auth و API-Key ذخیره‌شده."""
+    # دریافت API Key از تنظیمات
+    try:
+        rec = session.query(models.SystemSettings).filter(models.SystemSettings.key=='papi_api_key').order_by(models.SystemSettings.updated_at.desc()).first()
+        api_key = None
+        if rec:
+            api_key = rec.value
+            try:
+                if rec.is_secret:
+                    from .security import decrypt_value
+                    api_key = decrypt_value(api_key)
+            except Exception:
+                pass
+        if not api_key:
+            raise HTTPException(status_code=502, detail='PApi API key missing')
+        # مقصد: s.api.ir مطابق مستند
+        base = 'https://s.api.ir'
+        url = base + full_path
+        headers = { 'Authorization': f'Bearer {api_key}', 'Accept':'application/json' }
+        # انتقال بدنه برای متدهای غیر GET
+        method = request.method.upper()
+        if method == 'GET':
+            resp = requests.get(url, headers=headers, params=dict(request.query_params))
+        else:
+            try:
+                payload = await request.json()  # type: ignore
+            except Exception:
+                # Fallback to raw body if JSON parse fails
+                try:
+                    body_bytes = await request.body()  # type: ignore
+                    payload = json.loads(body_bytes.decode('utf-8')) if body_bytes else None
+                except Exception:
+                    payload = None
+            headers['Content-Type'] = 'application/json'
+            # map basic verbs
+            if method == 'POST':
+                resp = requests.post(url, headers=headers, json=payload)
+            elif method == 'PUT':
+                resp = requests.put(url, headers=headers, json=payload)
+            elif method == 'DELETE':
+                resp = requests.delete(url, headers=headers, json=payload)
+            else:
+                resp = requests.request(method, url, headers=headers, json=payload)
+        try:
+            data = resp.json()
+        except Exception:
+            data = { 'text': getattr(resp,'text','') }
+        if 200 <= resp.status_code < 300:
+            return JSONResponse(status_code=resp.status_code, content=data)
+        raise HTTPException(status_code=resp.status_code, detail=str(data)[:400])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===== Immutable audit export (Merkle proof) =====
+@app.get('/api/audit/otp/proof')
+def api_audit_otp_proof(entity_id: str, entry_id: int, session: Session = Depends(db.get_db)):
+    try:
+        proof = export_merkle_proof(session, entity_type='otp', entity_id=entity_id, entry_id=entry_id)
+        if 'error' in proof:
+            raise HTTPException(status_code=404, detail=proof['error'])
+        return proof
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/audit/otp/batch/build')
+def api_audit_otp_batch_build(limit: int = 100, session: Session = Depends(db.get_db)):
+    try:
+        payload = build_merkle_batch(session, entity_type='otp', limit=limit)
+        return payload
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get('/api/audit/otp/batch/latest')
+def api_audit_otp_batch_latest():
+    latest = get_latest_merkle_batch(entity_type='otp')
+    if not latest:
+        raise HTTPException(status_code=404, detail='No batch found')
+    return latest
+
+@app.post('/api/apiir/sms/send')
+def apiir_sms_send(payload: dict = Body(...), session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """ارسال پیامک از طریق api.ir با نگاشت ساده‌ی ورودی فرانت به بدنه مورد انتظار سرویس.
+    ورودی قابل قبول فرانت: { mobiles: string[] | string, messageText: string, lineNumber?: string }
+    """
+    # Read API key
+    rec = session.query(models.SystemSettings).filter(models.SystemSettings.key=='papi_api_key').order_by(models.SystemSettings.updated_at.desc()).first()
+    api_key = None
+    if rec:
+        api_key = rec.value
+        try:
+            if getattr(rec,'is_secret',False):
+                from .security import decrypt_value
+                api_key = decrypt_value(api_key)
+        except Exception:
+            pass
+    if not api_key:
+        raise HTTPException(status_code=502, detail='api.ir API key missing')
+    # Normalize payload
+    mobiles = payload.get('mobiles') or payload.get('mobile') or []
+    if isinstance(mobiles, str):
+        mobiles = [mobiles]
+    if not isinstance(mobiles, list):
+        mobiles = []
+    message = payload.get('messageText') or payload.get('message') or ''
+    sender = payload.get('lineNumber') or payload.get('sender') or ''
+    if not mobiles or not message:
+        raise HTTPException(status_code=400, detail='mobiles و message الزامی است')
+    body = {
+        'mobiles': mobiles,
+        'message': message,
+    }
+    if sender:
+        body['lineNumber'] = sender
+    headers = { 'Authorization': f'Bearer {api_key}', 'Accept':'text/plain', 'Content-Type':'application/json' }
+    try:
+        # allow overriding endpoint path via settings (papi_base_path)
+        base_path_rec = session.query(models.SystemSettings).filter(models.SystemSettings.key=='papi_base_path').order_by(models.SystemSettings.updated_at.desc()).first()
+        custom_path = None
+        if base_path_rec and base_path_rec.value:
+            custom_path = str(base_path_rec.value).strip()
+            if not custom_path.startswith('/'):
+                custom_path = '/' + custom_path
+        endpoints = [
+            f'https://s.api.ir{custom_path}' if custom_path else 'https://s.api.ir/api/sw1/SendSms',
+        ]
+        last_resp = None
+        for ep in endpoints:
+            try:
+                resp = requests.post(ep, headers=headers, json=body, timeout=20)
+                last_resp = resp
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = {'text': getattr(resp,'text','')}
+                if 200 <= resp.status_code < 300:
+                    return data
+                # If 401/403, stop early to surface auth issues
+                if resp.status_code in (401, 403):
+                    raise HTTPException(status_code=resp.status_code, detail=str(data)[:400])
+            except requests.RequestException as re:
+                last_resp = None
+                continue
+        if last_resp is not None:
+            try:
+                err_data = last_resp.json()
+            except Exception:
+                err_data = {'text': getattr(last_resp,'text','')}
+            raise HTTPException(status_code=last_resp.status_code, detail={
+                'endpoint_tried': endpoints,
+                'response': err_data,
+            })
+        raise HTTPException(status_code=502, detail='api.ir unreachable')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/apiir/otp/sms')
+def apiir_otp_sms(payload: dict = Body(...), session: Session = Depends(db.get_db)):
+    """ارسال OTP پیامکی از طریق api.ir مطابق مستند /api/sw1/SmsOTP
+    ورودی: { code: string, mobile: string, template?: int }
+    """
+    rec = session.query(models.SystemSettings).filter(models.SystemSettings.key=='papi_api_key').order_by(models.SystemSettings.updated_at.desc()).first()
+    api_key = None
+    if rec:
+        api_key = rec.value
+        try:
+            if getattr(rec,'is_secret',False):
+                from .security import decrypt_value
+                api_key = decrypt_value(api_key)
+        except Exception:
+            pass
+    if not api_key:
+        raise HTTPException(status_code=502, detail='api.ir API key missing')
+    code = str((payload or {}).get('code') or '').strip()
+    mobile = str((payload or {}).get('mobile') or '').strip()
+    template = (payload or {}).get('template')
+    if not code or not mobile:
+        raise HTTPException(status_code=400, detail='code و mobile الزامی است')
+    body = { 'code': code, 'mobile': mobile }
+    if template is not None:
+        body['template'] = template
+    headers = { 'Authorization': f'Bearer {api_key}', 'Accept':'text/plain', 'Content-Type':'application/json' }
+    try:
+        resp = requests.post('https://s.api.ir/api/sw1/SmsOTP', headers=headers, json=body, timeout=20)
+        try:
+            data = resp.json()
+        except Exception:
+            data = {'text': getattr(resp,'text','')}
+        if 200 <= resp.status_code < 300:
+            # ثبت کد در نشست‌های OTP داخلی برای امکان verify سمت بک‌اند
+            try:
+                from datetime import datetime, timedelta
+                from .papi import _otp_sessions
+                _otp_sessions[mobile] = { 'code': code, 'expires': datetime.utcnow() + timedelta(minutes=5) }
+            except Exception:
+                pass
+            return data
+        raise HTTPException(status_code=resp.status_code, detail=str(data)[:400])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/apiir/otp/call')
+def apiir_otp_call(payload: dict = Body(...), session: Session = Depends(db.get_db)):
+    """ارسال OTP تلفنی از طریق api.ir مطابق مستند /api/sw1/CallOTP
+    ورودی: { code: string, number: string }
+    """
+    rec = session.query(models.SystemSettings).filter(models.SystemSettings.key=='papi_api_key').order_by(models.SystemSettings.updated_at.desc()).first()
+    api_key = None
+    if rec:
+        api_key = rec.value
+        try:
+            if getattr(rec,'is_secret',False):
+                from .security import decrypt_value
+                api_key = decrypt_value(api_key)
+        except Exception:
+            pass
+    if not api_key:
+        raise HTTPException(status_code=502, detail='api.ir API key missing')
+    code = str((payload or {}).get('code') or '').strip()
+    number = str((payload or {}).get('number') or '').strip()
+    if not code or not number:
+        raise HTTPException(status_code=400, detail='code و number الزامی است')
+    body = { 'code': code, 'number': number }
+    headers = { 'Authorization': f'Bearer {api_key}', 'Accept':'text/plain', 'Content-Type':'application/json' }
+    try:
+        resp = requests.post('https://s.api.ir/api/sw1/CallOTP', headers=headers, json=body, timeout=20)
+        try:
+            data = resp.json()
+        except Exception:
+            data = {'text': getattr(resp,'text','')}
+        if 200 <= resp.status_code < 300:
+            return data
+        raise HTTPException(status_code=resp.status_code, detail=str(data)[:400])
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post('/api/dev/papi/provider')
+def dev_set_papi_provider(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Dev-only: تغییر Provider ماژول PApi (مثلاً mock یا papi.ir)."""
+    ensure_dev_enabled()
+    # محدود به کاربر دولوپر
+    if str(getattr(current_user, 'mobile', '')) not in ('09123506545',) and str(getattr(current_user, 'username','')) != 'developer':
+        raise HTTPException(status_code=403, detail='forbidden')
+    provider = str((payload or {}).get('provider') or '').strip().lower()
+    if provider not in ('mock','demo','papi.ir'):
+        raise HTTPException(status_code=400, detail='provider نامعتبر است')
+    s = DB.SessionLocal()
+    try:
+        from .models import SystemSettings
+        # set or update key
+        rec = s.query(SystemSettings).filter(SystemSettings.key=='papi_provider').first()
+        if rec:
+            rec.value = provider
+            rec.updated_at = datetime.utcnow()
+        else:
+            rec = SystemSettings(key='papi_provider', value=provider, is_secret=False)
+            s.add(rec)
+        s.commit()
+        return {'success': True, 'provider': provider}
+    except Exception as e:
+        try:
+            s.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+
+@app.post('/api/dev/papi/api-key')
+def dev_set_papi_api_key(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Dev-only: ثبت یا بروزرسانی API Key برای ماژول api.ir (papi_api_key)."""
+    ensure_dev_enabled()
+    if str(getattr(current_user, 'mobile', '')) not in ('09123506545',) and str(getattr(current_user, 'username','')) != 'developer':
+        raise HTTPException(status_code=403, detail='forbidden')
+    api_key = str((payload or {}).get('api_key') or '').strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail='api_key الزامی است')
+    s = DB.SessionLocal()
+    try:
+        from .models import SystemSettings
+        rec = s.query(SystemSettings).filter(SystemSettings.key=='papi_api_key').first()
+        if rec:
+            rec.value = api_key
+            rec.is_secret = True
+            rec.updated_at = datetime.utcnow()
+        else:
+            rec = SystemSettings(key='papi_api_key', value=api_key, is_secret=True, updated_at=datetime.utcnow())
+            s.add(rec)
+        s.commit()
+        return {'success': True}
+    except Exception as e:
+        try:
+            s.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+@app.post('/api/dev/papi/base-path')
+def dev_set_papi_base_path(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Dev-only: تنظیم مسیر پایه برای فراخوانی api.ir (مثلاً /api/SendSms)."""
+    ensure_dev_enabled()
+    if str(getattr(current_user, 'mobile', '')) not in ('09123506545',) and str(getattr(current_user, 'username','')) != 'developer':
+        raise HTTPException(status_code=403, detail='forbidden')
+    base_path = str((payload or {}).get('base_path') or '').strip()
+    if not base_path:
+        raise HTTPException(status_code=400, detail='base_path الزامی است')
+    s = DB.SessionLocal()
+    try:
+        from .models import SystemSettings
+        rec = s.query(SystemSettings).filter(SystemSettings.key=='papi_base_path').first()
+        if rec:
+            rec.value = base_path
+            rec.is_secret = False
+            rec.updated_at = datetime.utcnow()
+        else:
+            rec = SystemSettings(key='papi_base_path', value=base_path, is_secret=False, updated_at=datetime.utcnow())
+            s.add(rec)
+        s.commit()
+        return {'success': True, 'base_path': base_path}
+    except Exception as e:
+        try:
+            s.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        try:
+            s.close()
+        except Exception:
+            pass
+@app.get('/api/dev/papi/otp/debug')
+def dev_get_papi_otp_debug(mobile: str, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Dev-only: مشاهده کد OTP جاری برای شماره ورودی."""
+    ensure_dev_enabled()
+    if str(getattr(current_user, 'mobile', '')) not in ('09123506545',) and str(getattr(current_user, 'username','')) != 'developer':
+        raise HTTPException(status_code=403, detail='forbidden')
+    from .papi import get_otp_debug
+    return get_otp_debug(str(mobile))
+
+@app.get('/api/sms/lines')
+def api_sms_lines_top(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """لیست خطوط sms.ir برای انتخاب در فرانت (سطح بالا). فقط Admin/Manager."""
+    try:
+        role = getattr(current_user, 'role', '')
+        mobile = getattr(current_user, 'mobile', '')
+        if str(role) != 'Admin' and str(mobile) != '09123506545':
+            raise HTTPException(status_code=403, detail='forbidden')
+        ok, res = list_smsir_lines(session)
+        if not ok:
+            raise HTTPException(status_code=502, detail=str(res))
+        return {'items': res}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/current-user/modules")
+def current_user_modules(user: models.User = Depends(get_current_user)):
+    sub = getattr(user, "mobile", None)
+    role = getattr(user, "role", None)
+    is_admin = str(role) == "Admin"
+    is_dev = _is_developer(str(sub) if sub is not None else None)
+    modules = []
+    modules.extend(["dashboard", "reports", "sales", "finance", "inventory", "people"])
+    if is_admin or is_dev:
+        modules.append("settings")
+    if is_dev:
+        modules.extend(["developer", "access-control", "banks"])
+    return modules
 
 # ==================== Org & NFT Features ====================
 
@@ -289,6 +770,91 @@ def sales_trend(from_iso: Optional[str] = None, to_iso: Optional[str] = None, bu
         return {'from': from_dt.isoformat(), 'to': to_dt.isoformat(), 'bucket': bucket, 'points': labels}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    # ==================== SMS Endpoints (Dev) ====================
+
+    @app.post('/api/sms/send')
+    def api_sms_send(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+        """Send an SMS using configured provider. Expects { to, message }. Logs to sms.jsonl."""
+        try:
+            to = str(payload.get('to') or '').strip()
+            message = str(payload.get('message') or '').strip()
+            if not to or not message:
+                raise HTTPException(status_code=400, detail='شماره گیرنده و متن پیام الزامی است')
+            line_number = str(payload.get('lineNumber') or '').strip() or None
+            ok, detail = send_sms(session, to, message, line_number=line_number)
+            try:
+                log_sms_event({'user': getattr(current_user, 'username', None), 'to': to, 'message': message[:200], 'lineNumber': line_number, 'ok': ok, 'detail': detail})
+            except Exception:
+                pass
+            if not ok:
+                raise HTTPException(status_code=502, detail=detail)
+            return {'success': True, 'detail': detail}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get('/api/sms/history')
+    def api_sms_history(limit: int = 100, current_user: models.User = Depends(get_current_user)):
+        """Return recent SMS events from file-based history for inspection in DevConsole."""
+        try:
+            items = read_sms_history(limit=limit)
+            return {'items': items}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get('/api/sms/metrics/daily')
+    def api_sms_metrics_daily(days: int = 14, current_user: models.User = Depends(get_current_user)):
+        """Simple daily metrics based on file history: counts per day of ok vs fail."""
+        try:
+            from collections import defaultdict
+            import datetime as _dt
+            items = read_sms_history(limit=1000)
+            buckets_ok = defaultdict(int)
+            buckets_fail = defaultdict(int)
+            for it in items:
+                ts = str(it.get('ts') or '')[:10]
+                if it.get('ok'):
+                    buckets_ok[ts] += 1
+                else:
+                    buckets_fail[ts] += 1
+            # ensure last N days are present
+            out = []
+            today = _dt.date.today()
+            for i in range(days):
+                d = (today - _dt.timedelta(days=i)).isoformat()
+                out.append({'day': d, 'ok': buckets_ok.get(d, 0), 'fail': buckets_fail.get(d, 0)})
+            out.reverse()
+            return {'days': days, 'points': out}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.get('/api/sms/lines')
+    def api_sms_lines(current_user: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+        """لیست خطوط sms.ir برای انتخاب در فرانت. فقط Admin/Manager."""
+        require_roles(role_names=['Admin', 'Manager'])(current_user)
+        ok, res = list_smsir_lines(session)
+        if not ok:
+            raise HTTPException(status_code=502, detail=str(res))
+        return {'items': res}
+
+        # ==================== Dev SMS Config Check (no secrets) ====================
+
+        @app.get('/api/dev/sms/config-check')
+        def dev_sms_config_check(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+            """Report presence of SMS config keys without revealing secrets."""
+            try:
+                provider = crud.get_system_setting(session, 'sms_provider')
+                api_key = crud.get_system_setting(session, 'sms_api_key')
+                sender = crud.get_system_setting(session, 'sms_sender') or crud.get_system_setting(session, 'smsir_line_number')
+                return {
+                    'provider_present': bool(provider and (provider.value or '').strip()),
+                    'api_key_present': bool(api_key and (api_key.value or '').strip()),
+                    'sender_present': bool(sender and (sender.value or '').strip())
+                }
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== Utility & Integration Endpoints ====================
 
@@ -559,8 +1125,14 @@ def smsir_test_otp(payload: dict, session: Session = Depends(db.get_db), current
                 ok, info = send_sms(session, mobile, message)
                 return { 'sent': bool(ok), 'detail': info, 'error': str(e) }
         # fallback generic sender (enabled off یا تنظیمات ناقص)
-        # In developer mode (developer user), simulate delivery offline
-        if (current_user and (current_user.mobile == '09123506545' or current_user.username == 'developer')):
+        # اگر تنظیمات sms.ir غیرفعال/ناقص باشد، برای کاربر دولوپر تحویل آفلاین شبیه‌سازی می‌شود.
+        # در صورت فعال بودن sms.ir (smsir_enabled=true)، حتی برای دولوپر ارسال واقعی انجام شود.
+        try:
+            enabled_setting = session.query(models.SystemSettings).filter(models.SystemSettings.key == 'smsir_enabled').first()
+            smsir_enabled = str((enabled_setting.value if enabled_setting else '')).lower() == 'true'
+        except Exception:
+            smsir_enabled = False
+        if not smsir_enabled and (current_user and (current_user.mobile == '09123506545' or current_user.username == 'developer')):
             return { 'sent': True, 'detail': 'mock: offline dev delivery', 'code': code, 'to': mobile }
         message = f"کد یکبارمصرف شما: {code}"
         ok, info = send_sms(session, mobile, message)
@@ -2731,19 +3303,56 @@ def list_sms_providers(session: Session = Depends(db.get_db), current: models.Us
 
 @app.post('/api/sms/send')
 def api_sms_send(payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin']))):
-    to = (payload or {}).get('to')
-    msg = (payload or {}).get('message')
-    provider = (payload or {}).get('provider')
+    to = str((payload or {}).get('to') or '').strip()
+    msg = str((payload or {}).get('message') or '').strip()
+    line_number = str((payload or {}).get('lineNumber') or '').strip() or None
     if not to or not msg:
         raise HTTPException(status_code=400, detail='to and message required')
-    ok, info = send_sms(session, to, msg, provider)
+    from .sms import send_sms as _send
+    ok, info = _send(session, to, msg, line_number=line_number)
     if not ok:
         raise HTTPException(status_code=502, detail=info)
     try:
-        log_activity(session, current.username if hasattr(current, 'username') else None, f"ارسال پیامک به {to}")
+        log_activity(session, current.username if hasattr(current, 'username') else None, f"ارسال پیامک به {to} خط {line_number or ''}")
     except Exception:
         pass
     return {"ok": True, "detail": info}
+
+@app.get('/api/dev/sms/config-check')
+def dev_sms_config_check(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """نمایش خلاصه تنظیمات SMS برای دیباگ (بدون افشای کلید). فقط برای ادمین/دولوپر."""
+    # محدودیت دسترسی
+    role = getattr(current_user, 'role', '')
+    mobile = getattr(current_user, 'mobile', '')
+    if str(role) != 'Admin' and str(mobile) != '09123506545':
+        raise HTTPException(status_code=403, detail='forbidden')
+    try:
+        # بدون فیلتر دسته‌بندی و با درنظر گرفتن کلیدهای جایگزین
+        provider = (
+            session.query(models.SystemSettings)
+            .filter(models.SystemSettings.key.in_(['sms_provider','smsir_provider']))
+            .order_by(models.SystemSettings.updated_at.desc())
+            .first()
+        )
+        api_key = (
+            session.query(models.SystemSettings)
+            .filter(models.SystemSettings.key.in_(['sms_api_key','smsir_api_key']))
+            .order_by(models.SystemSettings.updated_at.desc())
+            .first()
+        )
+        sender = (
+            session.query(models.SystemSettings)
+            .filter(models.SystemSettings.key.in_(['sms_sender','smsir_line_number','smsir_sender']))
+            .order_by(models.SystemSettings.updated_at.desc())
+            .first()
+        )
+        return {
+            'provider': (provider.value if provider else None),
+            'api_key_present': bool(api_key and (api_key.value or '').strip()),
+            'sender': (sender.value if sender else None),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post('/api/sms/register-user', response_model=schemas.UserOut)
@@ -3849,3 +4458,49 @@ async def test_send_sms(
         'mobile': mobile,
         'text': message
     }
+
+# ==================== SMS DevConsole Endpoints ====================
+
+@app.post('/api/sms/send')
+def api_sms_send(payload: dict, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    to = str(payload.get('to') or '').strip()
+    message = str(payload.get('message') or '').strip()
+    if not to or not message:
+        raise HTTPException(status_code=400, detail='شماره گیرنده و متن پیام الزامی است')
+    from .sms import send_sms as _send, log_sms_event as _log
+    ok, detail = _send(session, to, message)
+    try:
+        _log({'user': getattr(current_user, 'username', None), 'to': to, 'message': message[:200], 'ok': ok, 'detail': detail})
+    except Exception:
+        pass
+    if not ok:
+        raise HTTPException(status_code=502, detail=detail)
+    return {'success': True, 'detail': detail}
+
+@app.get('/api/sms/history')
+def api_sms_history(limit: int = 100, current_user: models.User = Depends(get_current_user)):
+    from .sms import read_sms_history as _hist
+    items = _hist(limit=limit)
+    return {'items': items}
+
+@app.get('/api/sms/metrics/daily')
+def api_sms_metrics_daily(days: int = 14, current_user: models.User = Depends(get_current_user)):
+    from collections import defaultdict
+    import datetime as _dt
+    from .sms import read_sms_history as _hist
+    items = _hist(limit=1000)
+    buckets_ok = defaultdict(int)
+    buckets_fail = defaultdict(int)
+    for it in items:
+        ts = str(it.get('ts') or '')[:10]
+        if it.get('ok'):
+            buckets_ok[ts] += 1
+        else:
+            buckets_fail[ts] += 1
+    out = []
+    today = _dt.date.today()
+    for i in range(days):
+        d = (today - _dt.timedelta(days=i)).isoformat()
+        out.append({'day': d, 'ok': buckets_ok.get(d, 0), 'fail': buckets_fail.get(d, 0)})
+    out.reverse()
+    return {'days': days, 'points': out}

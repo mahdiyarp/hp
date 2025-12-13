@@ -1,7 +1,7 @@
 """
 Add optional person fields if missing
 
-Revision ID: 20251208_add_person_optional_fields
+Revision ID: 20251208_person_optional_fields
 Revises: 
 Create Date: 2025-12-08
 """
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '20251208_add_person_optional_fields'
-down_revision = None
+revision = '20251208_person_optional_fields'
+down_revision = '0033_merge_heads'
 branch_labels = None
 depends_on = None
 

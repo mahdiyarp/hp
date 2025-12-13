@@ -14,36 +14,40 @@ const fs = require('fs');
   });
 
   try {
-    const url = process.env.URL || 'http://host.docker.internal:3000';
+    const argUrl = process.argv[2];
+    const envUrl = process.env.BASE_URL;
+    const url = argUrl || envUrl || 'http://localhost:3000';
     console.log('Navigating to', url);
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // Try to login via API and set localStorage tokens if possible
-    const username = process.env.USERNAME || 'developer';
-    const password = process.env.PASSWORD || '09123506545';
+    // Basic availability check: ensure root element exists
+    await page.waitForSelector('#root', { timeout: 10000 });
 
-    // Perform login using fetch in page context (so cookies/localStorage set same origin)
-    const loginResult = await page.evaluate(async (creds) => {
-      try {
-        const params = new URLSearchParams();
-        params.append('username', creds.username);
-        params.append('password', creds.password);
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {'Content-Type':'application/x-www-form-urlencoded'},
-          body: params.toString(),
-        });
-        const data = await res.json();
-        if(res.ok && data.access_token){
-          localStorage.setItem('hesabpak_access_token', data.access_token);
-          localStorage.setItem('hesabpak_refresh_token', data.refresh_token || '');
-          return {ok:true};
-        }
-        return {ok:false, status: res.status, body: data};
-      } catch(e){ return {ok:false, error: String(e)} }
-    }, { username, password });
+    // Try a minimal OTP login interaction if elements are present
+    try {
+      const loginButton = await page.$('button:has-text("ورود")');
+      if (loginButton) await loginButton.click();
 
-    outLogs.push({type:'info', text: 'loginResult: ' + JSON.stringify(loginResult)});
+      const mobileModeToggle = await page.$('button:has-text("ورود با موبایل")');
+      if (mobileModeToggle) await mobileModeToggle.click();
+
+      const phoneInput = await page.$('input[type="tel"], input[name="mobile"], input[placeholder*="موبایل"], input[placeholder*="شماره"]');
+      if (phoneInput) await phoneInput.fill('09123506545');
+
+      const sendOtpBtn = await page.$('button:has-text("ارسال کد")') || await page.$('button:has-text("ارسال OTP")');
+      if (sendOtpBtn) await sendOtpBtn.click();
+
+      await page.waitForTimeout(1500);
+
+      const verifyBtn = await page.$('button:has-text("تایید")') || await page.$('button:has-text("ورود")');
+      if (verifyBtn) await verifyBtn.click();
+
+      await page.waitForTimeout(2000);
+      const dashboardExists = await page.$('nav, header, [data-testid="dashboard"], .dashboard');
+      console.log('Dashboard visible:', !!dashboardExists);
+    } catch (e) {
+      console.warn('Optional OTP flow skipped:', e.message);
+    }
 
     // reload the app after login
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });

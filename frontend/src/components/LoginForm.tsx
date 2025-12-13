@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
   retroButton,
@@ -11,22 +11,28 @@ import {
 
 export default function LoginForm() {
   const { login } = useAuth()
-  const [mode, setMode] = useState<'password' | 'mobile'>('password')
+  const [mode, setMode] = useState<'password' | 'mobile'>(() => {
+    const saved = sessionStorage.getItem('login_mode')
+    return saved === 'mobile' ? 'mobile' : 'password'
+  })
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [otp, setOtp] = useState('')
   const [otpRequired, setOtpRequired] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [phone, setPhone] = useState('')
+  const [phone, setPhone] = useState('09123506545')
   const [otpSessionId, setOtpSessionId] = useState<string | null>(null)
   const [mobileStep, setMobileStep] = useState<'request' | 'verify'>('request')
   const [cooldown, setCooldown] = useState<number>(0)
   const [cooldownTimer, setCooldownTimer] = useState<number | null>(null)
+  const [processing, setProcessing] = useState<boolean>(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const otpGeneratedRef = useRef<string | null>(null)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError(null)
     try {
-      setError(null)
       if (mode === 'password') {
         const result = await login(username, password, otpRequired ? otp : undefined)
         if (result.otpRequired) {
@@ -37,32 +43,42 @@ export default function LoginForm() {
         setOtp('')
         setOtpRequired(false)
       } else {
+        const { PApi } = await import('../services/papi')
+        const { setTokens } = await import('../services/auth')
         if (mobileStep === 'request') {
-          const r = await (await import('../services/auth')).default.loginByPhoneRequest(phone.trim())
-          setOtpSessionId(r.session_id)
+          setProcessing(true)
+          const generated = otp && otp.trim().length >= 4 ? otp.trim() : String(Math.floor(100000 + Math.random()*900000))
+          otpGeneratedRef.current = generated
+          await PApi.smsOtp(generated, phone.trim(), 1)
+          setOtpSessionId('papi')
           setMobileStep('verify')
-          // start cooldown 60s
-          setCooldown(60)
+          sessionStorage.setItem('login_mode','mobile')
+          sessionStorage.setItem('login_mobile_step','verify')
+          setCooldown(120)
           if (cooldownTimer) clearInterval(cooldownTimer)
           const id = window.setInterval(() => setCooldown(prev => (prev > 0 ? prev - 1 : 0)), 1000)
           setCooldownTimer(id)
+          setToast('کد ورود ارسال شد')
+          setTimeout(() => setToast(null), 2000)
+          setProcessing(false)
         } else {
-          if (!otpSessionId) throw new Error('شناسه نشست OTP نامشخص است')
-          const svc = (await import('../services/auth')).default
-          await svc.verifyPhoneOtp(otpSessionId, otp.trim())
-          // Tokens are set by service. Clear local states.
-          setOtp('')
-          setOtpSessionId(null)
-          setMobileStep('request')
+          setProcessing(true)
+          const codeToVerify = (otp && otp.trim()) || otpGeneratedRef.current || ''
+          const res = await PApi.verifyOtp(phone.trim(), codeToVerify)
+          if (typeof (res as any)?.access_token === 'string') {
+            setTokens((res as any).access_token, (res as any).refresh_token || '')
+            try { window.dispatchEvent(new Event('auth-updated')) } catch {}
+            setToast('ورود موفق')
+            setTimeout(() => setToast(null), 2000)
+          } else {
+            setError('تایید کد ناموفق')
+          }
           if (cooldownTimer) { clearInterval(cooldownTimer); setCooldownTimer(null) }
+          setProcessing(false)
         }
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message)
-      } else {
-        setError('ورود ناموفق')
-      }
+      setError(err instanceof Error ? err.message : 'ورود ناموفق')
     }
   }
 
@@ -88,58 +104,57 @@ export default function LoginForm() {
               <button
                 type="button"
                 className={`${retroButton} ${mode === 'password' ? '' : '!bg-[#e5e7eb] !text-[#1f2e3b]'}`}
-                onClick={() => setMode('password')}
+                onClick={() => { setMode('password'); sessionStorage.setItem('login_mode','password') }}
               >
                 ورود با رمز عبور
               </button>
               <button
                 type="button"
                 className={`${retroButton} ${mode === 'mobile' ? '' : '!bg-[#e5e7eb] !text-[#1f2e3b]'}`}
-                onClick={() => setMode('mobile')}
+                onClick={() => { setMode('mobile'); sessionStorage.setItem('login_mode','mobile') }}
               >
                 ورود با موبایل
               </button>
             </div>
 
             {mode === 'password' ? (
-              <div className="space-y-4">
-                <div>
-                  <label className={retroLabel}>نام کاربری</label>
-                  <input
-                    value={username}
-                    onChange={e => setUsername(e.target.value)}
-                    className={`${retroInput} w-full`}
-                    placeholder="username"
-                  />
-                </div>
-                <div>
-                  <label className={retroLabel}>رمز عبور</label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className={`${retroInput} w-full`}
-                    placeholder="••••••••"
-                  />
-                </div>
-                {otpRequired && (
+                <>
                   <div>
-                    <label className={retroLabel}>کد تایید دو مرحله‌ای</label>
+                    <label className={retroLabel}>نام کاربری</label>
                     <input
-                      value={otp}
-                      onChange={e => setOtp(e.target.value)}
-                      className={`${retroInput} w-full tracking-[0.6em] text-center`}
-                      placeholder="123456"
-                      inputMode="numeric"
-                      pattern="\\d{6}"
-                      autoComplete="one-time-code"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      className={`${retroInput} w-full`}
                     />
-                    <p className={`mt-2 text-[11px] ${retroMuted}`}>
-                      پیامک یا اپلیکیشن احراز هویت خود را بررسی کنید و کد شش رقمی را وارد نمایید.
-                    </p>
                   </div>
-                )}
-              </div>
+                  <div>
+                    <label className={retroLabel}>رمز عبور</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      className={`${retroInput} w-full`}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  {otpRequired && (
+                    <div>
+                      <label className={retroLabel}>کد تایید دو مرحله‌ای</label>
+                      <input
+                        value={otp}
+                        onChange={e => setOtp(e.target.value)}
+                        className={`${retroInput} w-full tracking-[0.6em] text-center`}
+                        placeholder="123456"
+                        inputMode="numeric"
+                        pattern="\\d{6}"
+                        autoComplete="one-time-code"
+                      />
+                      <p className={`mt-2 text-[11px] ${retroMuted}`}>
+                        پیامک یا اپلیکیشن احراز هویت خود را بررسی کنید و کد شش رقمی را وارد نمایید.
+                      </p>
+                    </div>
+                  )}
+                </>
             ) : (
               <div className="space-y-4">
                 {mobileStep === 'request' ? (
@@ -181,10 +196,12 @@ export default function LoginForm() {
                           onClick={async () => {
                             try {
                               setError(null)
-                              const svc = (await import('../services/auth')).default
-                              const r = await svc.loginByPhoneRequest(phone.trim())
-                              setOtpSessionId(r.session_id)
-                              setCooldown(60)
+                              const { PApi } = await import('../services/papi')
+                              const generated = otp && otp.trim().length >= 4 ? otp.trim() : String(Math.floor(100000 + Math.random()*900000))
+                              otpGeneratedRef.current = generated
+                              await PApi.smsOtp(generated, phone.trim(), 1)
+                              setOtpSessionId('papi')
+                              setCooldown(120)
                               if (cooldownTimer) clearInterval(cooldownTimer)
                               const id = window.setInterval(() => setCooldown(prev => (prev > 0 ? prev - 1 : 0)), 1000)
                               setCooldownTimer(id)
@@ -207,29 +224,47 @@ export default function LoginForm() {
                 {error}
               </div>
             )}
+            {toast && (
+              <div className="border-2 border-[#4caf50] bg-[#eaf7ea] text-[#1f4f1f] px-3 py-2 shadow-[3px_3px_0_#4caf50] text-sm">
+                {toast}
+              </div>
+            )}
 
             <div className="space-y-3">
               {mode === 'password' ? (
-                <button className={`${retroButton} w-full`} type="submit">
+                <button className={`${retroButton} w-full`} type="submit" disabled={processing}>
                   ورود به سیستم
                 </button>
               ) : (
                 mobileStep === 'request' ? (
-                  <button className={`${retroButton} w-full`} type="submit">
+                  <button className={`${retroButton} w-full`} type="submit" disabled={processing}>
                     ارسال کد ورود
                   </button>
                 ) : (
-                  <button className={`${retroButton} w-full`} type="button" onClick={async () => {
+                  <button className={`${retroButton} w-full`} type="button" disabled={processing} onClick={async () => {
                     try {
                       setError(null)
                       if (!otpSessionId) throw new Error('شناسه نشست OTP نامشخص است')
-                      const svc = (await import('../services/auth')).default
-                      await svc.verifyPhoneOtp(otpSessionId, otp.trim())
-                      setOtp('')
-                      setOtpSessionId(null)
-                      setMobileStep('request')
+                      const { PApi } = await import('../services/papi')
+                      const { setTokens } = await import('../services/auth')
+                      // Verify first, then persist tokens, then navigate
+                      setProcessing(true)
+                      const res = await PApi.verifyOtp(phone.trim(), (otp && otp.trim()) || otpGeneratedRef.current || '')
+                      if (typeof (res as any)?.access_token === 'string') {
+                        setTokens((res as any).access_token, (res as any).refresh_token || '')
+                        try { window.dispatchEvent(new Event('auth-updated')) } catch {}
+                        setOtp('')
+                        setOtpSessionId(null)
+                        setToast('ورود موفق')
+                        setTimeout(() => setToast(null), 2000)
+                        window.location.href = '/'
+                      } else {
+                        throw new Error('تایید کد ناموفق')
+                      }
+                      setProcessing(false)
                     } catch (e: any) {
                       setError(e?.message || 'تایید کد ناموفق')
+                      setProcessing(false)
                     }
                   }}>
                     تایید و ورود

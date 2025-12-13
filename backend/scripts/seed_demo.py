@@ -11,6 +11,60 @@ sys.path.insert(0, ROOT)
 
 from app import db, crud, models, schemas
 from app.security import get_password_hash
+from sqlalchemy import text
+
+
+def _get_table_columns(session, table_name: str) -> set:
+    try:
+        rows = session.execute(text(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = :tname
+            """
+        ), {"tname": table_name}).fetchall()
+        return {r[0] for r in rows}
+    except Exception:
+        return set()
+
+
+def _insert_person_safe(session, payload: dict):
+    cols = _get_table_columns(session, 'persons')
+    # Map expected fields to available columns
+    field_map = {
+        'id': 'id',
+        'name': 'name',
+        'name_norm': 'name_norm',
+        'code': 'code',
+        'kind': 'kind',
+        'mobile': 'mobile',
+        'description': 'description',
+        'tax_id': 'tax_id',
+        'national_id': 'national_id',
+        'address': 'address',
+        'payment_terms': 'payment_terms',
+        'credit_limit': 'credit_limit',
+    }
+    # Ensure an id is present if table expects it
+    if 'id' in cols and 'id' not in payload:
+        try:
+            import uuid
+            payload['id'] = uuid.uuid4().hex
+        except Exception:
+            pass
+    use_fields = [db_field for key, db_field in field_map.items() if db_field in cols and key in payload]
+    if not use_fields:
+        raise ProgrammingError("persons table has no expected columns", None, None)
+    placeholders = ", ".join([f":{f}" for f in use_fields])
+    columns = ", ".join(use_fields)
+    sql = text(f"INSERT INTO persons ({columns}) VALUES ({placeholders})")
+    params = {f: payload[f] for f in use_fields}
+    session.execute(sql, params)
+    session.commit()
+    # Fetch created person by unique code or name
+    per = session.query(models.Person).filter(models.Person.code == payload.get('code')).first()
+    if not per:
+        per = session.query(models.Person).filter(models.Person.name == payload.get('name')).first()
+    return per
 
 
 def seed():
@@ -128,28 +182,46 @@ def seed():
         persons = []
         for i in range(1, 11):
             name = f"Demo Customer {i}"
+            code = f"CUS-{i:03d}"
             try:
                 per = crud.create_person(session, schemas.PersonCreate(
                     name=name,
                     kind='customer',
                     mobile=f'0912{i:07d}',
                     description='Demo customer',
-                    code=f'CUS-{i:03d}'
+                    code=code
                 ))
                 persons.append(per)
                 print(f"[SEED] Created person {i}: {per.id[:8]}...", flush=True)
-            except IntegrityError as e:
+            except IntegrityError:
                 print(f"[SEED] Person {i} already exists (skipped)", flush=True)
                 session.rollback()
                 per = session.query(models.Person).filter(models.Person.name == name).first()
                 if per:
                     persons.append(per)
             except ProgrammingError as e:
-                print(f"[SEED] Persons seeding skipped due to schema mismatch: {e}", flush=True)
+                print(f"[SEED] ORM insert failed due to schema mismatch, using safe insert: {e}", flush=True)
                 session.rollback()
-                # Break out to avoid repeating the same error for remaining persons
-                persons = []
-                break
+                try:
+                    per = _insert_person_safe(session, {
+                        'name': name,
+                        'name_norm': name.lower(),
+                        'code': code,
+                        'kind': 'customer',
+                        'mobile': f'0912{i:07d}',
+                        'description': 'Demo customer',
+                        'tax_id': None,
+                        'national_id': None,
+                        'address': None,
+                        'payment_terms': None,
+                        'credit_limit': None,
+                    })
+                    if per:
+                        persons.append(per)
+                        print(f"[SEED] Safely inserted person {i}: {per.id[:8]}...", flush=True)
+                except Exception as e2:
+                    print(f"[SEED] Safe insert failed for person {i}: {e2}", flush=True)
+                    session.rollback()
         
         print(f"[SEED] Total persons: {len(persons)}", flush=True)
 

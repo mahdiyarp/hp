@@ -16,13 +16,35 @@ docker compose up --build
 Backend swagger UI (once running): `http://localhost:8000/docs`  
 Frontend app: `http://localhost:3000`
 
+## SMS.ir Setup & Testing
+
+- Backend SystemSettings keys (DB):
+	- `sms_provider` (category `sms`): e.g. `sms.ir` یا `ippanel`
+	- `sms_api_key` (category `sms`, می‌تواند secret باشد)
+	- `sms_sender` (category `sms`): شماره خط فرستنده
+	- `sms_webhook_token` (برای امنیت وبهوک؛ اگر ست نشود، درخواست بدون توکن رد می‌شود)
+- Frontend DevConsole: تب SMS برای ارسال تست، تاریخچه، CSV و متریک‌ها.
+- Testing:
+	- "Send OTP Test" uses `/api/smsir/test-otp` and sends a sample code.
+	- "Send Free Text" uses `/api/sms/send` with `{ mobile, message }`.
+- Developer mock behavior:
+	- When `smsir_enabled=true`, even developer user sends real SMS.
+	- When disabled or misconfigured, developer user gets `mock: offline dev delivery` responses.
+- Logs:
+```powershell
+docker compose logs -f backend
+```
+
 ## Dev Quickstart (Windows)
 
 1. Install Docker Desktop and ensure Compose is available.
 2. Start services:
 
 ```powershell
-docker compose up -d --build frontend; docker compose up -d --build backend
+docker compose up -d db
+docker compose up -d backend
+Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing
+docker compose up -d --build frontend
 ```
 
 3. Seed demo data (users, NFTs, products, invoices):
@@ -33,7 +55,7 @@ python.exe backend\scripts\seed_demo.py
 
 4. Open the app:
 
-- Frontend: `http://localhost:8080`
+- Frontend: `http://localhost:3000`
 - Backend Swagger: `http://localhost:8000/docs`
 
 Notes:
@@ -41,10 +63,24 @@ Notes:
 - The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
 - Organization features are derived from the user's NFT assets via `/api/org/features`.
 
+#### Verify quickly (PowerShell)
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8000/api/version" -UseBasicParsing
+Invoke-WebRequest -Uri "http://localhost:3000/api/version" -UseBasicParsing
+
+# Optional: get dev token and confirm modules via frontend proxy
+$loginBody = @{ username = "developer"; password = "developer" } | ConvertTo-Json
+$tokenResp = Invoke-WebRequest -Uri "http://localhost:8000/api/auth/login-dev" -Method Post -ContentType "application/json" -Body $loginBody -UseBasicParsing
+$token = ($tokenResp.Content | ConvertFrom-Json).access_token
+Invoke-WebRequest -Uri "http://localhost:3000/api/current-user/modules" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
+```
+
 ### Environment Flags
 
 - `DEV_FEATURES_ENABLED` (default: off): Enables dev-only endpoints like `/api/auth/login-dev` and `/api/dev/assistant/*`. Accepts `true|1|dev|yes`.
 - `VITE_DEV_AUTOLOGIN` (frontend, default: `false`): When `true`, the client attempts silent developer login on startup if no token exists.
+- Theme: ذخیره تم در `localStorage` با کلید `theme` (`light|dark|system`)؛ حالت `system` بر اساس `prefers-color-scheme` عمل می‌کند.
 - `ALLOW_CREATE_ALL_IN_SEED` (default: off): When enabled or when using SQLite, `backend/scripts/seed_demo.py` will call `create_all` to ensure new tables exist.
 
 ### Database Migrations
@@ -78,6 +114,7 @@ pre-commit install
 cd frontend
 npm install
 npm run prepare   # installs husky hooks
+npm run test      # vitest؛ تست‌های ساده DevConsole و تم
 ```
 
 See `docs/architecture.md` for module breakdown and roadmap.

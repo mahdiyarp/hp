@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { parseJalaliInput } from '../utils/date'
-import { getAccessToken } from '../services/auth'
+import { apiGet } from '../services/api'
 import {
   retroBadge,
   retroButton,
@@ -53,19 +53,7 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
 
   const fetchFinancialContext = async () => {
     try {
-      const token = getAccessToken()
-      const response = await fetch('/api/financial/auto-context', {
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch financial context')
-      }
-      
-      const data = await response.json()
+      const data = await apiGet<any>('/api/financial/auto-context')
       setContext(data.context)
       setSuggestions(data.date_suggestions)
       

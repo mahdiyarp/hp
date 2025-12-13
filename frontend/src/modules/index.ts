@@ -1,3 +1,4 @@
+export { }
 import DashboardModule from './DashboardModule'
 import SalesModule from './SalesModule'
 import FinanceModule from './FinanceModule'
@@ -7,9 +8,24 @@ import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import AccessControlModule from './settings/AccessControlModule'
 import BanksModule from './settings/BanksModule'
-import DeveloperModule from './settings/DeveloperModule'
+import DevConsole from './developer/DevConsole'
+import SmsPanel from './sms/SmsPanel'
+import PApiPanel from './PApiPanel'
+import AuditModule from './audit/AuditModule'
 import { getAccessToken, loginDeveloper } from '../services/auth'
 import type { ModuleDefinition } from '../components/layout/AppShell'
+
+function base64urlDecode(input: string): string {
+  try {
+    let b64 = input.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = b64.length % 4
+    if (pad === 2) b64 += '=='
+    else if (pad === 3) b64 += '='
+    return atob(b64)
+  } catch {
+    return ''
+  }
+}
 
 function isDeveloperMobileUser(): boolean {
   try {
@@ -18,7 +34,9 @@ function isDeveloperMobileUser(): boolean {
     // Lightweight decode JWT payload without external libs
     const parts = token.split('.')
     if (parts.length !== 3) return false
-    const payloadJson = JSON.parse(atob(parts[1]))
+    const payloadStr = base64urlDecode(parts[1])
+    if (!payloadStr) return false
+    const payloadJson = JSON.parse(payloadStr)
     const sub = String(payloadJson.sub || '')
     // Allow developer menu only for the specific mobile user
     return sub === '09123506545' || sub === 'developer'
@@ -33,7 +51,9 @@ function getUserRoleFromToken(): string | null {
     if (!token) return null
     const parts = token.split('.')
     if (parts.length !== 3) return null
-    const payloadJson = JSON.parse(atob(parts[1]))
+    const payloadStr = base64urlDecode(parts[1])
+    if (!payloadStr) return null
+    const payloadJson = JSON.parse(payloadStr)
     const role = String(payloadJson.role || payloadJson['x-role'] || '')
     return role || null
   } catch {
@@ -124,11 +144,38 @@ export const modules: ModuleDefinition[] = [
   },
   {
     id: 'developer',
-    label: 'تنظیمات توسعه‌دهنده',
-    description: 'ابزارهای دیباگ و لاگ‌ها؛ فقط برای دولوپر',
-    component: DeveloperModule,
+    label: 'کنسول توسعه‌دهنده',
+    description: 'پنل کامل دیباگ، تنظیمات، لاگ‌ها و تست‌ها',
+    component: DevConsole,
     badge: 'DEV',
     hidden: !isDeveloperMobileUser(),
+    feature: 'settings',
+  },
+  {
+    id: 'sms-panel',
+    label: 'پنل پیامک',
+    description: 'ارسال، خطوط، تاریخچه و متریک‌ها',
+    component: SmsPanel,
+    badge: 'SMS',
+    hidden: !isAdminOrDeveloper(),
+    feature: 'settings',
+  },
+  {
+    id: 'papi-panel',
+    label: 'پنل PApi/OTP',
+    description: 'ارسال پیامک و ورود با OTP از p.api.ir',
+    component: PApiPanel,
+    badge: 'PAPI',
+    hidden: !isAdminOrDeveloper(),
+    feature: 'settings',
+  },
+  {
+    id: 'audit',
+    label: 'ممیزی و مرکل',
+    description: 'نمایش وضعیت زنجیره و ساخت Batch Merkle',
+    component: AuditModule,
+    badge: 'AUDIT',
+    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
   },
 ]

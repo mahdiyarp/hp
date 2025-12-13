@@ -129,6 +129,36 @@ export default function DashboardModule({
     loadDashboardData()
   }, [])
 
+  async function loadTrend() {
+    let fromIso = ''
+    let toIso = ''
+    const now = new Date()
+    const end = new Date(now)
+    const start = new Date(now)
+    if (trendRange === 'today') {
+      start.setHours(0, 0, 0, 0)
+    } else if (trendRange === '3days') {
+      start.setDate(start.getDate() - 2)
+      start.setHours(0, 0, 0, 0)
+    } else {
+      fromIso = customFrom
+      toIso = customTo
+    }
+    if (!fromIso) fromIso = start.toISOString()
+    if (!toIso) toIso = end.toISOString()
+    const res = await fetchWithAuth(`/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange === 'today' ? 'hour' : 'day'}`)
+    const data = await res.json().catch(() => ({}))
+    setTrend(Array.isArray(data.points) ? data.points : [])
+  }
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const id = setInterval(() => {
+      loadTrend().catch(() => {})
+    }, Math.max(10000, refreshMs))
+    return () => clearInterval(id)
+  }, [autoRefresh, refreshMs, trendRange, customFrom, customTo])
+
   async function loadDashboardData() {
     setLoading(true)
     setError(null)
@@ -139,23 +169,13 @@ export default function DashboardModule({
         apiGet<DashboardSummary>('/api/dashboard/summary'),
         apiGet<Invoice[]>(`/api/invoices?limit=50`),
         apiGet<Product[]>(`/api/products?limit=50`),
-        // replaced by live endpoint below
         Promise.resolve({ series: [] as TrendPoint[] }),
         apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=50`),
         apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=50`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
       ])
 
-      const [
-        financialRes,
-        summaryRes,
-        invoicesRes,
-        productsRes,
-        trendRes,
-        oldStockRes,
-        checksRes,
-        pricesRes,
-      ] = results
+      const [financialRes, summaryRes, invoicesRes, productsRes, _trendRes, oldStockRes, checksRes, pricesRes] = results
 
       if (financialRes.status === 'fulfilled') {
         setFinancialData(financialRes.value)
@@ -181,34 +201,11 @@ export default function DashboardModule({
         newWarnings.push('فهرست محصولات اخیر قابل دسترس نیست.')
       }
 
-      try { await loadTrend() } catch { newWarnings.push('روند فروش قابل نمایش نیست.') }
-  async function loadTrend() {
-    let fromIso = ''
-    let toIso = ''
-    const now = new Date()
-    const end = new Date(now)
-    const start = new Date(now)
-    if (trendRange === 'today') {
-      start.setHours(0,0,0,0)
-    } else if (trendRange === '3days') {
-      start.setDate(start.getDate() - 2)
-      start.setHours(0,0,0,0)
-    } else {
-      fromIso = customFrom
-      toIso = customTo
-    }
-    if (!fromIso) fromIso = start.toISOString()
-    if (!toIso) toIso = end.toISOString()
-    const res = await fetchWithAuth(`/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange==='today'?'hour':'day'}`)
-    const data = await res.json().catch(()=>({}))
-    setTrend(Array.isArray(data.points) ? data.points : [])
-  }
-
-  useEffect(() => {
-    if (!autoRefresh) return
-    const id = setInterval(() => { loadTrend().catch(()=>{}) }, Math.max(10000, refreshMs))
-    return () => clearInterval(id)
-  }, [autoRefresh, refreshMs, trendRange, customFrom, customTo])
+      try {
+        await loadTrend()
+      } catch {
+        newWarnings.push('روند فروش قابل نمایش نیست.')
+      }
 
       if (oldStockRes.status === 'fulfilled') {
         setOldStock(oldStockRes.value)
