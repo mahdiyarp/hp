@@ -327,6 +327,26 @@ def api_audit_otp_batch_latest():
         raise HTTPException(status_code=404, detail='No batch found')
     return latest
 
+@app.get('/api/audit/otp/recent')
+def api_audit_otp_recent(limit: int = 20, session: Session = Depends(db.get_db)):
+    try:
+        entries = (
+            session.query(models.BlockchainEntry)
+            .filter(models.BlockchainEntry.entity_type=='otp')
+            .order_by(models.BlockchainEntry.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+        return [{
+            'id': e.id,
+            'entity_id': e.entity_id,
+            'action': e.action,
+            'ts': e.timestamp.isoformat(),
+            'data_hash': e.data_hash,
+        } for e in entries]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post('/api/apiir/sms/send')
 def apiir_sms_send(payload: dict = Body(...), session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
     """ارسال پیامک از طریق api.ir با نگاشت ساده‌ی ورودی فرانت به بدنه مورد انتظار سرویس.

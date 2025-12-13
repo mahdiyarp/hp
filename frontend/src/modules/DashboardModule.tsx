@@ -1,5 +1,42 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet } from '../services/api'
+function AuditStatusCard() {
+  const [latest, setLatest] = useState<{ ts:string; merkle_root:string; count:number } | null>(null)
+  const [chainOk, setChainOk] = useState<boolean | null>(null)
+  useEffect(() => {
+    (async () => {
+      try {
+        const batch = await apiGet<any>('/api/audit/otp/batch/latest')
+        setLatest({ ts: batch.ts, merkle_root: batch.merkle_root, count: batch.count })
+        const entryIds: number[] = Array.isArray(batch.entry_ids) ? batch.entry_ids : []
+        if (entryIds.length > 0) {
+          try {
+            const proof = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`)
+            setChainOk(Boolean(proof?.chain_is_valid))
+          } catch { setChainOk(null) }
+        }
+      } catch {
+        setLatest(null)
+        setChainOk(null)
+      }
+    })()
+  }, [])
+  return (
+    <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
+      <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
+      {latest ? (
+        <div className="mt-2 text-xs space-y-1">
+          <div>آخرین Batch: {new Date(latest.ts).toLocaleString()}</div>
+          <div>تعداد رویدادها: {latest.count}</div>
+          <div className="break-all">مرکل‌روت: {latest.merkle_root}</div>
+          <div>اعتبار زنجیره: {chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر' : 'نامعتبر')}</div>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs">Batch موجود نیست</div>
+      )}
+    </div>
+  )
+}
 import { fetchWithAuth } from '../services/auth'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
@@ -279,6 +316,7 @@ export default function DashboardModule({
   return (
     <div className="space-y-4">
       <div className="space-y-8">
+      <AuditStatusCard />
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
           {error}

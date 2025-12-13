@@ -18,6 +18,7 @@ export default function AuditModule() {
   const [entityId, setEntityId] = useState<string>('09123506545')
   const [entryId, setEntryId] = useState<number>(0)
   const [proof, setProof] = useState<any | null>(null)
+  const [recent, setRecent] = useState<Array<{id:number; entity_id:string; action:string; ts:string}> | null>(null)
 
   async function loadLatest() {
     setError(null)
@@ -57,8 +58,37 @@ export default function AuditModule() {
     }
   }
 
+  async function buildBatchAndProof() {
+    setLoading(true)
+    setError(null)
+    setProof(null)
+    try {
+      const batch = await apiPost<MerkleBatch>(`/api/audit/otp/batch/build?limit=${limit}`)
+      setLatest(batch)
+      const firstId = Array.isArray(batch.entry_ids) && batch.entry_ids.length > 0 ? batch.entry_ids[0] : 0
+      if (firstId) {
+        setEntityId((recent && recent[0]?.entity_id) || entityId)
+        setEntryId(firstId)
+        const data = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent((recent && recent[0]?.entity_id) || entityId)}&entry_id=${firstId}`)
+        setProof(data)
+      }
+    } catch (e: any) {
+      setError(e?.message || 'Batch+Proof failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadLatest()
+    ;(async () => {
+      try {
+        const data = await apiGet<Array<{id:number; entity_id:string; action:string; ts:string}>>('/api/audit/otp/recent?limit=20')
+        setRecent(data)
+      } catch {
+        setRecent(null)
+      }
+    })()
   }, [])
 
   return (
@@ -84,6 +114,7 @@ export default function AuditModule() {
             {loading ? 'در حال ساخت...' : 'ساخت Batch'}
           </button>
           <button className={retroButton} onClick={loadLatest} disabled={loading}>آخرین Batch</button>
+          <button className={`${retroButton} !bg-[#2563eb] !text-white`} onClick={buildBatchAndProof} disabled={loading}>Batch + Proof</button>
         </div>
 
         {error && (
@@ -101,6 +132,23 @@ export default function AuditModule() {
             {latest.entry_ids?.length ? (
               <div className="mt-2 text-xs">IDs اخیر: {latest.entry_ids.slice(0, 10).join(', ')}{latest.entry_ids.length > 10 ? ' ...' : ''}</div>
             ) : null}
+          </div>
+        )}
+
+        {recent && recent.length > 0 && (
+          <div className="mt-4">
+            <h4 className={retroHeading}>رویدادهای اخیر OTP</h4>
+            <div className="text-xs space-y-1">
+              {recent.map(r => (
+                <div key={r.id} className="flex items-center gap-2">
+                  <span>#{r.id}</span>
+                  <span>{r.entity_id}</span>
+                  <span>{r.action}</span>
+                  <span>{new Date(r.ts).toLocaleString()}</span>
+                  <button className={`${retroButton} !text-xs`} onClick={() => { setEntityId(r.entity_id); setEntryId(r.id); }}>انتخاب برای Proof</button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
