@@ -121,7 +121,13 @@ See `docs/architecture.md` for module breakdown and roadmap.
 
 ## Headless Smoke Test
 - Run locally: `npm run smoke` (expects frontend at `http://localhost:3000`).
+- CI workflow: see [.github/workflows/smoke.yml](.github/workflows/smoke.yml) for automated headless run on push/PR.
 - CI artifacts: console log and screenshot saved under `workspace/logs/`.
+
+## Audit Status Card
+- The dashboard includes an audit status card rendering latest OTP audit batch: timestamp, event count, and Merkle root.
+- A quick chain validity indicator is derived from a sample Merkle proof.
+- File: [frontend/src/modules/DashboardModule.tsx](frontend/src/modules/DashboardModule.tsx)
 
 ## Financial Year (FY) UX
 - Active FY is selectable in the header via the FY selector.
