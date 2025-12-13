@@ -10,7 +10,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "smoke": "node scripts/headless_test.js",
-    "headless:test": "node scripts/headless_test.js http://localhost:3000"
+    "headless:test": "node scripts/headless_test.js http://localhost:3000",
+    "headless:audit": "node scripts/headless_audit_card.js http://localhost:3000"
   },
   "repository": {
     "type": "git",
