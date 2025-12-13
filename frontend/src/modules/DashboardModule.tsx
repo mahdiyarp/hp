@@ -24,6 +24,8 @@ function AuditStatusCard() {
   }
   useEffect(() => {
     refreshStatus()
+    const id = setInterval(refreshStatus, 30000)
+    return () => clearInterval(id)
   }, [])
   async function buildBatch() {
     if (busy) return

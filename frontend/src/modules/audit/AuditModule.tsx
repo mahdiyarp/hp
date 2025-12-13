@@ -97,7 +97,15 @@ export default function AuditModule() {
           <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold">ساخت Batch مرکل</div>
-              <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={async()=>{ try { await apiGet('/api/audit/otp/batch/build'); alert('Batch ساخته شد'); } catch(e){ alert('خطا در ساخت Batch'); } }}>
+              <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={async()=>{
+                const ev = (type: 'success'|'error', msg: string) => window.dispatchEvent(new CustomEvent('toast', { detail: { type, message: msg } }))
+                try {
+                  await apiGet('/api/audit/otp/batch/build')
+                  ev('success','Batch ساخته شد')
+                } catch(e){
+                  ev('error','خطا در ساخت Batch')
+                }
+              }}>
                 ساخت Batch
               </button>
             </div>
