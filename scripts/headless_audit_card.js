@@ -22,6 +22,15 @@ async function run() {
     if (verifyBtn) await verifyBtn.click()
     await page.waitForTimeout(2000)
   } catch {}
+  // If batch is not present, trigger build and wait
+  try {
+    await page.click('text=ساخت Batch', { timeout: 3000 })
+    await page.waitForTimeout(1500)
+  } catch {}
+  // Wait for merkle root text to appear
+  try {
+    await page.waitForSelector('text=مرکل‌روت', { timeout: 10000 })
+  } catch {}
   // wait up to 10s for audit card text to appear
   let visible = false
   try {

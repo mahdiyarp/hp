@@ -42,7 +42,10 @@ function AuditStatusCard() {
           <div>آخرین Batch: {new Date(latest.ts).toLocaleString()}</div>
           <div>تعداد رویدادها: {latest.count}</div>
           <div className="break-all">مرکل‌روت: {latest.merkle_root}</div>
-          <div>اعتبار زنجیره: {chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر' : 'نامعتبر')}</div>
+          <div className="flex items-center gap-2">
+            <span>اعتبار زنجیره:</span>
+            <span className={`${chainOk === null ? 'bg-[#f3f4f6] text-[#374151]' : (chainOk ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fee2e2] text-[#7f1d1d]')} px-2 py-0.5 rounded-sm border`}>{chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر ✅' : 'نامعتبر ❌')}</span>
+          </div>
         </div>
       ) : (
         <div className="mt-2 text-xs flex items-center gap-3">
