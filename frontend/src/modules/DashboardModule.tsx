@@ -3,24 +3,37 @@ import { apiGet } from '../services/api'
 function AuditStatusCard() {
   const [latest, setLatest] = useState<{ ts:string; merkle_root:string; count:number } | null>(null)
   const [chainOk, setChainOk] = useState<boolean | null>(null)
-  useEffect(() => {
-    (async () => {
-      try {
-        const batch = await apiGet<any>('/api/audit/otp/batch/latest')
-        setLatest({ ts: batch.ts, merkle_root: batch.merkle_root, count: batch.count })
-        const entryIds: number[] = Array.isArray(batch.entry_ids) ? batch.entry_ids : []
-        if (entryIds.length > 0) {
-          try {
-            const proof = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`)
-            setChainOk(Boolean(proof?.chain_is_valid))
-          } catch { setChainOk(null) }
-        }
-      } catch {
-        setLatest(null)
+  const [busy, setBusy] = useState<boolean>(false)
+  async function refreshStatus() {
+    try {
+      const batch = await apiGet<any>('/api/audit/otp/batch/latest')
+      setLatest({ ts: batch.ts, merkle_root: batch.merkle_root, count: batch.count })
+      const entryIds: number[] = Array.isArray(batch.entry_ids) ? batch.entry_ids : []
+      if (entryIds.length > 0) {
+        try {
+          const proof = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`)
+          setChainOk(Boolean(proof?.chain_is_valid))
+        } catch { setChainOk(null) }
+      } else {
         setChainOk(null)
       }
-    })()
+    } catch {
+      setLatest(null)
+      setChainOk(null)
+    }
+  }
+  useEffect(() => {
+    refreshStatus()
   }, [])
+  async function buildBatch() {
+    if (busy) return
+    setBusy(true)
+    try {
+      await apiGet<any>('/api/audit/otp/batch/build')
+      await refreshStatus()
+    } catch {}
+    setBusy(false)
+  }
   return (
     <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
       <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
@@ -32,7 +45,12 @@ function AuditStatusCard() {
           <div>اعتبار زنجیره: {chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر' : 'نامعتبر')}</div>
         </div>
       ) : (
-        <div className="mt-2 text-xs">Batch موجود نیست</div>
+        <div className="mt-2 text-xs flex items-center gap-3">
+          <span>Batch موجود نیست</span>
+          <button className="border border-[#111827] bg-white px-2 py-1 text-[11px] disabled:opacity-50" onClick={buildBatch} disabled={busy}>
+            {busy ? 'در حال ساخت…' : 'ساخت Batch'}
+          </button>
+        </div>
       )}
     </div>
   )
