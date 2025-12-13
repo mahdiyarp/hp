@@ -61,6 +61,7 @@ export default function App() {
   const { user, modules: userModules, logout } = useAuth()
   const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
   const [orgFeatures, setOrgFeatures] = useState<string[] | null>(null)
+  const [toast, setToast] = useState<{ type:'success'|'error'|'info'; message:string }|null>(null)
 
   async function syncTime() {
     const before = new Date()
@@ -156,6 +157,20 @@ export default function App() {
     }
     window.addEventListener('api-error', handler)
     return () => window.removeEventListener('api-error', handler)
+  }, [])
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent
+      const d = ce.detail || {}
+      if (typeof d?.message === 'string') {
+        setToast({ type: (d.type as any) || 'info', message: String(d.message) })
+        const id = setTimeout(() => setToast(null), 3000)
+        return () => clearTimeout(id)
+      }
+    }
+    window.addEventListener('toast', handler as EventListener)
+    return () => window.removeEventListener('toast', handler as EventListener)
   }, [])
 
   useEffect(() => {
@@ -267,6 +282,11 @@ export default function App() {
             onLogout={logout}
             orgFeatures={orgFeatures || undefined}
           />
+          {toast && (
+            <div className={`fixed bottom-4 left-4 z-50 px-3 py-2 text-sm border-2 shadow-[4px_4px_0_#111827] ${toast.type==='success' ? 'bg-[#d1fae5] text-[#065f46] border-[#065f46]' : toast.type==='error' ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#7f1d1d]' : 'bg-[#f3f4f6] text-[#374151] border-[#374151]'}`}>
+              {toast.message}
+            </div>
+          )}
           {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
         </>
       </FYProvider>
