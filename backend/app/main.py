@@ -31,7 +31,11 @@ from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, read_sms_history, log_sms_event, list_smsir_lines
 from sqlalchemy import select
-from .ai_assistant import run_dev_assistant_analysis
+try:
+    from .ai_assistant import run_dev_assistant_analysis
+except Exception:
+    def run_dev_assistant_analysis(*args, **kwargs):
+        return {"ok": True, "message": "assistant disabled in this build"}
 from fastapi import Body
 from .blockchain import export_merkle_proof, build_merkle_batch, get_latest_merkle_batch
 

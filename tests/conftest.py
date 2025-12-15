@@ -7,14 +7,14 @@ try:
 except Exception:
     DB = None
 
-@pytest.fixture(scope='session', autouse=True)
-def _clean_financial_years_once():
+@pytest.fixture(scope='function', autouse=True)
+def _clean_financial_years_before_each_test():
     if DB is None:
         return
     try:
         with DB.engine.connect() as conn:
-            # Best-effort cleanup to avoid unique violations on name
-            conn.execute(text("DELETE FROM financial_years"))
+            # Best-effort cleanup to avoid unique violations on common test names
+            conn.execute(text("DELETE FROM financial_years WHERE name LIKE 'FY-%'"))
             conn.commit()
     except Exception:
         # Ignore if DB or table not available in certain test modes
