@@ -41,6 +41,26 @@ Frontend app: `http://localhost:3000`
 docker compose logs -f backend
 ```
 
+### OTP از طریق PApi (حالت dev)
+
+- اندپوینت‌های جدید:
+	- `POST /api/papi/otp/start` → شروع OTP (در dev/دمو بدون نیاز به API Key با بای‌پس امن فعال می‌شود)
+	- `POST /api/papi/otp/verify` → تایید OTP و صدور توکن
+- فلگ‌های محیطی:
+	- `DEV_FEATURES_ENABLED=true` یا `ENVIRONMENT=development|dev|local`
+	- `DEMO_ALLOW_OTP_NO_SMS=true` برای اجازه دادن به ادامهٔ جریان حتی در صورت شکست ارسال SMS
+- مثال سریع (PowerShell):
+
+```powershell
+$payload = @{ mobile = '09123456789' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/api/papi/otp/start -Method Post -ContentType 'application/json' -Body $payload
+
+# استفاده از کد دیباگ برگشتی در پاسخ start
+$code = '123456'
+$verify = @{ mobile = '09123456789'; code = $code } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/api/papi/otp/verify -Method Post -ContentType 'application/json' -Body $verify
+```
+
 ## Dev Quickstart (Windows)
 
 1. Install Docker Desktop and ensure Compose is available.

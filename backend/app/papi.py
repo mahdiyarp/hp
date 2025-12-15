@@ -46,12 +46,25 @@ def send_sms(session: Session, to: str, message: str, line_number: Optional[str]
     provider = (cfg.get('provider') or 'papi.ir').lower()
     api_key = cfg.get('api_key')
     sender = (line_number or cfg.get('sender') or '').strip()
+    # Dev fallback: if running in dev and API key is missing, simulate send
+    try:
+        DEV_ENABLED = str(os.getenv('DEV_FEATURES_ENABLED', '')).lower() in ('1', 'true', 'yes', 'dev') or \
+                      str(os.getenv('ENVIRONMENT', '')).lower() in ('dev', 'development', 'local')
+    except Exception:
+        DEV_ENABLED = False
     if provider in ('mock','demo'):
         try:
             log_event({'provider':'papi','phase':'mock','status':200,'payload':{'to':to,'message':message,'sender':sender}})
         except Exception: pass
         return True, 'PApi mock sent'
     if not api_key:
+        # In development environments, allow OTP and SMS flows without a real API key
+        if DEV_ENABLED:
+            try:
+                log_event({'provider':'papi','phase':'dev-fallback','status':200,'payload':{'to':to,'message':message,'sender':sender}})
+            except Exception:
+                pass
+            return True, 'PApi mock sent (dev fallback)'
         return False, 'PApi API key missing'
     # Minimal PApi send per p.api.ir docs (assumed structure)
     headers = { 'Authorization': f'Bearer {api_key}', 'Content-Type':'application/json', 'Accept':'application/json' }
@@ -99,6 +112,21 @@ def start_otp(session: Session, mobile: str, code: Optional[str] = None) -> Tupl
     }
     # Send the actual code in the message for demo/testing
     ok, info = send_sms(session, mobile, f"OTP: {code}", None)
+    # If SMS failed but demo/dev allows bypass, proceed
+    try:
+        DEV_ENABLED = str(os.getenv('DEV_FEATURES_ENABLED', '')).lower() in ('1', 'true', 'yes', 'dev') or \
+                      str(os.getenv('ENVIRONMENT', '')).lower() in ('dev', 'development', 'local')
+        DEMO_ALLOW = str(os.getenv('DEMO_ALLOW_OTP_NO_SMS', '')).lower() in ('1','true','yes')
+    except Exception:
+        DEV_ENABLED = False
+        DEMO_ALLOW = False
+    if not ok and (DEV_ENABLED or DEMO_ALLOW):
+        ok = True
+        info = 'OTP started (dev bypass)'
+        try:
+            log_event({'provider':'papi','phase':'otp-start-bypass','status':200,'payload':{'mobile':mobile}})
+        except Exception:
+            pass
     try:
         log_event({'provider':'papi','phase':'otp-start','status':200 if ok else 400,'payload':{'mobile':mobile},'resp':info})
     except Exception: pass
