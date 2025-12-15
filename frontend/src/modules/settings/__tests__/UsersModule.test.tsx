@@ -35,11 +35,11 @@ describe('UsersModule', () => {
   it('renders UsersModule headings', async () => {
     render(<UsersModule />, { wrapper: Wrapper as any })
     expect(await screen.findByText(/کاربران و دسترسی‌ها/)).toBeInTheDocument()
-    expect(screen.getByText(/کاربران/)).toBeInTheDocument()
+    expect(screen.getByText(/فهرست کاربران، نقش، وضعیت و دسترسی‌ها/)).toBeInTheDocument()
   })
 
   it('can create a new user', async () => {
-    const { default: api } = await import('../../../services/api')
+    const api = await import('../../../services/api')
     const apiPost = (api as any).apiPost as ReturnType<typeof vi.fn>
 
     render(<UsersModule />, { wrapper: Wrapper as any })
