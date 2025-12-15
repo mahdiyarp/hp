@@ -8,6 +8,7 @@ import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
 import AccessControlModule from './settings/AccessControlModule'
 import BanksModule from './settings/BanksModule'
+import UsersModule from './settings/users/UsersModule'
 import DevConsole from './developer/DevConsole'
 import SmsPanel from './sms/SmsPanel'
 import PApiPanel from './PApiPanel'
@@ -132,6 +133,15 @@ export const modules: ModuleDefinition[] = [
     badge: 'ADMIN',
     // نمایش فقط برای کاربر دولوپر NFT
     hidden: !isDeveloperMobileUser(),
+    feature: 'settings',
+  },
+  {
+    id: 'settings-users',
+    label: 'کاربران',
+    description: 'مدیریت متمرکز کاربران و وضعیت تأیید آنها',
+    component: UsersModule,
+    badge: 'USERS',
+    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
   },
   {

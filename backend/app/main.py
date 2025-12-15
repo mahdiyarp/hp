@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 import jdatetime
 from typing import List, Optional
 import json
+import re
 import requests
 import os
 
@@ -184,31 +185,57 @@ def api_papi_send(payload: dict, session: Session = Depends(db.get_db), current_
         raise HTTPException(status_code=502, detail=info)
     return {'success': True, 'detail': info}
 
+@app.get('/api/papi/status/public')
+def api_papi_status_public(session: Session = Depends(db.get_db)):
+    """وضعیت عمومی PApi/api.ir بدون افشای کلید؛ برای صفحه ورود و بررسی پیش‌نیازها."""
+    try:
+        from .papi import get_config_summary, get_active_otp_sessions_count
+        summary = get_config_summary(session)
+        summary['active_otp_sessions'] = get_active_otp_sessions_count(datetime.utcnow())
+        summary['ready_for_otp'] = bool(summary.get('has_api_key') and summary.get('has_sender'))
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post('/api/papi/otp/start')
 def api_papi_otp_start(payload: dict, session: Session = Depends(db.get_db)):
     mobile = str((payload or {}).get('mobile') or '').strip()
     code = str((payload or {}).get('code') or '').strip() or None
     if not mobile:
         raise HTTPException(status_code=400, detail='mobile الزامی است')
+    if not re.match(r'^0\d{10}$', mobile):
+        raise HTTPException(status_code=400, detail='شماره موبایل نامعتبر است')
+    if code is not None and not re.match(r'^\d{4,6}$', code):
+        raise HTTPException(status_code=400, detail='کد OTP نامعتبر است (۴ تا ۶ رقم)')
+    try:
+        from .papi import get_config_summary
+        cfg = get_config_summary(session)
+        if not cfg.get('has_api_key') or not cfg.get('has_sender'):
+            raise HTTPException(status_code=503, detail='ارسال OTP بدون کلید api.ir و خط ارسال ممکن نیست')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail='خطا در بررسی وضعیت api.ir')
     # If client provided a code (demo/testing), use it to initialize session
     from .papi import start_otp as _start
     from .blockchain import create_blockchain_entry, hash_data
-    ok, info = _start(session, mobile, code)
+    ok, info, meta = _start(session, mobile, code)
     try:
         create_blockchain_entry(
             session,
             entity_type='otp',
             entity_id=mobile,
             action='request',
-            data={'mobile': mobile, 'ok': ok, 'info': info},
+            data={'mobile': mobile, 'ok': ok, 'info': info, 'meta': meta},
             user_id=None,
         )
     except Exception:
         pass
     if not ok:
-        raise HTTPException(status_code=502, detail=info)
+        status = 429 if (meta or {}).get('lock_reason') in ('otp_rate', 'otp_attempts') else 502
+        raise HTTPException(status_code=status, detail={'message': info, 'meta': meta})
     # In dev mode, include debug info (current code) to ease testing
-    resp = {'success': True, 'detail': info}
+    resp = {'success': True, 'detail': info, 'meta': meta}
     try:
         from .papi import get_otp_debug
         dbg = get_otp_debug(mobile)
@@ -224,22 +251,27 @@ def api_papi_otp_verify(payload: dict, session: Session = Depends(db.get_db)):
     code = str((payload or {}).get('code') or '').strip()
     if not mobile or not code:
         raise HTTPException(status_code=400, detail='mobile و code الزامی است')
+    if not re.match(r'^0\d{10}$', mobile):
+        raise HTTPException(status_code=400, detail='شماره موبایل نامعتبر است')
+    if not re.match(r'^\d{4,6}$', code):
+        raise HTTPException(status_code=400, detail='کد OTP نامعتبر است (۴ تا ۶ رقم)')
     from .papi import verify_otp as _verify
     from .blockchain import create_blockchain_entry
-    ok, info = _verify(session, mobile, code)
+    ok, info, meta = _verify(session, mobile, code)
     try:
         create_blockchain_entry(
             session,
             entity_type='otp',
             entity_id=mobile,
             action='verify' if ok else 'verify_fail',
-            data={'mobile': mobile, 'ok': ok},
+            data={'mobile': mobile, 'ok': ok, 'meta': meta},
             user_id=None,
         )
     except Exception:
         pass
     if not ok:
-        raise HTTPException(status_code=400, detail=info)
+        status = 429 if (meta or {}).get('lock_reason') in ('otp_attempts', 'otp_rate') else 400
+        raise HTTPException(status_code=status, detail={'message': info, 'meta': meta})
     # ایجاد توکن ورود پس از تایید OTP
     user = session.query(models.User).filter(models.User.mobile==mobile).first()
     if not user:
@@ -251,7 +283,7 @@ def api_papi_otp_verify(payload: dict, session: Session = Depends(db.get_db)):
     access = security.create_access_token(user.username, timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
     refresh = security.create_refresh_token(user.username, timedelta(days=security.REFRESH_TOKEN_EXPIRE_DAYS))
     crud.set_refresh_token(session, user, refresh)
-    return {'success': True, 'detail': info, 'access_token': access, 'refresh_token': refresh}
+    return {'success': True, 'detail': info, 'access_token': access, 'refresh_token': refresh, 'meta': meta}
 
 @app.api_route('/api/papi/proxy{full_path:path}', methods=['GET','POST','PUT','DELETE'])
 async def api_papi_proxy(full_path: str, request: Request, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
@@ -630,6 +662,22 @@ def dev_set_papi_base_path(payload: dict, session: Session = Depends(db.get_db),
             s.close()
         except Exception:
             pass
+
+@app.get('/api/dev/papi/status')
+def dev_get_papi_status(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+    """Dev-only: گزارش وضعیت تنظیمات api.ir/PApi برای بررسی وابستگی‌ها."""
+    ensure_dev_enabled()
+    if str(getattr(current_user, 'mobile', '')) not in ('09123506545',) and str(getattr(current_user, 'username','')) != 'developer':
+        raise HTTPException(status_code=403, detail='forbidden')
+    try:
+        from .papi import get_config_summary, get_active_otp_sessions_count
+        summary = get_config_summary(session)
+        summary['active_otp_sessions'] = get_active_otp_sessions_count(datetime.utcnow())
+        return summary
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 @app.get('/api/dev/papi/otp/debug')
 def dev_get_papi_otp_debug(mobile: str, session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
     """Dev-only: مشاهده کد OTP جاری برای شماره ورودی."""
@@ -879,22 +927,22 @@ def sales_trend(from_iso: Optional[str] = None, to_iso: Optional[str] = None, bu
             raise HTTPException(status_code=502, detail=str(res))
         return {'items': res}
 
-        # ==================== Dev SMS Config Check (no secrets) ====================
+    # ==================== Dev SMS Config Check (no secrets) ====================
 
-        @app.get('/api/dev/sms/config-check')
-        def dev_sms_config_check(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
-            """Report presence of SMS config keys without revealing secrets."""
-            try:
-                provider = crud.get_system_setting(session, 'sms_provider')
-                api_key = crud.get_system_setting(session, 'sms_api_key')
-                sender = crud.get_system_setting(session, 'sms_sender') or crud.get_system_setting(session, 'smsir_line_number')
-                return {
-                    'provider_present': bool(provider and (provider.value or '').strip()),
-                    'api_key_present': bool(api_key and (api_key.value or '').strip()),
-                    'sender_present': bool(sender and (sender.value or '').strip())
-                }
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=str(e))
+    @app.get('/api/dev/sms/config-check')
+    def dev_sms_config_check(session: Session = Depends(db.get_db), current_user: models.User = Depends(get_current_user)):
+        """Report presence of SMS config keys without revealing secrets."""
+        try:
+            provider = crud.get_system_setting(session, 'sms_provider')
+            api_key = crud.get_system_setting(session, 'sms_api_key')
+            sender = crud.get_system_setting(session, 'sms_sender') or crud.get_system_setting(session, 'smsir_line_number')
+            return {
+                'provider_present': bool(provider and (provider.value or '').strip()),
+                'api_key_present': bool(api_key and (api_key.value or '').strip()),
+                'sender_present': bool(sender and (sender.value or '').strip())
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== Utility & Integration Endpoints ====================
 

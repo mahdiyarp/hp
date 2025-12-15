@@ -12,6 +12,8 @@ PAPI_HISTORY = os.path.join(HISTORY_DIR, 'papi.jsonl')
 
 _otp_sessions: Dict[str, Dict] = {}
 _otp_rate: Dict[str, List[datetime]] = {}
+# تعداد تلاش‌های ناموفق برای هر موبایل جهت جلوگیری از حملات جستجوی کد
+_otp_attempts: Dict[str, Dict] = {}
 
 def _hash_code(code: str, salt: Optional[str] = None) -> str:
     import hashlib, os
@@ -40,6 +42,41 @@ def _get_config(session: Session) -> Dict:
         cfg['api_key'] = decrypt_value(api_key.value) if api_key.is_secret else api_key.value
     cfg['sender'] = (sender.value if sender else '')
     return cfg
+
+
+def get_config_summary(session: Session) -> Dict:
+    """Return a non-sensitive snapshot of the current PApi/api.ir configuration."""
+    cfg = _get_config(session)
+    base_path = (
+        session.query(models.SystemSettings)
+        .filter(models.SystemSettings.key == 'papi_base_path')
+        .order_by(models.SystemSettings.updated_at.desc())
+        .first()
+    )
+    return {
+        'provider': (cfg.get('provider') or 'papi.ir'),
+        'has_api_key': bool(cfg.get('api_key')),
+        'sender': (cfg.get('sender') or ''),
+        'has_sender': bool(cfg.get('sender')),
+        'base_path': str(base_path.value).strip() if base_path and base_path.value else None,
+    }
+
+
+def get_active_otp_sessions_count(now: Optional[datetime] = None) -> int:
+    """Count active OTP sessions that are not expired and not used."""
+    now = now or datetime.utcnow()
+    try:
+        return len([
+            1
+            for rec in _otp_sessions.values()
+            if rec
+            and not rec.get('used')
+            and rec.get('expires')
+            and isinstance(rec.get('expires'), datetime)
+            and now < rec['expires']
+        ])
+    except Exception:
+        return 0
 
 def send_sms(session: Session, to: str, message: str, line_number: Optional[str] = None) -> Tuple[bool, str]:
     cfg = _get_config(session)
@@ -74,18 +111,32 @@ def send_sms(session: Session, to: str, message: str, line_number: Optional[str]
     except Exception as e:
         return False, f"PApi exception: {str(e)}"
 
-def start_otp(session: Session, mobile: str, code: Optional[str] = None) -> Tuple[bool, str]:
+def start_otp(session: Session, mobile: str, code: Optional[str] = None) -> Tuple[bool, str, Dict]:
     # Rate limiting: max 3 requests in 5 minutes per mobile
     now = datetime.utcnow()
     window = now - timedelta(minutes=5)
     hist = _otp_rate.get(mobile, [])
     hist = [t for t in hist if t > window]
     if len(hist) >= 3:
+        retry_after = max(30, int(((min(hist) + timedelta(minutes=5)) - now).total_seconds())) if hist else 300
         try:
-            log_event({'provider':'papi','phase':'otp-rate-limit','status':429,'payload':{'mobile':mobile}})
+            log_event({'provider':'papi','phase':'otp-rate-limit','status':429,'payload':{'mobile':mobile,'retry_after':retry_after}})
         except Exception:
             pass
-        return False, 'Rate limited. Try later.'
+        return False, f'به دلیل تکرار درخواست، ارسال مجدد کد تا {max(1, retry_after//60)} دقیقه محدود شد', {
+            'retry_after_seconds': retry_after,
+            'lock_reason': 'otp_rate',
+        }
+    # Respect existing lockouts to avoid bypassing failed-attempt rules
+    attempts_info = _otp_attempts.get(mobile) or {'attempts': 0, 'locked_until': None}
+    locked_until = attempts_info.get('locked_until')
+    if locked_until and isinstance(locked_until, datetime) and now < locked_until:
+        remaining = int((locked_until - now).total_seconds() // 60) + 1
+        return False, f'به دلیل تلاش ناموفق، ارسال مجدد کد تا {remaining} دقیقه مسدود است', {
+            'locked_until': locked_until.isoformat() + 'Z',
+            'lock_reason': 'otp_attempts',
+            'lock_remaining_minutes': remaining,
+        }
     hist.append(now)
     _otp_rate[mobile] = hist
 
@@ -97,29 +148,63 @@ def start_otp(session: Session, mobile: str, code: Optional[str] = None) -> Tupl
         'expires': now + timedelta(minutes=3),  # short-lived
         'used': False,
     }
+    # Reset failed-attempts window on each new issuance
+    _otp_attempts[mobile] = {'attempts': 0, 'locked_until': None}
     # Send the actual code in the message for demo/testing
     ok, info = send_sms(session, mobile, f"OTP: {code}", None)
     try:
         log_event({'provider':'papi','phase':'otp-start','status':200 if ok else 400,'payload':{'mobile':mobile},'resp':info})
     except Exception: pass
-    return ok, info
+    return ok, info, {'expires_at': (_otp_sessions[mobile]['expires'].isoformat() + 'Z')}
 
-def verify_otp(session: Session, mobile: str, code: str) -> Tuple[bool, str]:
+def verify_otp(session: Session, mobile: str, code: str) -> Tuple[bool, str, Dict]:
     rec = _otp_sessions.get(mobile)
+    attempts_info = _otp_attempts.get(mobile) or {'attempts': 0, 'locked_until': None}
+    now = datetime.utcnow()
+
+    locked_until = attempts_info.get('locked_until')
+    if locked_until and isinstance(locked_until, datetime) and now < locked_until:
+        remaining = int((locked_until - now).total_seconds() // 60) + 1
+        return False, f'به دلیل تلاش ناموفق، ورود موقتاً مسدود است؛ {remaining} دقیقه بعد تلاش کنید', {
+            'locked_until': locked_until.isoformat() + 'Z',
+            'lock_remaining_minutes': remaining,
+            'lock_reason': 'otp_attempts',
+        }
+
     if not rec:
-        return False, 'OTP not found'
+        attempts_info['attempts'] = attempts_info.get('attempts', 0) + 1
+        _otp_attempts[mobile] = attempts_info
+        return False, 'کد تایید یافت نشد؛ لطفاً دوباره درخواست دهید', {'remaining_attempts': max(0, 5 - attempts_info['attempts'])}
     if rec.get('used'):
-        return False, 'OTP already used'
-    if datetime.utcnow() > rec['expires']:
-        return False, 'OTP expired'
+        attempts_info['attempts'] = attempts_info.get('attempts', 0) + 1
+        _otp_attempts[mobile] = attempts_info
+        return False, 'این کد قبلاً استفاده شده است؛ کد جدید دریافت کنید', {'remaining_attempts': max(0, 5 - attempts_info['attempts'])}
+    if now > rec['expires']:
+        attempts_info['attempts'] = attempts_info.get('attempts', 0) + 1
+        _otp_attempts[mobile] = attempts_info
+        return False, 'کد منقضی شده است؛ کد جدید دریافت کنید', {'remaining_attempts': max(0, 5 - attempts_info['attempts'])}
     if _hash_code(code) != rec.get('code_hash'):
-        return False, 'Invalid OTP'
+        attempts_info['attempts'] = attempts_info.get('attempts', 0) + 1
+        remaining_attempts = max(0, 5 - attempts_info['attempts'])
+        if attempts_info['attempts'] >= 5:
+            attempts_info['locked_until'] = now + timedelta(minutes=5)
+            _otp_attempts[mobile] = attempts_info
+            return False, 'کد نادرست؛ به دلیل تکرار خطا برای ۵ دقیقه قفل شد', {
+                'locked_until': attempts_info['locked_until'].isoformat() + 'Z',
+                'remaining_attempts': 0,
+                'lock_reason': 'otp_attempts',
+                'lock_remaining_minutes': 5,
+            }
+        _otp_attempts[mobile] = attempts_info
+        return False, f'کد نادرست؛ {remaining_attempts} تلاش دیگر مجاز است', {'remaining_attempts': remaining_attempts}
+
     rec['used'] = True
     _otp_sessions[mobile] = rec
+    _otp_attempts[mobile] = {'attempts': 0, 'locked_until': None}
     try:
         log_event({'provider':'papi','phase':'otp-verify','status':200,'payload':{'mobile':mobile}})
     except Exception: pass
-    return True, 'OTP verified'
+    return True, 'OTP verified', {'remaining_attempts': 5}
 
 def get_otp_debug(mobile: str) -> Dict:
     rec = _otp_sessions.get(mobile)

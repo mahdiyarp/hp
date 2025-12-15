@@ -1,11 +1,40 @@
 import { fetchWithAuth } from './auth'
 
+async function handleResponse(res: Response) {
+  if (res.ok) return res.json()
+  let rawText = ''
+  try {
+    rawText = await res.text()
+    const parsed = rawText ? JSON.parse(rawText) : null
+    const detail = (parsed && (parsed.detail || parsed.message))
+    if (typeof detail === 'string' && detail.trim()) {
+      const err = new Error(detail)
+      if (parsed && typeof parsed === 'object' && parsed.meta) {
+        ;(err as any).meta = parsed.meta
+      }
+      throw err
+    }
+    if (detail && typeof detail === 'object') {
+      const err = new Error(detail.message || 'خطای نامشخص')
+      if (detail.meta) {
+        ;(err as any).meta = detail.meta
+      }
+      throw err
+    }
+    if (parsed && typeof parsed === 'object') {
+      throw new Error(JSON.stringify(parsed))
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message) throw err
+  }
+  throw new Error(rawText || 'خطا در ارتباط با سرویس پیامک')
+}
+
 export async function papiGet(path: string, params?: Record<string, any>) {
   const q = new URLSearchParams()
   Object.entries(params || {}).forEach(([k,v]) => { if (v !== undefined && v !== null) q.append(k, String(v)) })
   const res = await fetchWithAuth(`/api/papi/proxy${path}?${q.toString()}`)
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return handleResponse(res)
 }
 
 export async function papiPost(path: string, body?: any) {
@@ -14,8 +43,7 @@ export async function papiPost(path: string, body?: any) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {}),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return handleResponse(res)
 }
 
 export const PApi = {
@@ -25,7 +53,7 @@ export const PApi = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
+  }).then(handleResponse),
   // api.ir OTP helpers (direct backend routes)
   smsOtp: (code: string, mobile: string, template?: number) => {
     const normalizedCode = String(code).trim()
@@ -40,16 +68,22 @@ export const PApi = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: normalizedCode, mobile: normalizedMobile, template }),
-    }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); })
+    }).then(handleResponse)
   },
   callOtp: (code: string, number: string) => fetchWithAuth('/api/apiir/otp/call', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code, number }),
-  }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
-  startOtp: (mobile: string, code?: string) => fetchWithAuth('/api/papi/otp/start', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile, code })
-  }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
+  }).then(handleResponse),
+  startOtp: (mobile: string, code?: string) => {
+    const normalizedMobile = String(mobile).trim()
+    if (!/^0\d{10}$/.test(normalizedMobile)) {
+      return Promise.reject(new Error('شماره موبایل نامعتبر است'))
+    }
+    return fetchWithAuth('/api/papi/otp/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile: normalizedMobile, code })
+    }).then(handleResponse)
+  },
   verifyOtp: (mobile: string, code: string) => {
     const normalizedCode = String(code).trim()
     const normalizedMobile = String(mobile).trim()
@@ -61,12 +95,12 @@ export const PApi = {
     }
     return fetchWithAuth('/api/papi/otp/verify', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mobile: normalizedMobile, code: normalizedCode })
-    }).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); })
+    }).then(handleResponse)
   },
-  getLines: () => fetchWithAuth('/api/sms/lines').then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
+  getLines: () => fetchWithAuth('/api/sms/lines').then(handleResponse),
   addBlacklist: (mobile: string) => papiPost('/blacklist/add', { mobile }),
   removeBlacklist: (mobile: string) => papiPost('/blacklist/remove', { mobile }),
-  reportDaily: (dateIso: string) => fetchWithAuth(`/api/sms/metrics/daily?days=14`).then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
+  reportDaily: (dateIso: string) => fetchWithAuth(`/api/sms/metrics/daily?days=14`).then(handleResponse),
   // Dev-only provider switch (backend local route)
   setProvider: async (provider: 'mock'|'sms.ir'|'papi.ir') => {
     const res = await fetchWithAuth(`/api/dev/papi/provider`, {
@@ -74,8 +108,7 @@ export const PApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ provider }),
     })
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse(res)
   },
   setApiKey: async (apiKey: string) => {
     const res = await fetchWithAuth(`/api/dev/papi/api-key`, {
@@ -83,8 +116,15 @@ export const PApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ api_key: apiKey }),
     })
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse(res)
+  },
+  status: async () => {
+    const res = await fetchWithAuth(`/api/dev/papi/status`)
+    return handleResponse(res)
+  },
+  publicStatus: async () => {
+    const res = await fetch('/api/papi/status/public')
+    return handleResponse(res)
   },
   // Templates (CRUD) via proxy
   listTemplates: () => papiGet('/templates'),
@@ -107,3 +147,5 @@ export const createTemplate = PApi.createTemplate
 export const deleteTemplate = PApi.deleteTemplate
 export const getWebhooks = PApi.getWebhooks
 export const setWebhook = PApi.setWebhook
+export const getStatus = PApi.status
+export const getPublicStatus = PApi.publicStatus
