@@ -1364,9 +1364,20 @@ def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end
     method = (method or 'FIFO').upper()
     if method not in ('FIFO', 'LIFO'):
         method = 'FIFO'
+    # Normalize datetime awareness to avoid naive/aware comparison errors
+    try:
+        if start is not None and start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        if end is not None and end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
     # Fetch all finalized invoices up to `end` to build layers
     inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
-    if end:
+        if end:
         inv_q = inv_q.filter(models.Invoice.server_time <= end)
     invs = inv_q.all()
     if not invs:
