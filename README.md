@@ -16,6 +16,12 @@ docker compose up --build
 Backend swagger UI (once running): `http://localhost:8000/docs`  
 Frontend app: `http://localhost:3000`
 
+### Settings → Users (جدید)
+
+- مسیر جدید «تنظیمات → کاربران» تنها مرجع مدیریت کاربران است: ساخت/ویرایش کاربر، تعیین نقش و مشاهده مجوزها.
+- ذخیره مجوزها در حال حاضر «نقش‌محور» است (تغییرات روی نقش ذخیره می‌شود).
+- ترجیحات پیامکِ کاربر فقط خواندنی است؛ دکمهٔ ذخیرهٔ فردبه‌فرد تا افزوده‌شدن اندپوینت بک‌اند غیرفعال شده است.
+
 ## SMS.ir Setup & Testing
 
 - Backend SystemSettings keys (DB):
