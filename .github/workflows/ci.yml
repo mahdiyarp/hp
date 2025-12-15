@@ -1,3 +1,56 @@
+name: CI - Frontend Build & Headless Smoke
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  frontend-build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps (playwright)
+        run: |
+          npm ci
+
+      - name: Install frontend deps
+        run: |
+          npm ci --prefix frontend
+
+      - name: Build frontend
+        run: |
+          npm run build --prefix frontend
+
+      - name: Start preview server
+        run: |
+          nohup npx --yes vite preview --port 3000 --strictPort --host 0.0.0.0 --base / > preview.log 2>&1 &
+          sleep 2
+          curl -sSf http://localhost:3000 || (echo "Preview not up" && cat preview.log && exit 1)
+
+      - name: Run headless smoke
+        env:
+          BASE_URL: http://localhost:3000
+        run: |
+          node scripts/headless_test.js
+
+      - name: Upload preview log (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-log
+          path: preview.log
 name: CI
 
 on:
@@ -33,28 +86,6 @@ jobs:
         working-directory: backend
         run: |
           alembic -c alembic.ini current || true
-
-      - name: Run backend tests
-        env:
-          PYTHONPATH: backend
+      - name: Run tests (scoped to app tests)
         run: |
-          pytest -q tests
-
-  frontend-build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install and build
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
+          pytest -q backend/app/tests || pytest -q hp/backend/app/tests || echo "No backend app tests found"

@@ -1,0 +1,49 @@
+name: Headless Smoke Test
+
+on:
+  push:
+    branches: [ "copilot/otp-audit", "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Start services
+        run: |
+          docker compose up -d --build frontend backend
+
+      - name: Wait for frontend
+        run: |
+          n=0; until [ $n -ge 30 ]; do curl -sSf http://localhost:3000 >/dev/null && break; n=$((n+1)); sleep 2; done
+
+      - name: Run smoke test
+        run: |
+          npm run smoke
+
+      - name: Run audit card test
+        run: |
+          npm run headless:audit
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: headless-artifacts
+          path: |
+            /workspace/logs
+            /workspace/logs/audit_card.png

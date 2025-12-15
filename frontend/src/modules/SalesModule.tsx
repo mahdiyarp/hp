@@ -143,8 +143,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [saleOrders, setSaleOrders] = useState<SaleOrder[]>([])
-  const [invoiceListLimit, setInvoiceListLimit] = useState(20) // تعداد فاکتورهای نمایشی
+  const [invoiceListLimit, setInvoiceListLimit] = useState(5) // تعداد فاکتورهای نمایشی (دیفالت 5)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [search, setSearch] = useState('')
@@ -200,6 +199,60 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     proforma: 'پیش‌فاکتور',
   }
 
+  const resetForm = (type: InvoiceFormState['invoice_type'] = invoiceForm.invoice_type) => {
+    setInvoiceForm({
+      invoice_type: type,
+      party_name: '',
+      note: '',
+      items: [{ ...emptyItem }],
+    })
+    setAutoFinalize(type !== 'proforma')
+    setFormError(null)
+    setFormSuccess(null)
+  }
+
+  const launchForm = (type: InvoiceFormState['invoice_type']) => {
+    resetForm(type)
+    setShowForm(true)
+  }
+
+  function PartySelectorInline({ onSelect }: { onSelect: (p: {id:string, name:string, mobile?:string})=>void }) {
+    const [q, setQ] = useState('')
+    const [items, setItems] = useState<Array<{id:string,name:string,mobile?:string}>>([])
+    const [loading, setLoading] = useState(false)
+    async function search(s: string) {
+      setLoading(true)
+      try { const res = await apiGet<Array<any>>(`/api/people/search?q=${encodeURIComponent(s)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) }
+    }
+    useEffect(()=>{ search('') },[])
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <input className={`${retroInput} flex-1`} placeholder="جستجوی طرف‌حساب" value={q} onChange={e=>{ setQ(e.target.value); search(e.target.value) }} />
+          <button className={retroButton} onClick={async()=>{ try { const p = await apiPost('/api/people/from-user', {}); onSelect(p as any) } catch {} }}>از کاربر</button>
+          <button className={retroButton} onClick={async()=>{
+            const name = prompt('نام طرف‌حساب؟'); if (!name) return
+            const mobile = prompt('شماره موبایل (اختیاری)؟') || undefined
+            try { const p = await apiPost('/api/people/quick-create', { name, mobile, kind:'customer' }); onSelect(p as any) } catch {}
+          }}>ایجاد سریع</button>
+          <button className={retroButton} onClick={async()=>{ setLoading(true); try { const res = await apiGet<Array<any>>(`/api/public/counterparties?q=${encodeURIComponent(q)}`); setItems(res as any) } catch { setItems([]) } finally { setLoading(false) } }}>نمایه‌های پابلیک</button>
+        </div>
+        <div className="border rounded p-2 max-h-40 overflow-auto">
+          {loading? <div className="text-xs">در حال جستجو…</div>: items.map((i)=> (
+            <div key={i.id} className="flex justify-between py-1">
+              <span className="text-sm">{i.name} {i.mobile? `— ${i.mobile}`: ''}</span>
+              <button className={retroButton} onClick={()=>onSelect(i)}>انتخاب</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const addItem = () => {
+    setInvoiceForm(prev => ({ ...prev, items: [...prev.items, { ...emptyItem }] }))
+  }
+
   const pickPriceCandidate = useCallback((candidates: Array<number | null | undefined>) => {
     for (const value of candidates) {
       if (typeof value === 'number' && value > 0) {
@@ -220,7 +273,6 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
           product.last_sale_price,
         ])
       }
-      // sale & proforma default to sale chain
       return pickPriceCandidate([
         product.last_sale_price,
         product.avg_sale_price,
@@ -300,134 +352,6 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     }
   }
 
-  async function loadSaleOrders(showSpinner = false) {
-    if (showSpinner) setLoading(true)
-    try {
-      const data = await listSaleOrders(200)
-      setSaleOrders(data)
-    } catch (err) {
-      console.warn('Failed to load sale orders', err)
-    } finally {
-      if (showSpinner) setLoading(false)
-    }
-  }
-
-  const resetSaleOrderForm = () => {
-    setSaleOrderItems([{ ...emptySoItem }])
-    setSaleOrderPartyName('')
-    setSaleOrderNote('')
-    setSaleOrderAutoFinalize(true)
-    setSaleOrderFormError(null)
-    setSaleOrderFormSuccess(null)
-  }
-
-  const addSaleOrderItem = () => {
-    setSaleOrderItems(prev => [...prev, { ...emptySoItem }])
-  }
-
-  const updateSaleOrderItem = (index: number, field: 'description' | 'quantity' | 'unit' | 'unit_price', value: string) => {
-    setSaleOrderItems(prev => prev.map((it, idx) => (idx === index ? { ...it, [field]: field === 'quantity' || field === 'unit_price' ? Number(value) : value } : it)))
-  }
-
-  const removeSaleOrderItem = (index: number) => {
-    setSaleOrderItems(prev => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))
-  }
-
-  const saleOrderSubtotal = useMemo(() => saleOrderItems.reduce((acc, it) => acc + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0), [saleOrderItems])
-
-  const submitSaleOrder = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!saleOrderPartyName.trim()) {
-      setSaleOrderFormError('نام طرف حساب را وارد کنید.')
-      return
-    }
-    if (saleOrderItems.some(i => !i.description.trim())) {
-      setSaleOrderFormError('شرح هر ردیف باید وارد شود.')
-      return
-    }
-    if (saleOrderItems.some(i => i.quantity <= 0 || i.unit_price <= 0)) {
-      setSaleOrderFormError('تعداد و قیمت واحد باید بزرگ‌تر از صفر باشند.')
-      return
-    }
-    setCreatingSaleOrder(true)
-    setSaleOrderFormError(null)
-    try {
-      const clientIso = computeClientTimestamp()
-      const payload = {
-        party_name: saleOrderPartyName.trim(),
-        client_time: clientIso,
-        client_calendar: smartDate.jalali ? 'jalali' : 'gregorian',
-        note: saleOrderNote.trim() || undefined,
-        items: saleOrderItems.map(it => ({
-          description: it.description.trim(),
-          quantity: Number(it.quantity),
-          unit: it.unit.trim() || undefined,
-          unit_price: Number(it.unit_price),
-          product_id: it.product_id || undefined,
-        })),
-      }
-      const created = await createSaleOrder(payload)
-      let successMsg = 'سفارش فروش ثبت شد.'
-      if (saleOrderAutoFinalize) {
-        try {
-          const finalized = await finalizeSaleOrder(created.id, clientIso)
-          successMsg = 'سفارش ثبت و قطعی شد.'
-          setSaleOrders(prev => [finalized, ...prev])
-        } catch (fErr) {
-          console.error(fErr)
-          successMsg = 'سفارش ثبت شد اما قطعی‌سازی با خطا مواجه شد.'
-        }
-      } else {
-        setSaleOrders(prev => [created, ...prev])
-      }
-      setSaleOrderFormSuccess(successMsg)
-      setShowSaleOrderForm(false)
-      resetSaleOrderForm()
-    } catch (err) {
-      setSaleOrderFormError(err instanceof Error ? err.message : 'ثبت سفارش با خطا روبه‌رو شد.')
-    } finally {
-      setCreatingSaleOrder(false)
-    }
-  }
-
-  const duplicateSaleOrder = (so: SaleOrder) => {
-    setSaleOrderPartyName(so.party_name || '')
-    setSaleOrderNote(so.note || '')
-    setSaleOrderItems(
-      (so.items || []).map(it => ({
-        description: it.description,
-        quantity: it.quantity,
-        unit: it.unit || '',
-        unit_price: it.unit_price,
-        product_id: it.product_id || null,
-      })) || [{ ...emptySoItem }],
-    )
-    setShowSaleOrderForm(true)
-    setSaleOrderFormError(null)
-    setSaleOrderFormSuccess(null)
-  }
-
-  const resetForm = (type: InvoiceFormState['invoice_type'] = invoiceForm.invoice_type) => {
-    setInvoiceForm({
-      invoice_type: type,
-      party_name: '',
-      note: '',
-      items: [{ ...emptyItem }],
-    })
-    setAutoFinalize(type !== 'proforma')
-    setFormError(null)
-    setFormSuccess(null)
-  }
-
-  const launchForm = (type: InvoiceFormState['invoice_type']) => {
-    resetForm(type)
-    setShowForm(true)
-  }
-
-  const addItem = () => {
-    setInvoiceForm(prev => ({ ...prev, items: [...prev.items, { ...emptyItem }] }))
-  }
-
   const updateItem = (index: number, field: keyof InvoiceItemForm, value: string) => {
     setInvoiceForm(prev => {
       const items = prev.items.map((item, idx) =>
@@ -483,15 +407,13 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         return true
       })
       .sort((a, b) => {
-        // اگر یک فاکتور اخیراً مشاهده شده است، آن را به بالای لیست ببر
         if (recentlyViewedInvoiceId) {
           if (a.id === recentlyViewedInvoiceId) return -1
           if (b.id === recentlyViewedInvoiceId) return 1
         }
-        // نمایش فاکتورهای جدید در بالا
         const aTime = new Date(a.server_time).getTime()
         const bTime = new Date(b.server_time).getTime()
-        return bTime - aTime // newest first
+        return bTime - aTime
       })
       .slice(0, invoiceListLimit)
     return result
@@ -709,8 +631,6 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
       await loadInvoices(false)
       setFormSuccess(successMessage)
       setShowForm(false)
-      
-      // نمایش دیالوگ شیک برای عملیات بعدی
       if (selectedType === 'sale' || selectedType === 'purchase') {
         setTimeout(() => {
           setNextActionModal({
@@ -738,6 +658,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
     }
   }
 
+
   if (loading) {
     return (
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
@@ -755,6 +676,167 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
           {error}
         </div>
+      )}
+
+      {(detailLoading || invoiceDetail || detailError) && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <p className={retroHeading}>جزئیات فاکتور</p>
+              {invoiceDetail ? (
+                <>
+                  <h3 className="text-lg font-semibold mt-1">
+                    {toPersianDigits(invoiceDetail.invoice_number || `#${invoiceDetail.id}`)}
+                  </h3>
+                  <p className={`text-xs ${retroMuted} mt-2`}>
+                    طرف حساب: {invoiceDetail.party_name ?? 'نامشخص'} | وضعیت: {invoiceDetail.status}
+                  </p>
+                </>
+              ) : (
+                <h3 className="text-lg font-semibold mt-1">در انتظار بارگذاری...</h3>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {invoiceDetail && (
+                <>
+                  {(invoiceDetail as any).tracking_code && (
+                    <button
+                      className={`${retroButton} !bg-purple-700 text-[11px]`}
+                      onClick={() => {
+                        const code = (invoiceDetail as any).tracking_code
+                        window.open(`/trace/${code}`, '_blank')
+                      }}
+                    >
+                      🔍 ردگیری
+                    </button>
+                  )}
+                  {invoiceDetail.status !== 'final' && (
+                    <button
+                      className={`${retroButton} !bg-[#2d5b2d] text-[11px]`}
+                      onClick={finalizeInvoice}
+                      disabled={finalizing}
+                    >
+                      {finalizing ? 'در حال تأیید...' : 'تأیید نهایی'}
+                    </button>
+                  )}
+                  <button
+                    className={`${retroButton} !bg-[#1f2e3b] text-[11px]`}
+                    onClick={openPrintPreview}
+                  >
+                    نسخه چاپی
+                  </button>
+                  <button
+                    className={`${retroButton} text-[11px]`}
+                    disabled={exporting}
+                    onClick={() => exportInvoice('pdf')}
+                  >
+                    {exporting ? '...' : 'خروجی PDF'}
+                  </button>
+                  <button
+                    className={`${retroButton} text-[11px]`}
+                    disabled={exporting}
+                    onClick={() => exportInvoice('xlsx')}
+                  >
+                    خروجی Excel
+                  </button>
+                </>
+              )}
+              <button className={`${retroButton} !bg-[#c35c5c] text-[11px]`} onClick={closeInvoiceDetail}>
+                بستن
+              </button>
+            </div>
+          </header>
+          {detailLoading && !invoiceDetail && (
+            <div className="text-center py-6 text-sm text-[#7a6b4f]">در حال دریافت جزئیات...</div>
+          )}
+          {detailError && (
+            <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+              {detailError}
+            </div>
+          )}
+          {detailSuccess && (
+            <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
+              {detailSuccess}
+            </div>
+          )}
+          {invoiceDetail && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-[#2e2720]">
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 rounded-sm">
+                  <p className={retroHeading}>مهر زمانی سرور</p>
+                  <p className="mt-1">{isoToJalali(invoiceDetail.server_time)}</p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    UTC: {invoiceDetail.server_time.slice(0, 19).replace('T', ' ')}
+                  </p>
+                </div>
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 rounded-sm">
+                  <p className={retroHeading}>مهر زمانی کلاینت</p>
+                  <p className="mt-1">
+                    {invoiceDetail.client_time ? isoToJalali(invoiceDetail.client_time) : '---'}
+                  </p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    {invoiceDetail.client_time
+                      ? `UTC: ${invoiceDetail.client_time.slice(0, 19).replace('T', ' ')}`
+                      : '---'}
+                  </p>
+                  <p className={`text-[11px] ${retroMuted} mt-1`}>
+                    اختلاف ثبت: {detailTimeDelta === null ? '---' : `${formatNumberFa(detailTimeDelta)} ثانیه`}
+                  </p>
+                </div>
+              </div>
+              {invoiceDetail.note && (
+                <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
+                  یادداشت: {invoiceDetail.note}
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                  <thead>
+                    <tr>
+                      <th className={retroTableHeader}>شرح</th>
+                      <th className={retroTableHeader}>تعداد</th>
+                      <th className={retroTableHeader}>واحد</th>
+                      <th className={retroTableHeader}>قیمت واحد</th>
+                      <th className={retroTableHeader}>مبلغ ردیف</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(invoiceDetail.items ?? []).map(item => {
+                      const itemTotal = (item.quantity ?? 0) * (item.unit_price ?? 0)
+                      return (
+                        <tr key={item.id} className="border-b border-[#d9cfb6]">
+                          <td className="px-3 py-2">{item.description}</td>
+                          <td className="px-3 py-2 text-left font-[Yekan]">{formatNumberFa(item.quantity)}</td>
+                          <td className="px-3 py-2 text-left">{item.unit ?? '-'}</td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-[Yekan]">{formatCurrencyFa(item.unit_price, 'ریال', false).numeric}</div>
+                            {item.unit_price > 0 && (
+                              <div className="text-[10px] text-[#7a6b4f] italic">{numberToPersianWords(Math.trunc(item.unit_price))} ریال</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-left">
+                            <div className="font-bold font-[Yekan] text-[#154b5f]">{formatCurrencyFa(itemTotal, 'ریال', false).numeric}</div>
+                            {itemTotal > 0 && (
+                              <div className="text-[10px] text-[#154b5f] italic">{numberToPersianWords(Math.trunc(itemTotal))} ریال</div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-sm text-[#2e2720] rounded-sm space-y-1">
+                <p>جمع کل قبل از مالیات: {formatPrice(invoiceDetail.subtotal ?? 0, 'ریال')}</p>
+                <p>مبلغ کل نهایی: {formatPrice(invoiceDetail.total ?? 0, 'ریال')}</p>
+              </div>
+
+              {invoiceDetail && (
+                <RelatedPayments invoiceId={invoiceDetail.id} invoiceNumber={invoiceDetail.invoice_number} />
+              )}
+            </>
+          )}
+        </section>
       )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
@@ -1101,6 +1183,9 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 {auxLoading && (
                   <p className="text-[10px] text-[#7a6b4f] mt-1">در حال بارگذاری لیست مخاطبین...</p>
                 )}
+                <div className="mt-2">
+                  <PartySelectorInline onSelect={(p)=> setInvoiceForm(f=> ({...f, party_name: p.name}))} />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className={retroHeading}>نوع فاکتور</label>
@@ -1125,15 +1210,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className={retroHeading}>توضیحات</label>
-              <textarea
-                value={invoiceForm.note}
-                onChange={e => setInvoiceForm(prev => ({ ...prev, note: e.target.value }))}
-                className={`${retroInput} w-full h-24`}
-                placeholder="یادداشت‌های فاکتور"
-              />
-            </div>
+            {/* توضیحات منتقل شد به پایین، قبل از دکمه‌ها */}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -1164,11 +1241,8 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 const suggestedPrice = getSuggestedPrice(selectedProduct, invoiceForm.invoice_type)
 
                 return (
-                  <div
-                    key={idx}
-                    className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm space-y-3"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-3">
+                  <div key={idx} className="border border-dashed border-[#c5bca5] px-4 py-3 rounded-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-[2fr_0.7fr_0.8fr_1fr_1fr_auto] gap-3 items-end">
                       <div className="space-y-2">
                         <label className={retroHeading}>شرح کالا *</label>
                         <input
@@ -1176,9 +1250,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           onChange={e => {
                             const value = e.target.value
                             updateItem(idx, 'description', value)
-                            const matched = products.find(
-                              prod => prod.name === value || prod.id === value,
-                            )
+                            const matched = products.find(prod => prod.name === value || prod.id === value)
                             if (matched) {
                               setInvoiceForm(prev => {
                                 const items = prev.items.map((row, rowIndex) =>
@@ -1191,10 +1263,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                                           row.unit_price && row.unit_price > 0
                                             ? row.unit_price
                                             : (() => {
-                                                const suggestion = getSuggestedPrice(
-                                                  matched,
-                                                  prev.invoice_type,
-                                                )
+                                                const suggestion = getSuggestedPrice(matched, prev.invoice_type)
                                                 return suggestion > 0 ? suggestion : row.unit_price
                                               })(),
                                       }
@@ -1219,90 +1288,46 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                         {selectedProduct && (
                           <div className="text-[10px] space-y-2 bg-[#f6f1df] p-2 rounded border border-dashed border-[#c5bca5]">
                             <div className="space-y-1">
-                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
-                                📦 وضعیت موجودی
-                              </div>
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">📦 وضعیت موجودی</div>
                               <div>
                                 موجودی فعلی:{' '}
                                 <span className="font-semibold">
-                                  {typeof availableInventory === 'number'
-                                    ? formatNumberFa(availableInventory)
-                                    : '---'}
+                                  {typeof availableInventory === 'number' ? formatNumberFa(availableInventory) : '---'}
                                 </span>{' '}
                                 {selectedProduct.unit || 'عدد'}
                               </div>
                               {typeof projectedInventory === 'number' && (
-                                <div className="text-[#7a6b4f]">
-                                  پس از قطعی تقریبی: {formatNumberFa(Math.max(projectedInventory, 0))}{' '}
-                                  {selectedProduct.unit || 'عدد'}
-                                </div>
+                                <div className="text-[#7a6b4f]">پس از قطعی تقریبی: {formatNumberFa(Math.max(projectedInventory, 0))} {selectedProduct.unit || 'عدد'}</div>
                               )}
                               {invoiceForm.invoice_type === 'sale' && saleShortage && (
-                                <div className="text-[#7a0000] font-semibold">
-                                  موجودی ناکافی برای این ردیف است.
-                                </div>
+                                <div className="text-[#7a0000] font-semibold">موجودی ناکافی برای این ردیف است.</div>
                               )}
-                              {invoiceForm.invoice_type === 'sale' &&
-                                !saleShortage &&
-                                typeof availableInventory === 'number' &&
-                                availableInventory <= 5 && (
-                                  <div className="text-[#8a4d2c]">
-                                    ⚠️ موجودی رو به اتمام است.
-                                  </div>
-                                )}
+                              {invoiceForm.invoice_type === 'sale' && !saleShortage && typeof availableInventory === 'number' && availableInventory <= 5 && (
+                                <div className="text-[#8a4d2c]">⚠️ موجودی رو به اتمام است.</div>
+                              )}
                             </div>
                             <div className="space-y-1">
-                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">
-                                💰 تاریخچه قیمت‌ها:
-                              </div>
+                              <div className="font-semibold text-[#154b5f] border-b border-dashed border-[#c5bca5] pb-1">💰 تاریخچه قیمت‌ها:</div>
                               {selectedProduct.last_sale_price && (
-                                <div>
-                                  🔹 آخرین فروش:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.last_sale_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>🔹 آخرین فروش: <span className="font-semibold">{formatNumberFa(selectedProduct.last_sale_price)}</span> ریال</div>
                               )}
                               {selectedProduct.avg_sale_price && (
-                                <div>
-                                  📊 میانگین فروش:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.avg_sale_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>📊 میانگین فروش: <span className="font-semibold">{formatNumberFa(selectedProduct.avg_sale_price)}</span> ریال</div>
                               )}
                               {selectedProduct.last_purchase_price && (
-                                <div>
-                                  🔹 آخرین خرید:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.last_purchase_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>🔹 آخرین خرید: <span className="font-semibold">{formatNumberFa(selectedProduct.last_purchase_price)}</span> ریال</div>
                               )}
                               {selectedProduct.avg_purchase_price && (
-                                <div>
-                                  📊 میانگین خرید:{' '}
-                                  <span className="font-semibold">
-                                    {formatNumberFa(selectedProduct.avg_purchase_price)}
-                                  </span>{' '}
-                                  ریال
-                                </div>
+                                <div>📊 میانگین خرید: <span className="font-semibold">{formatNumberFa(selectedProduct.avg_purchase_price)}</span> ریال</div>
                               )}
-                              {!selectedProduct.last_sale_price &&
-                                !selectedProduct.avg_sale_price &&
-                                !selectedProduct.last_purchase_price &&
-                                !selectedProduct.avg_purchase_price && (
-                                  <div className="text-[#7a6b4f] italic">
-                                    هنوز تاریخچه قیمتی ندارد
-                                  </div>
-                                )}
+                              {!selectedProduct.last_sale_price && !selectedProduct.avg_sale_price && !selectedProduct.last_purchase_price && !selectedProduct.avg_purchase_price && (
+                                <div className="text-[#7a6b4f] italic">هنوز تاریخچه قیمتی ندارد</div>
+                              )}
                             </div>
                           </div>
                         )}
                       </div>
+
                       <div className="space-y-2">
                         <label className={retroHeading}>تعداد *</label>
                         <input
@@ -1313,19 +1338,14 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           className={`${retroInput} w-full`}
                         />
                         {selectedProduct && typeof availableInventory === 'number' && (
-                          <div
-                            className={`text-[11px] ${
-                              saleShortage ? 'text-[#7a0000]' : 'text-[#154b5f]'
-                            }`}
-                          >
+                          <div className={`text-[11px] ${saleShortage ? 'text-[#7a0000]' : 'text-[#154b5f]'}`}>
                             {saleShortage
-                              ? `نیاز ${formatNumberFa(item.quantity)} در برابر موجودی ${formatNumberFa(
-                                  availableInventory,
-                                )}`
+                              ? `نیاز ${formatNumberFa(item.quantity)} در برابر موجودی ${formatNumberFa(availableInventory)}`
                               : `موجودی: ${formatNumberFa(availableInventory)} ${selectedProduct.unit || 'عدد'}`}
                           </div>
                         )}
                       </div>
+
                       <div className="space-y-2">
                         <label className={retroHeading}>واحد</label>
                         <input
@@ -1335,9 +1355,7 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                           placeholder="عدد / بسته ..."
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-3">
                       <div className="space-y-2">
                         <label className={retroHeading}>قیمت واحد (ریال) *</label>
                         <div className="space-y-1">
@@ -1349,18 +1367,14 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                             className={`${retroInput} w-full font-[Yekan] text-center text-lg`}
                             style={{ fontFamily: 'Yekan' }}
                           />
-                          <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">
-                            {formatNumberFa(item.unit_price)}
-                          </div>
                           {item.unit_price > 0 && (
-                            <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">
-                              {priceWords} ریال
-                            </div>
+                            <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">{formatNumberFa(item.unit_price)}</div>
+                          )}
+                          {item.unit_price > 0 && (
+                            <div className="text-[10px] text-[#7a6b4f] italic bg-[#faf4de] px-2 py-0.5 rounded border border-dashed border-[#c5bca5]">{priceWords} ریال</div>
                           )}
                           {selectedProduct && suggestedPrice > 0 && (
-                            <div className="text-[10px] text-[#1f2e3b] bg-[#e2eef7] px-2 py-1 rounded border border-dashed border-[#154b5f]">
-                              پیشنهاد بر اساس سوابق: {formatNumberFa(suggestedPrice)} ریال
-                            </div>
+                            <div className="text-[10px] text-[#1f2e3b] bg-[#e2eef7] px-2 py-1 rounded border border-dashed border-[#154b5f]">پیشنهاد بر اساس سوابق: {formatNumberFa(suggestedPrice)} ریال</div>
                           )}
                         </div>
                       </div>
@@ -1368,13 +1382,11 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                       <div className="space-y-2">
                         <label className={retroHeading}>کل (تعداد × قیمت)</label>
                         <div className="space-y-1">
-                          <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-3 py-2 rounded font-bold text-center font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+                          <div className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-3 py-2 rounded font-bold text-center font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
                             {formatNumberFa(itemSubtotal)}
                           </div>
                           {itemSubtotal > 0 && (
-                            <div className="text-[10px] text-[#154b5f] italic bg-[#e8f2f7] px-2 py-0.5 rounded border border-dashed border-[#154b5f]">
-                              {subtotalWords} ریال
-                            </div>
+                            <div className="text-[10px] text-[#1f2e3b] italic bg-[#f6f1df] px-2 py-0.5 rounded border border-dashed border-[#1f2e3b]">{subtotalWords} ریال</div>
                           )}
                         </div>
                       </div>
@@ -1395,12 +1407,12 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
               })}
             </div>
 
-            <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-4 py-3 rounded text-center space-y-1">
-              <p className={retroHeading}>💰 جمع کل فاکتور</p>
+            <div className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-4 py-3 rounded text-center space-y-1">
+              <p className={retroHeading}>جمع کل فاکتور</p>
               <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
                 {formatNumberFa(computedSubtotal || 0)}
               </p>
-              <p className="text-xs text-[#154b5f] italic">
+              <p className="text-xs text-[#1f2e3b] italic">
                 {computedSubtotal > 0 ? numberToPersianWords(Math.trunc(computedSubtotal)) + ' ریال' : ''}
               </p>
             </div>
@@ -1439,6 +1451,16 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
                 {formSuccess}
               </div>
             )}
+
+            <div className="space-y-2">
+              <label className={retroHeading}>توضیحات</label>
+              <textarea
+                value={invoiceForm.note}
+                onChange={e => setInvoiceForm(prev => ({ ...prev, note: e.target.value }))}
+                className={`${retroInput} w-full h-24`}
+                placeholder="یادداشت‌های فاکتور"
+              />
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
@@ -1486,14 +1508,16 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
           </div>
           <div className="space-y-2">
             <label className={retroHeading}>تعداد نمایشی</label>
-            <input
-              type="number"
-              min={5}
-              max={100}
+            <select
               value={invoiceListLimit}
-              onChange={e => setInvoiceListLimit(Math.max(5, parseInt(e.target.value) || 20))}
+              onChange={e => setInvoiceListLimit(parseInt(e.target.value))}
               className={`${retroInput} w-full`}
-            />
+            >
+              <option value={5}>۵</option>
+              <option value={10}>۱۰</option>
+              <option value={20}>۲۰</option>
+              <option value={50}>۵۰</option>
+            </select>
           </div>
           <div className="space-y-2 lg:col-span-2">
             <label className={retroHeading}>جستجو</label>

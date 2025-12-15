@@ -1,211 +1,536 @@
-import React, { useMemo, useState } from 'react'
-import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiPost } from '../services/api'
-import {
-  retroBadge,
-  retroButton,
-  retroHeading,
-  retroInput,
-  retroPanel,
-  retroPanelPadded,
-  retroTableHeader,
-  retroMuted,
-} from '../components/retroTheme'
-
-type SearchIndex = 'products' | 'persons' | 'invoices' | 'payments'
-
-interface SearchResponse {
-  [index: string]: {
-    hits: Array<Record<string, unknown>>
-  }
-}
-
-const INDEX_LABELS: Record<SearchIndex, string> = {
-  products: 'ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§',
-  persons: 'ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨',
-  invoices: 'ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§',
-  payments: 'ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾/ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¹ط¢آ¾',
-}
-
-export default function SearchModule({ smartDate }: ModuleComponentProps) {
-  const [query, setQuery] = useState('')
-  const [limit, setLimit] = useState(10)
-  const [selectedIndexes, setSelectedIndexes] = useState<SearchIndex[]>(['products', 'persons', 'invoices', 'payments'])
-  const [results, setResults] = useState<SearchResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const activeIndexes = useMemo(
-    () => (selectedIndexes.length > 0 ? selectedIndexes : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[])),
-    [selectedIndexes],
-  )
-
-  const toggleIndex = (idx: SearchIndex) => {
-    setSelectedIndexes(prev => (prev.includes(idx) ? prev.filter(item => item !== idx) : [...prev, idx]))
-  }
-
-  const runSearch = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    if (!query.trim()) {
-      setError('ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const payload = { q: query, indexes: activeIndexes, limit, filters: undefined }
-      const res = await apiPost<SearchResponse>('/api/search', payload)
-      setResults(res)
-    } catch (err) {
-      console.error(err)
-      setError('ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-      setResults(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-8">
-      <section className={`${retroPanelPadded} space-y-5`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <p className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</p>
-            <h2 className="text-2xl font-semibold mt-2">ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§</h2>
-            <p className={`text-xs ${retroMuted} mt-2`}>
-              ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ® ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ¹: {smartDate.jalali ?? 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ'} | {smartDate.isoDate ?? 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ'}
-            </p>
-          </div>
-          <div className={`${retroPanel} px-4 py-3 text-xs`}>
-            <p className={`${retroHeading} text-[#7a6b4f]`}>ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§</p>
-            <p className="mt-1 leading-6 text-[#7a6b4f]">
-              ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾/ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯. ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¬ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§
-              ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط›ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯.
-            </p>
-          </div>
-        </header>
-
-        <form onSubmit={runSearch} className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-3">
-            <div className="space-y-2">
-              <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ </label>
-              <input
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                className={`${retroInput} w-full`}
-                placeholder="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط› ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯..."
-              />
-            </div>
-            <div className="space-y-2">
-              <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¬ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ´</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={limit}
-                onChange={e => setLimit(Number(e.target.value))}
-                className={`${retroInput} w-full`}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-              {(Object.keys(INDEX_LABELS) as SearchIndex[]).map(idx => {
-                const active = selectedIndexes.includes(idx)
-                return (
-                  <button
-                    type="button"
-                    key={idx}
-                    onClick={() => toggleIndex(idx)}
-                    className={`${retroButton} ${active ? '' : 'opacity-50'} text-[11px]`}
-                  >
-                    {INDEX_LABELS[idx]}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button type="submit" className={`${retroButton} !bg-[#1f2e3b]`}>
-              ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ 
-            </button>
-            <button
-              type="button"
-              className={`${retroButton} !bg-[#5b4a2f]`}
-              onClick={() => {
-                setQuery('')
-                setResults(null)
-              }}
-            >
-              ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
-            </button>
-          </div>
-        </form>
-
-        {error && (
-          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-            {error}
-          </div>
-        )}
-      </section>
-
-      {loading && (
-        <div className={`${retroPanel} p-6 text-center`}>
-          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} mt-3 text-[#1f2e3b]`}>ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ...</p>
-        </div>
-      )}
-
-      {results && !loading && (
-        <section className="space-y-6">
-          {(activeIndexes as string[]).map(idx => {
-            const hitPack = results[idx]
-            const hits = hitPack?.hits ?? []
-            return (
-              <div key={idx} className={`${retroPanelPadded} space-y-3`}>
-                <header className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¬</p>
-                    <h3 className="text-lg font-semibold mt-1">{INDEX_LABELS[idx as SearchIndex]}</h3>
-                  </div>
-                  <span className={retroBadge}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯: {hits.length}</span>
-                </header>
-                {hits.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {hits.map((hit, index) => (
-                          <tr key={index} className="border-b border-[#d9cfb6] text-left">
-                            <td className="px-3 py-2">
-                              <span className={`${retroBadge} text-left`}>{(hit.id as string) ?? `#${index + 1}`}</span>
-                            </td>
-                            <td className="px-3 py-2">
-                              <pre className="text-xs whitespace-pre-wrap leading-5 text-[#2e2720] bg-[#f6f1df] border border-[#bfb69f] p-2 rounded-sm">
-                                {JSON.stringify(hit, null, 2)}
-                              </pre>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <p className={`text-xs ${retroMuted}`}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ· ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.</p>
-                )}
-              </div>
-            )
-          })}
-        </section>
-      )}
-    </div>
-  )
-}
+import React, { useEffect, useMemo, useState } from 'react'
+import type { ModuleComponentProps } from '../components/layout/AppShell'
+import { apiGet, apiPost } from '../services/api'
+import {
+  retroBadge,
+  retroButton,
+  retroHeading,
+  retroInput,
+  retroPanel,
+  retroPanelPadded,
+  retroTableHeader,
+  retroMuted,
+} from '../components/retroTheme'
+import { formatNumberFaSpaced, isoToJalali, toPersianDigits } from '../utils/num'
+
+type SearchIndex = 'products' | 'persons' | 'invoices' | 'payments'
+
+interface SearchResponse {
+  [index: string]: {
+    hits: Array<Record<string, unknown>>
+  }
+}
+
+const INDEX_LABELS: Record<SearchIndex, string> = {
+  products: 'کالاها',
+  persons: 'طرف‌های حساب',
+  invoices: 'فاکتورها',
+  payments: 'دریافت/پرداخت',
+}
+
+const GLOBAL_SEARCH_QUERY_KEY = 'hesabpak_global_search_query'
+
+export default function SearchModule({ smartDate }: ModuleComponentProps) {
+  const [query, setQuery] = useState('')
+  const [limit, setLimit] = useState(10)
+  const [selectedIndexes, setSelectedIndexes] = useState<SearchIndex[]>([
+    'products',
+    'persons',
+    'invoices',
+    'payments',
+  ])
+  const [results, setResults] = useState<SearchResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [personBalances, setPersonBalances] = useState<Record<string, number>>({})
+  const [ledgerModal, setLedgerModal] = useState<null | { productId: string; loading: boolean; items: Array<Record<string, any>> }>(null)
+
+  const activeIndexes = useMemo(() => selectedIndexes.length > 0 ? selectedIndexes : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[]), [selectedIndexes])
+
+  const navigateModule = (moduleId: string) => {
+    try {
+      const evt = new CustomEvent('switch-module', { detail: { module: moduleId } })
+      window.dispatchEvent(evt)
+    } catch {}
+  }
+
+  const toggleIndex = (idx: SearchIndex) => {
+    setSelectedIndexes(prev =>
+      prev.includes(idx) ? prev.filter(item => item !== idx) : [...prev, idx],
+    )
+  }
+
+  const runSearchWith = async (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) {
+      setError('متن جستجو را وارد کنید.')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const payload = {
+        q: trimmed,
+        indexes: activeIndexes,
+        limit,
+        filters: undefined,
+      }
+      const res = await apiPost<SearchResponse>('/api/search', payload)
+      setResults(res)
+      // Preload person balances if persons present
+      try {
+        if (res && res.persons && Array.isArray(res.persons.hits) && res.persons.hits.length) {
+          const bal = await apiGet<{ balances: Record<string, number> }>('/api/persons/balances')
+          if (bal && bal.balances) setPersonBalances(bal.balances)
+        } else {
+          setPersonBalances({})
+        }
+      } catch {
+        // ignore balance fetch errors
+      }
+    } catch (err) {
+      console.error(err)
+      setError('اجرای جستجو با خطا مواجه شد.')
+      setResults(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const runSearch = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    await runSearchWith(query)
+  }
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(GLOBAL_SEARCH_QUERY_KEY)
+      if (saved && saved.trim()) {
+        setQuery(saved)
+        sessionStorage.removeItem(GLOBAL_SEARCH_QUERY_KEY)
+        // Fire and forget; no need to await here
+        void runSearchWith(saved)
+      }
+    } catch {}
+    // run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return (
+    <div className="space-y-8">
+      <section className={`${retroPanelPadded} space-y-5`}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p className={retroHeading}>Universal Search</p>
+            <h2 className="text-2xl font-semibold mt-2">جستجوی هوشمند در رکوردها</h2>
+            <p className={`text-xs ${retroMuted} mt-2`}>
+              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | {smartDate.isoDate ?? 'ISO TBD'}
+            </p>
+          </div>
+          <div className={`${retroPanel} px-4 py-3 text-xs`}>
+            <p className={`${retroHeading} text-[#7a6b4f]`}>راهنما</p>
+            <p className="mt-1 leading-6 text-[#7a6b4f]">
+              متنی را وارد کنید تا در کالاها، طرف حساب‌ها، فاکتورها و پرداخت‌ها جستجو شود. انتخاب
+              نمایه‌ها را می‌توانید محدود کنید تا نتایج دقیق‌تری بگیرید.
+            </p>
+          </div>
+        </header>
+
+        <form onSubmit={runSearch} className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-3">
+            <div className="space-y-2">
+              <label className={retroHeading}>عبارت جستجو</label>
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                className={`${retroInput} w-full`}
+                placeholder="نام محصول، شماره فاکتور، طرف حساب..."
+              />
+            </div>
+            <div className="space-y-2">
+              <label className={retroHeading}>حداکثر نتایج هر بخش</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={limit}
+                onChange={e => setLimit(Number(e.target.value))}
+                className={`${retroInput} w-full`}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className={retroHeading}>نمایه‌های فعال</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+              {(Object.keys(INDEX_LABELS) as SearchIndex[]).map(idx => {
+                const active = selectedIndexes.includes(idx)
+                return (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => toggleIndex(idx)}
+                    className={`${retroButton} ${active ? '' : 'opacity-50'} text-[11px]`}
+                  >
+                    {INDEX_LABELS[idx]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button type="submit" className={`${retroButton} !bg-[#1f2e3b]`}>
+              اجرای جستجو
+            </button>
+            <button
+              type="button"
+              className={`${retroButton} !bg-[#5b4a2f]`}
+              onClick={() => {
+                setQuery('')
+                setResults(null)
+              }}
+            >
+              پاک‌سازی
+            </button>
+          </div>
+        </form>
+
+        {error && (
+          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
+            {error}
+          </div>
+        )}
+      </section>
+
+      {loading && (
+        <div className={`${retroPanel} p-6 text-center`}>
+          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+          <p className={`${retroHeading} mt-3 text-[#1f2e3b]`}>در حال پردازش جستجو...</p>
+        </div>
+      )}
+
+      {results && !loading && (
+        <section className="space-y-6">
+          {(activeIndexes as string[]).map(idx => {
+            const hitPack = results[idx]
+            const hits = hitPack?.hits ?? []
+            return (
+              <div key={idx} className={`${retroPanelPadded} space-y-3`}>
+                <header className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className={retroHeading}>نتایج</p>
+                    <h3 className="text-lg font-semibold mt-1">{INDEX_LABELS[idx as SearchIndex]}</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`${retroBadge} !bg-[#1f2e3b] !text-[#faf4de]`}>تعداد: {hits.length}</span>
+                    {idx === 'products' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('inventory')}>باز کردن انبار</button>
+                    )}
+                    {idx === 'persons' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('people')}>باز کردن طرف‌ها</button>
+                    )}
+                    {idx === 'invoices' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('sales')}>باز کردن فروش</button>
+                    )}
+                    {idx === 'payments' && (
+                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('finance')}>باز کردن مالی</button>
+                    )}
+                  </div>
+                </header>
+                {hits.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    {idx === 'products' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>کالا</th>
+                            <th className={retroTableHeader}>گروه/واحد</th>
+                            <th className={retroTableHeader}>موجودی</th>
+                            <th className={retroTableHeader}>اقدامات</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const inv = Number(h.inventory || 0)
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.name}</div>
+                                      {h.code && <div className="text-xs text-[#7a6b4f]">کد: {toPersianDigits(h.code)}</div>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 text-left">
+                                  <div className="text-xs text-[#5b4a2f]">{h.group || '-'}</div>
+                                  <div className="text-[11px] text-[#7a6b4f]">واحد: {h.unit || '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`${retroBadge} ${inv < 0 ? '!bg-[#c35c5c]' : inv === 0 ? '!bg-[#bfb69f]' : '!bg-[#3a7d44]'}`}>{formatNumberFaSpaced(inv)}</span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={async () => {
+                                      setLedgerModal({ productId: String(h.id), loading: true, items: [] })
+                                      try {
+                                        const data = await apiGet<any>(`/api/ledger/product/${h.id}`)
+                                        let items: any[] = []
+                                        if (Array.isArray(data)) {
+                                          items = data
+                                        } else if (data && Array.isArray(data.entries)) {
+                                          items = data.entries
+                                        }
+                                        const mapped = items.map((it:any) => ({
+                                          time: it.time || it.date || null,
+                                          kind: it.kind || it.type || '-',
+                                          qty: typeof it.qty === 'number' ? it.qty : (typeof it.quantity === 'number' ? it.quantity : 0),
+                                          balance: typeof it.balance === 'number' ? it.balance : (typeof it.running_qty === 'number' ? it.running_qty : 0),
+                                        }))
+                                        setLedgerModal({ productId: String(h.id), loading: false, items: mapped })
+                                      } catch {
+                                        setLedgerModal({ productId: String(h.id), loading: false, items: [] })
+                                      }
+                                    }}
+                                  >
+                                    گردش کالا
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'persons' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>طرف حساب</th>
+                            <th className={retroTableHeader}>نوع</th>
+                            <th className={retroTableHeader}>مانده</th>
+                            <th className={retroTableHeader}>اقدام</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const bal = personBalances?.[String(h.id)] ?? 0
+                            const badgeCls = bal > 0 ? '!bg-[#3a7d44]' : bal < 0 ? '!bg-[#c35c5c]' : '!bg-[#bfb69f]'
+                            const balLabel = bal > 0 ? 'بدهکار' : bal < 0 ? 'بستانکار' : 'بی‌تراز'
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="font-semibold text-[#1f2e3b]">{h.name}</div>
+                                  <div className="text-xs text-[#7a6b4f]">{h.mobile || '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <span className={`${retroBadge}`}>{h.kind || 'other'}</span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${badgeCls}`}>{balLabel}</span>
+                                    <span className="text-[#1f2e3b]">{formatNumberFaSpaced(Math.abs(bal))}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={() => {
+                                      navigateModule('people')
+                                      setTimeout(() => {
+                                        try {
+                                          const personId = String(h.id || h.person_id || h.code || '')
+                                          const evt = new CustomEvent('open-person-history', { detail: { person_id: personId } })
+                                          window.dispatchEvent(evt)
+                                        } catch {}
+                                      }, 50)
+                                    }}
+                                  >
+                                    گردش
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'invoices' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>شماره/طرف</th>
+                            <th className={retroTableHeader}>مبلغ/وضعیت</th>
+                            <th className={retroTableHeader}>تاریخ</th>
+                            <th className={retroTableHeader}>اقدام</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const amt = Number(h.total || 0)
+                            const type = String(h.invoice_type || '')
+                            const status = String(h.status || '-')
+                            const statusCls = status === 'paid' ? '!bg-[#3a7d44]' : status === 'cancelled' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.invoice_number || h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
+                                      <div className="text-[11px] text-[#7a6b4f]">نوع: {type === 'sale' ? 'فروش' : type === 'purchase' ? 'خرید' : '-'}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${amt >= 0 ? '!bg-[#3a7d44]' : '!bg-[#c35c5c]'}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                    <span className={`${retroBadge} ${statusCls}`}>{status}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={() => {
+                                      navigateModule('sales')
+                                      setTimeout(() => {
+                                        try {
+                                          const evt = new CustomEvent('open-invoice-detail', { detail: { invoice_id: Number(h.id || h.invoice_id) } })
+                                          window.dispatchEvent(evt)
+                                        } catch {}
+                                      }, 50)
+                                    }}
+                                  >
+                                    نمایش
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                    {idx === 'payments' && (
+                      <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                        <thead>
+                          <tr>
+                            <th className={retroTableHeader}>شماره/طرف</th>
+                            <th className={retroTableHeader}>مبلغ/جهت</th>
+                            <th className={retroTableHeader}>روش/وضعیت</th>
+                            <th className={retroTableHeader}>تاریخ</th>
+                            <th className={retroTableHeader}>اقدام</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hits.map((h: any, i) => {
+                            const amt = Number(h.amount || 0)
+                            const dir = String(h.direction || '')
+                            const dirCls = dir === 'in' ? '!bg-[#3a7d44]' : dir === 'out' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            const status = String(h.status || '-')
+                            return (
+                              <tr key={i} className="border-b border-[#d9cfb6]">
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{toPersianDigits(h.payment_number || h.id)}</span>
+                                    <div>
+                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge} ${dirCls}`}>{dir === 'in' ? 'دریافت' : dir === 'out' ? 'پرداخت' : '-'}</span>
+                                    <span className={`${retroBadge}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`${retroBadge}`}>{h.method || '-'}</span>
+                                    <span className={`${retroBadge}`}>{status}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <button
+                                    className={`${retroButton} text-[11px]`}
+                                    onClick={() => {
+                                      navigateModule('finance')
+                                      setTimeout(() => {
+                                        try {
+                                          const evt = new CustomEvent('open-payment-detail', { detail: { payment_id: Number(h.id || h.payment_id) } })
+                                          window.dispatchEvent(evt)
+                                        } catch {}
+                                      }, 50)
+                                    }}
+                                  >
+                                    نمایش
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ) : (
+                  <p className={`text-xs ${retroMuted}`}>
+                    نتیجه‌ای برای این بخش یافت نشد یا سرویس ایندکس غیرفعال است.
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </section>
+      )}
+
+      {ledgerModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setLedgerModal(null)}>
+          <div className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-[#1f2e3b]">گردش کالا #{toPersianDigits(ledgerModal.productId)}</h4>
+              <button className={`${retroButton}`} onClick={()=> setLedgerModal(null)}>بستن</button>
+            </div>
+            {ledgerModal.loading ? (
+              <div className="text-xs text-[#7a6b4f]">در حال دریافت گردش...</div>
+            ) : ledgerModal.items.length ? (
+              <div className="overflow-x-auto max-h-[60vh]">
+                <table className="min-w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
+                  <thead>
+                    <tr>
+                      <th className={retroTableHeader}>تاریخ</th>
+                      <th className={retroTableHeader}>نوع</th>
+                      <th className={retroTableHeader}>مقدار</th>
+                      <th className={retroTableHeader}>مانده</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledgerModal.items.map((it:any, idx:number) => (
+                      <tr key={idx} className="border-b border-[#d9cfb6]">
+                        <td className="px-3 py-2">{it.time ? isoToJalali(it.time) : '-'}</td>
+                        <td className="px-3 py-2">{it.kind || '-'}</td>
+                        <td className="px-3 py-2">{formatNumberFaSpaced(it.qty || 0)}</td>
+                        <td className="px-3 py-2">{formatNumberFaSpaced(it.balance || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-xs text-[#7a6b4f]">رکوردی یافت نشد.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+

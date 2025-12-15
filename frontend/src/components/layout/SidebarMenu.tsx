@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { retroHeading } from '../retroTheme'
 import { apiGet, apiPost } from '../../services/api'
+import { useAuth } from '../../context/AuthContext'
 
 const STORAGE_KEY = 'hesabpak_sidebar_order_v1'
 
@@ -19,11 +20,11 @@ export default function SidebarMenu({
   modules: ModuleDef[]
   activeModuleId: string
   onNavigate: (id: string) => void
-  collapsed?: boolean
 }) {
+  const { user } = useAuth()
   const [order, setOrder] = useState<string[]>([])
-  const [expandedSettings, setExpandedSettings] = useState(false)
-  const collapsed = (arguments[0] && (arguments[0] as any).collapsed) || false
+  const [expandedSettings, setExpandedSettings] = useState(true)
+  const collapsed = false
 
   useEffect(() => {
     let cancelled = false
@@ -31,12 +32,16 @@ export default function SidebarMenu({
     async function loadOrder() {
       // Try server-side first (authenticated)
       try {
-        const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
-        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
-          const ids = modules.map(m => m.id)
-          const merged = [...serverOrder.filter((id: string) => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
-          if (!cancelled) setOrder(merged)
-          return
+        // Avoid early 401s: only fetch from server after auth tokens exist
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (hasToken) {
+          const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
+          if (Array.isArray(serverOrder) && serverOrder.length > 0) {
+            const ids = modules.map(m => m.id)
+            const merged = [...serverOrder.filter((id: string) => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
+            if (!cancelled) setOrder(merged)
+            return
+          }
         }
       } catch (e) {
         // ignore - fallback to localStorage
@@ -79,8 +84,13 @@ export default function SidebarMenu({
   }, [modules])
 
   const settingsChildren = useMemo(() => {
-    return modules.filter(m => /system|settings|user|security|integration|auth/i.test(m.id))
-  }, [modules])
+    const all = modules.filter(m => /system|settings|user|security|integration|auth|developer|bank|banks|branch|access-control|roles|permissions/i.test(m.id))
+    // hide developer for non-developers
+    if (!user || (user.role || '').toLowerCase() !== 'developer') {
+      return all.filter(m => m.id !== 'developer')
+    }
+    return all
+  }, [modules, user])
 
   const nonSettings = useMemo(() => {
     return order.filter(id => !settingsChildren.some(s => s.id === id)).map(id => moduleMap.get(id)).filter(Boolean) as ModuleDef[]
@@ -110,7 +120,7 @@ export default function SidebarMenu({
   }
 
   return (
-    <nav className={`flex-1 overflow-y-auto px-2 py-4 ${collapsed ? 'space-y-1' : 'space-y-2'}`}>
+    <nav className={`flex-1 overflow-y-auto px-2 py-4 space-y-2`}>
       {nonSettings.map(mod => {
         const isActive = mod.id === activeModuleId
         if (collapsed) {

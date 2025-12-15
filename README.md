@@ -16,6 +16,107 @@ docker compose up --build
 Backend swagger UI (once running): `http://localhost:8000/docs`  
 Frontend app: `http://localhost:3000`
 
+### Settings → Users (جدید)
+
+- مسیر جدید «تنظیمات → کاربران» تنها مرجع مدیریت کاربران است: ساخت/ویرایش کاربر، تعیین نقش و مشاهده مجوزها.
+- ذخیره مجوزها در حال حاضر «نقش‌محور» است (تغییرات روی نقش ذخیره می‌شود).
+- ترجیحات پیامکِ کاربر فقط خواندنی است؛ دکمهٔ ذخیرهٔ فردبه‌فرد تا افزوده‌شدن اندپوینت بک‌اند غیرفعال شده است.
+
+## SMS.ir Setup & Testing
+
+- Backend SystemSettings keys (DB):
+	- `sms_provider` (category `sms`): e.g. `sms.ir` یا `ippanel`
+	- `sms_api_key` (category `sms`, می‌تواند secret باشد)
+	- `sms_sender` (category `sms`): شماره خط فرستنده
+	- `sms_webhook_token` (برای امنیت وبهوک؛ اگر ست نشود، درخواست بدون توکن رد می‌شود)
+- Frontend DevConsole: تب SMS برای ارسال تست، تاریخچه، CSV و متریک‌ها.
+- Testing:
+	- "Send OTP Test" uses `/api/smsir/test-otp` and sends a sample code.
+	- "Send Free Text" uses `/api/sms/send` with `{ mobile, message }`.
+- Developer mock behavior:
+	- When `smsir_enabled=true`, even developer user sends real SMS.
+	- When disabled or misconfigured, developer user gets `mock: offline dev delivery` responses.
+- Logs:
+```powershell
+docker compose logs -f backend
+```
+
+### OTP از طریق PApi (حالت dev)
+
+- اندپوینت‌های جدید:
+	- `POST /api/papi/otp/start` → شروع OTP (در dev/دمو بدون نیاز به API Key با بای‌پس امن فعال می‌شود)
+	- `POST /api/papi/otp/verify` → تایید OTP و صدور توکن
+- فلگ‌های محیطی:
+	- `DEV_FEATURES_ENABLED=true` یا `ENVIRONMENT=development|dev|local`
+	- `DEMO_ALLOW_OTP_NO_SMS=true` برای اجازه دادن به ادامهٔ جریان حتی در صورت شکست ارسال SMS
+- مثال سریع (PowerShell):
+
+```powershell
+$payload = @{ mobile = '09123456789' } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/api/papi/otp/start -Method Post -ContentType 'application/json' -Body $payload
+
+# استفاده از کد دیباگ برگشتی در پاسخ start
+$code = '123456'
+$verify = @{ mobile = '09123456789'; code = $code } | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/api/papi/otp/verify -Method Post -ContentType 'application/json' -Body $verify
+```
+
+## Dev Quickstart (Windows)
+
+1. Install Docker Desktop and ensure Compose is available.
+2. Start services:
+
+```powershell
+docker compose up -d db
+docker compose up -d backend
+Invoke-WebRequest -Uri "http://localhost:8000/health" -UseBasicParsing
+docker compose up -d --build frontend
+```
+
+3. Seed demo data (users, NFTs, products, invoices):
+
+```powershell
+python.exe backend\scripts\seed_demo.py
+```
+
+4. Open the app:
+
+- Frontend: `http://localhost:3000`
+- Backend Swagger: `http://localhost:8000/docs`
+
+Notes:
+- Developer shortcut login is available via `POST /api/auth/login-dev` used by frontend.
+- The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
+- Organization features are derived from the user's NFT assets via `/api/org/features`.
+
+#### Verify quickly (PowerShell)
+
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8000/api/version" -UseBasicParsing
+Invoke-WebRequest -Uri "http://localhost:3000/api/version" -UseBasicParsing
+
+# Optional: get dev token and confirm modules via frontend proxy
+$loginBody = @{ username = "developer"; password = "developer" } | ConvertTo-Json
+$tokenResp = Invoke-WebRequest -Uri "http://localhost:8000/api/auth/login-dev" -Method Post -ContentType "application/json" -Body $loginBody -UseBasicParsing
+$token = ($tokenResp.Content | ConvertFrom-Json).access_token
+Invoke-WebRequest -Uri "http://localhost:3000/api/current-user/modules" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
+```
+
+### Environment Flags
+
+- `DEV_FEATURES_ENABLED` (default: off): Enables dev-only endpoints like `/api/auth/login-dev` and `/api/dev/assistant/*`. Accepts `true|1|dev|yes`.
+- `VITE_DEV_AUTOLOGIN` (frontend, default: `false`): When `true`, the client attempts silent developer login on startup if no token exists.
+- Theme: ذخیره تم در `localStorage` با کلید `theme` (`light|dark|system`)؛ حالت `system` بر اساس `prefers-color-scheme` عمل می‌کند.
+- `ALLOW_CREATE_ALL_IN_SEED` (default: off): When enabled or when using SQLite, `backend/scripts/seed_demo.py` will call `create_all` to ensure new tables exist.
+
+### Database Migrations
+
+- Apply migrations (including the new `nft_assets` table):
+
+```powershell
+docker compose exec backend alembic upgrade head
+```
+
 For local development copy `backend/.env.example` → `backend/.env` and adjust secrets.
 
 ### Background Scheduler (optional)
@@ -43,6 +144,7 @@ A lightweight background scheduler can emit automation events (e.g., overdue che
 - Python: `pytest`, `black`, `isort` (managed via `pre-commit`).
 - Node: `eslint`, `prettier`, `lint-staged` (configured in `frontend`).
 - CI: GitHub Actions workflow under `.github/workflows/ci.yml`.
+- Headless smoke test workflow under `.github/workflows/headless-smoke.yml`.
 - Optional 2FA (TOTP) for sign-in flows is available via `/api/auth/otp/*` endpoints.
 
 ### Developer Setup
@@ -58,29 +160,26 @@ pre-commit install
 cd frontend
 npm install
 npm run prepare   # installs husky hooks
+npm run test      # vitest؛ تست‌های ساده DevConsole و تم
 ```
 
 See `docs/architecture.md` for module breakdown and roadmap.
 
- 
-## Theme and Forms
+## Headless Smoke Test
+- Run locally: `npm run smoke` (expects frontend at `http://localhost:3000`).
+- CI workflow: see [.github/workflows/smoke.yml](.github/workflows/smoke.yml) for automated headless run on push/PR.
+- CI artifacts: console log and screenshot saved under `workspace/logs/`.
 
-- The app uses a unified Finance (Receipts & Payments) palette.
-- Theme variables are defined in `frontend/src/index.css` under `:root` (e.g., `--retro-border`, `--retro-panel-bg`, `--retro-button-bg`).
-- Shared UI utilities live in `frontend/src/components/retroTheme.ts` and read from those variables.
-- When building new components, import from `retroTheme` and avoid hardcoded colors.
+## Audit Status Card
+- The dashboard includes an audit status card rendering latest OTP audit batch: timestamp, event count, and Merkle root.
+- A quick chain validity indicator is derived from a sample Merkle proof.
+- File: [frontend/src/modules/DashboardModule.tsx](frontend/src/modules/DashboardModule.tsx)
 
-### Frontend Dev
-
-Run the frontend locally:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-To adjust colors app-wide, update the CSS variables in `frontend/src/index.css`.
+## Financial Year (FY) UX
+- Active FY is selectable in the header via the FY selector.
+- After changing FY, the app auto-refreshes and all lists (invoices, payments, party ledger, product movement, balances) reflect the selected FY.
+- The active FY badge appears next to date badges to confirm the applied FY.
+- FY state persists in user preferences and mirrors to localStorage for fast client routing.
 
 ## 📚 Documentation
 

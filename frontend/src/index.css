@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --hp-bg: #0b0f19;
+  --hp-card: #121826;
+  --hp-text: #e5e7eb;
+  --hp-accent: #22c55e;
+}
+
+html, body, #root { height: 100%; background: var(--hp-bg); color: var(--hp-text); }
+.hp-card { background: var(--hp-card); border-radius: 12px; border: 1px solid #1f2937; }
+.hp-btn { background: var(--hp-accent); color: #0b0f19; border-radius: 10px; padding: 0.5rem 0.9rem; font-weight: 600; }
+.hp-input { background: #0f172a; color: var(--hp-text); border: 1px solid #1f2937; border-radius: 10px; }
+
 /* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
 @font-face {
   font-family: 'Yekan';
@@ -42,7 +54,7 @@ html, body, #root {
 
 body {
   font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  background-color: white;
+  background-color: #e9e4d8; /* retro.surface */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -50,4 +62,29 @@ body {
 /* Ensure direction is RTL throughout */
 html[dir='rtl'] {
   direction: rtl;
+}
+
+/* Base container spacing for consistent rhythm */
+.hp-container {
+  @apply max-w-[1200px] mx-auto px-5 py-5;
+}
+
+/* Card panels unified padding and border */
+.hp-card {
+  @apply border-2 border-retro-panelBorder bg-retro-panel shadow-retroPanel rounded-sm p-5;
+}
+
+/* Headings unified style */
+.hp-heading {
+  @apply text-xs uppercase tracking-widest5 text-retro-muted;
+}
+
+/* Form controls unified style */
+.hp-input {
+  @apply bg-[#f6f1df] border border-[#bfb69f] text-retro-text placeholder:text-retro-muted px-3 py-2 rounded-sm focus:outline-none focus:ring-2 focus:ring-retro-brand focus:border-retro-brand transition font-yekan;
+}
+
+/* Buttons unified style */
+.hp-button {
+  @apply bg-retro-brand hover:bg-retro-brandDark text-[#f6f1df] uppercase tracking-widest35 text-xs py-3 px-4 border-2 border-retro-brandBorder shadow-retroButton transition-colors duration-150;
 }

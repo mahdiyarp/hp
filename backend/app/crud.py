@@ -44,6 +44,25 @@ def get_all_permissions(session: Session) -> List[models.Permission]:
     return session.query(models.Permission).all()
 
 
+# ==================== Safe Person Basic Loader ====================
+
+def get_person_basic(session: Session, person_id: str) -> Optional[dict]:
+    """Load minimal person fields safely without selecting newly-added columns.
+    Returns dict with keys: id, name, kind, mobile, code
+    """
+    from sqlalchemy import text
+    sql = text(
+        """
+        SELECT id, name, kind, mobile, code
+        FROM persons
+        WHERE id = :pid
+        LIMIT 1
+        """
+    )
+    row = session.execute(sql, { 'pid': person_id }).mappings().first()
+    return dict(row) if row else None
+
+
 def _normalize_username(raw: str) -> str:
     return normalize_for_search(raw or '')
 
@@ -79,6 +98,30 @@ def create_user(session: Session, user: schemas.UserCreate):
     session.commit()
     session.refresh(db_user)
     return db_user
+
+
+# ==================== NFT Assets ====================
+
+def create_nft_asset(session: Session, owner_user_id: Optional[int], token_id: str, chain: str = 'hesabpak', contract_address: Optional[str] = None, metadata: Optional[dict] = None) -> models.NftAsset:
+    existing = session.query(models.NftAsset).filter(models.NftAsset.token_id == token_id).first()
+    if existing:
+        return existing
+    asset = models.NftAsset(
+        token_id=token_id,
+        chain=chain,
+        contract_address=contract_address,
+        metadata_json=metadata or {},
+        owner_user_id=owner_user_id,
+        is_active=True
+    )
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return asset
+
+
+def get_user_nft_assets(session: Session, user_id: int) -> List[models.NftAsset]:
+    return session.query(models.NftAsset).filter(models.NftAsset.owner_user_id == user_id, models.NftAsset.is_active == True).all()
 
 
 def make_hash_id(obj: dict) -> str:
@@ -211,7 +254,20 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
     norm = normalize_for_search(p.name)
     raw = {"name": p.name, "kind": p.kind or '', "mobile": p.mobile or '', "created_at": str(func.now())}
     pid = make_hash_id(raw)
-    person = models.Person(id=pid, name=p.name, name_norm=norm, kind=p.kind, mobile=p.mobile, description=p.description, code=p.code or '')
+    person = models.Person(
+        id=pid,
+        name=p.name,
+        name_norm=norm,
+        kind=p.kind,
+        mobile=p.mobile,
+        description=p.description,
+        code=p.code or '',
+        tax_id=p.tax_id,
+        national_id=p.national_id,
+        address=p.address,
+        payment_terms=p.payment_terms,
+        credit_limit=p.credit_limit,
+    )
     session.add(person)
     session.commit()
     session.refresh(person)
@@ -233,11 +289,151 @@ def create_person(session: Session, p: PersonCreate) -> models.Person:
 
 
 def get_persons(session: Session, q: Optional[str] = None, limit: int = 50):
-    qs = session.query(models.Person)
+    """Safely fetch persons even if some columns aren't migrated yet.
+
+    Uses a raw SELECT over known baseline columns to avoid selecting
+    non-existent columns in environments where Alembic migrations
+    haven't applied the new fields yet.
+    """
+    from sqlalchemy import text
+    base_cols = "id, name, name_norm, code, kind, mobile, description, created_at"
+    sql = f"SELECT {base_cols} FROM persons"
+    params = {}
     if q:
-        qn = normalize_for_search(q)
-        qs = qs.filter(models.Person.name_norm.contains(qn))
-    return qs.limit(limit).all()
+        # naive filter over name_norm using LIKE
+        sql += " WHERE name_norm LIKE :q"
+        params['q'] = f"%{normalize_for_search(q)}%"
+    sql += " LIMIT :limit"
+    params['limit'] = int(limit or 50)
+    rows = session.execute(text(sql), params).mappings().all()
+    persons = []
+    for r in rows:
+        persons.append(models.Person(
+            id=r['id'],
+            name=r['name'],
+            name_norm=r['name_norm'],
+            code=r.get('code'),
+            kind=r.get('kind'),
+            mobile=r.get('mobile'),
+            description=r.get('description'),
+            created_at=r.get('created_at'),
+        ))
+    return persons
+
+def get_person(session: Session, person_id: str) -> Optional[models.Person]:
+    return session.query(models.Person).filter(models.Person.id == person_id).first()
+
+def update_person(session: Session, person_id: str, p: PersonCreate) -> Optional[models.Person]:
+    person = get_person(session, person_id)
+    if not person:
+        return None
+    person.name = p.name
+    person.name_norm = normalize_for_search(p.name)
+    person.kind = p.kind
+    person.mobile = p.mobile
+    person.code = p.code or person.code
+    person.description = p.description
+    person.tax_id = p.tax_id
+    person.national_id = p.national_id
+    person.address = p.address
+    person.payment_terms = p.payment_terms
+    person.credit_limit = p.credit_limit
+    session.add(person)
+    session.commit()
+    session.refresh(person)
+    try:
+        search_client.index_person({
+            'id': person.id,
+            'name': person.name,
+            'mobile': person.mobile,
+            'description': person.description,
+        })
+    except Exception:
+        pass
+    return person
+
+def delete_person(session: Session, person_id: str) -> bool:
+    person = get_person(session, person_id)
+    if not person:
+        return False
+    session.delete(person)
+    session.commit()
+    return True
+
+def get_person_balances(session: Session, start: datetime | None = None, end: datetime | None = None):
+    """محاسبه مانده اشخاص از دفترکل.
+
+    مانده‌ها بر اساس حساب‌های "AccountsReceivable" و "AccountsPayable" محاسبه می‌شوند.
+    Receivable = مجموع بدهکار AR − مجموع بستانکار AR
+    Payable   = مجموع بستانکار AP − مجموع بدهکار AP
+    Balance   = Receivable − Payable
+    """
+    from sqlalchemy import text
+
+    people = session.execute(text("SELECT id, name, kind, mobile, code FROM persons ORDER BY id"))
+    people = people.mappings().all()
+
+    # Optionally filter by date range
+    date_filter = ""
+    params = {}
+    if start:
+        date_filter += " AND entry_date >= :start"
+        params['start'] = start
+    if end:
+        date_filter += " AND entry_date <= :end"
+        params['end'] = end
+
+    ar_rows = session.execute(text(
+        """
+        SELECT party_id,
+               COALESCE(SUM(CASE WHEN debit_account = 'AccountsReceivable' THEN amount ELSE 0 END),0) AS debit,
+               COALESCE(SUM(CASE WHEN credit_account = 'AccountsReceivable' THEN amount ELSE 0 END),0) AS credit
+        FROM ledger_entries
+        WHERE 1=1
+        """ + date_filter + """
+        GROUP BY party_id
+        """
+    ), params).mappings().all()
+
+    ap_rows = session.execute(text(
+        """
+        SELECT party_id,
+               COALESCE(SUM(CASE WHEN debit_account = 'AccountsPayable' THEN amount ELSE 0 END),0) AS debit,
+               COALESCE(SUM(CASE WHEN credit_account = 'AccountsPayable' THEN amount ELSE 0 END),0) AS credit
+        FROM ledger_entries
+        WHERE 1=1
+        """ + date_filter + """
+        GROUP BY party_id
+        """
+    ), params).mappings().all()
+
+    ar_map = {r['party_id']: {'debit': r['debit'], 'credit': r['credit']} for r in ar_rows}
+    ap_map = {r['party_id']: {'debit': r['debit'], 'credit': r['credit']} for r in ap_rows}
+
+    results = []
+    for p in people:
+        pid = p['id']
+        ar_debit = (ar_map.get(pid, {}).get('debit') or 0)
+        ar_credit = (ar_map.get(pid, {}).get('credit') or 0)
+        ap_debit = (ap_map.get(pid, {}).get('debit') or 0)
+        ap_credit = (ap_map.get(pid, {}).get('credit') or 0)
+
+        receivable = ar_debit - ar_credit
+        payable = ap_credit - ap_debit
+        balance = receivable - payable
+
+        results.append({
+            'person_id': pid,
+            'name': p['name'],
+            'kind': p.get('kind'),
+            'mobile': p.get('mobile'),
+            'code': p.get('code'),
+            'receivable': float(receivable),
+            'payable': float(payable),
+            'balance': float(balance),
+        })
+
+    return results
 
 
 def get_users(session: Session):
@@ -632,18 +828,6 @@ def finalize_invoice(session: Session, invoice_id: int, client_time: Optional[da
         log_activity(session, inv.party_name or None, f"تأیید/پایان فاکتور {inv.invoice_number}", path=f"/api/invoices/{inv.id}/finalize", method='POST', status_code=200, detail={'invoice_id': inv.id})
     except Exception:
         pass
-    # Automation hooks
-    try:
-        from .services.automation import trigger_event as _trigger
-        _trigger(session, 'invoice.finalized', {
-            'id': inv.id,
-            'invoice_number': inv.invoice_number,
-            'party_id': inv.party_id,
-            'party_name': inv.party_name,
-            'total': int(inv.total or 0),
-        })
-    except Exception:
-        pass
     return inv
 
 
@@ -731,30 +915,33 @@ def create_payment_manual(session: Session, p: schemas.PaymentCreate) -> models.
         log_activity(session, pay.party_name or None, f"صدور رسید/سند پرداخت {pay.payment_number}", path=f"/api/payments/manual", method='POST', status_code=201, detail={'payment_id': pay.id})
     except Exception:
         pass
-    # Auto-create cheque record when method is cheque (by key or flag)
+
+    # Create ledger entries for payment to impact AccountsReceivable
     try:
-        is_cheque_method = False
-        if p.method:
-            m = None
-            try:
-                m = session.query(models.PaymentMethod).filter(models.PaymentMethod.key == p.method).first()
-            except Exception:
-                m = None
-            if (m and getattr(m, 'is_cheque', False)) or (p.method or '').lower() == 'cheque':
-                is_cheque_method = True
-        if is_cheque_method:
-            # Create cheque only if none exists yet
-            existing = session.query(models.Cheque).filter(models.Cheque.payment_id == pay.id).first()
-            if not existing:
-                ch = models.Cheque(
-                    payment_id=pay.id,
-                    status='pending',
-                    due_date=p.due_date,
-                )
-                session.add(ch)
-                session.commit()
-    except Exception:
-        # Don't fail the payment creation on cheque side-effects
+        # For receipts (direction 'in'): Debit Cash/Bank, Credit AccountsReceivable
+        # For outgoing payments (direction 'out'): Debit AccountsPayable or Expense, Credit Cash/Bank
+        if pay.direction == 'in':
+            debit_acc = 'Cash'
+            credit_acc = 'AccountsReceivable'
+        else:
+            debit_acc = 'AccountsPayable'
+            credit_acc = 'Cash'
+        le = models.LedgerEntry(
+            ref_type='payment',
+            ref_id=str(pay.id),
+            entry_date=pay.client_time or pay.server_time,
+            debit_account=debit_acc,
+            credit_account=credit_acc,
+            amount=pay.amount,
+            party_id=pay.party_id,
+            party_name=pay.party_name,
+            description=f"Payment {pay.payment_number} ({pay.method or 'cash'})",
+            tracking_code=pay.tracking_code,
+        )
+        session.add(le)
+        session.commit()
+    except Exception as e:
+        print(f"Ledger creation error (payment): {e}")
         pass
     return pay
 
@@ -1169,6 +1356,130 @@ def report_pnl(session: Session, start: Optional[datetime] = None, end: Optional
     return {'start': start, 'end': end, 'sales': int(sales), 'purchases': int(purchases), 'gross_profit': int(gross)}
 
 
+def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end: Optional[datetime] = None, method: str = 'FIFO'):
+    """Compute P&L with COGS using FIFO/LIFO layers.
+    Revenue is sum of finalized sales within [start,end]. COGS is derived by consuming purchase layers according to method.
+    Sales before the start reduce layers without impacting period revenue/COGS. Purchases up to end add to layers.
+    """
+    method = (method or 'FIFO').upper()
+    if method not in ('FIFO', 'LIFO'):
+        method = 'FIFO'
+    # Fetch all finalized invoices up to `end` to build layers
+    inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
+    if end:
+        inv_q = inv_q.filter(models.Invoice.server_time <= end)
+    invs = inv_q.all()
+    if not invs:
+        return {'start': start, 'end': end, 'sales': 0, 'cogs': 0, 'gross_profit': 0}
+    # Load items in bulk
+    inv_ids = [i.id for i in invs]
+    items = session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id.in_(inv_ids)).all()
+    items_by_inv = {}
+    for it in items:
+        items_by_inv.setdefault(it.invoice_id, []).append(it)
+    # Compose events per product
+    by_product: dict[str, list] = {}
+    for inv in invs:
+        t = inv.server_time or inv.client_time
+        if not t:
+            continue
+        its = items_by_inv.get(inv.id, [])
+        for it in its:
+            if not it.product_id:
+                continue
+            by_product.setdefault(it.product_id, []).append({
+                't': t,
+                'type': inv.invoice_type,
+                'qty': int(it.quantity or 0),
+                'unit': int(it.unit_price or 0),
+                'total': int(it.total or 0),
+            })
+    total_revenue = 0
+    total_cogs = 0
+    for pid, evs in by_product.items():
+        evs.sort(key=lambda x: x['t'])
+        layers: list[dict] = []
+        last_cost = 0
+        def take(need: int) -> int:
+            nonlocal layers, last_cost
+            taken = 0
+            while need > 0:
+                idx = 0 if method == 'FIFO' else (len(layers) - 1)
+                if idx < 0 or idx >= len(layers):
+                    taken += need * last_cost
+                    need = 0
+                    break
+                layer = layers[idx]
+                use = min(need, layer['qty'])
+                taken += use * layer['cost']
+                layer['qty'] -= use
+                need -= use
+                if layer['qty'] <= 0:
+                    layers.pop(idx)
+            return taken
+        for e in evs:
+            if e['type'] == 'purchase':
+                layers.append({'qty': e['qty'], 'cost': e['unit']})
+                last_cost = e['unit'] or last_cost
+            elif e['type'] == 'sale':
+                in_range = True
+                if start and e['t'] < start:
+                    in_range = False
+                if end and e['t'] > end:
+                    in_range = False
+                if in_range:
+                    total_revenue += e['total']
+                    total_cogs += take(e['qty'])
+                else:
+                    # consume layers for before-period sales without counting
+                    take(e['qty'])
+    gross = total_revenue - total_cogs
+    return {'start': start, 'end': end, 'sales': int(total_revenue), 'cogs': int(total_cogs), 'gross_profit': int(gross), 'method': method}
+
+
+def product_ledger(session: Session, product_id: str, start: Optional[datetime] = None, end: Optional[datetime] = None):
+    """Return chronological movement for a product within [start,end]: purchase/sale lines with running quantity."""
+    inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
+    if start:
+        inv_q = inv_q.filter(models.Invoice.server_time >= start)
+    if end:
+        inv_q = inv_q.filter(models.Invoice.server_time <= end)
+    invs = inv_q.all()
+    if not invs:
+        return []
+    inv_ids = [i.id for i in invs]
+    items = session.query(models.InvoiceItem).filter(
+        models.InvoiceItem.invoice_id.in_(inv_ids),
+        models.InvoiceItem.product_id == product_id
+    ).all()
+    evs = []
+    for it in items:
+        inv = next((x for x in invs if x.id == it.invoice_id), None)
+        if not inv:
+            continue
+        t = inv.server_time or inv.client_time
+        if not t:
+            continue
+        evs.append({'date': t, 'type': inv.invoice_type, 'qty': int(it.quantity or 0), 'unit': int(it.unit_price or 0), 'total': int(it.total or 0)})
+    evs.sort(key=lambda x: x['date'])
+    running = 0
+    rows = []
+    for e in evs:
+        if e['type'] == 'purchase':
+            running += e['qty']
+        elif e['type'] == 'sale':
+            running -= e['qty']
+        rows.append({
+            'date': e['date'],
+            'type': e['type'],
+            'qty': e['qty'],
+            'unit': e['unit'],
+            'total': e['total'],
+            'running': running,
+        })
+    return rows
+
+
 def report_person_turnover(session: Session, party_id: Optional[str] = None, party_name: Optional[str] = None, start: Optional[datetime] = None, end: Optional[datetime] = None):
     """Compute per-person turnover based on finalized invoices.
 
@@ -1199,28 +1510,74 @@ def report_person_turnover(session: Session, party_id: Optional[str] = None, par
     }
 
 
-def report_stock_valuation(session: Session):
-    # For each product, compute inventory * last known price (from price history) as approximation
+def report_stock_valuation(session: Session, as_of: Optional[datetime] = None):
+    """Compute stock valuation.
+    - If as_of is None: approximate using current product.inventory and latest price history.
+    - If as_of is provided: compute quantity up to as_of via product ledger and use last price effective at or before as_of.
+    """
     out = []
     prods = session.query(models.Product).all()
+    if not as_of:
+        for p in prods:
+            last_price = None
+            ph = (
+                session.query(models.PriceHistory)
+                .filter(models.PriceHistory.product_id == p.id)
+                .order_by(models.PriceHistory.effective_at.desc())
+                .first()
+            )
+            if ph:
+                last_price = ph.price
+            total = (p.inventory or 0) * (last_price or 0)
+            out.append({
+                'product_id': p.id,
+                'name': p.name,
+                'inventory': int(p.inventory or 0),
+                'unit_price': int(last_price) if last_price else None,
+                'total_value': int(total),
+            })
+        return out
+
+    # Date-bounded valuation
     for p in prods:
-        last_price = None
-        ph = session.query(models.PriceHistory).filter(models.PriceHistory.product_id == p.id).order_by(models.PriceHistory.effective_at.desc()).first()
-        if ph:
-            last_price = ph.price
-        total = (p.inventory or 0) * (last_price or 0)
-        out.append({'product_id': p.id, 'name': p.name, 'inventory': int(p.inventory or 0), 'unit_price': int(last_price) if last_price else None, 'total_value': int(total)})
+        rows = product_ledger(session, product_id=p.id, start=None, end=as_of)
+        qty = 0
+        if rows:
+            # product_ledger returns rows sorted by date with 'running' field
+            last = rows[-1]
+            qty = int(last.get('running') or last.get('running_qty') or 0)
+        ph = (
+            session.query(models.PriceHistory)
+            .filter(models.PriceHistory.product_id == p.id)
+            .filter(models.PriceHistory.effective_at <= as_of)
+            .order_by(models.PriceHistory.effective_at.desc())
+            .first()
+        )
+        last_price = int(ph.price) if ph and ph.price is not None else None
+        total = (qty or 0) * (last_price or 0)
+        out.append({
+            'product_id': p.id,
+            'name': p.name,
+            'inventory': int(qty or 0),
+            'unit_price': last_price,
+            'total_value': int(total),
+            'as_of': as_of,
+        })
     return out
 
 
-def report_cash_balance(session: Session, method: Optional[str] = None):
+def report_cash_balance(session: Session, method: Optional[str] = None, start: Optional[datetime] = None, end: Optional[datetime] = None):
     q = session.query(models.Payment).filter(models.Payment.status == 'posted')
+    if start:
+        q = q.filter(models.Payment.server_time >= start)
+    if end:
+        q = q.filter(models.Payment.server_time <= end)
     if method:
         q = q.filter(models.Payment.method.ilike(f"%{method}%"))
     # balance = sum(in receipts) - sum(out payments)
     receipts = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'in').all())
     outs = sum(p.amount or 0 for p in q.filter(models.Payment.direction == 'out').all())
-    return {'method': method or 'all', 'balance': int(receipts - outs)}
+    return {'method': method or 'all', 'balance': int(receipts - outs), 'start': start, 'end': end}
 
 
 def dashboard_summary(session: Session):

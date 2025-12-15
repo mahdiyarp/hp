@@ -1,800 +1,883 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet, apiPost } from '../services/api'
-import { formatNumberFa } from '../utils/num'
-import {
-  retroBadge,
-  retroButton,
-  retroHeading,
-  retroInput,
-  retroPanel,
-  retroPanelPadded,
-  retroTableHeader,
-  retroMuted,
-} from '../components/retroTheme'
-
-interface Product {
-  id: string
-  name: string
-  group: string | null
-  unit: string | null
-  inventory: number | null | undefined
-  description?: string | null
-  last_purchase_price?: number | null
-  avg_purchase_price?: number | null
-  last_sale_price?: number | null
-  avg_sale_price?: number | null
-}
-
-interface ProductMovement {
-  id: number
-  invoice_id: number
-  invoice_number: string
-  invoice_date: string
-  direction: string
-  type: string
-  quantity: number
-  quantity_change: number
-  unit_price: number
-  total_price: number
-  stock_before: number
-  stock_after: number
-  party: {
-    id: string
-    name: string
-    kind: string | null
-  } | null
-  status: string
-}
-
-interface ProductMovementData {
-  product: {
-    id: string
-    name: string
-    unit: string | null
-    group: string | null
-    current_stock: number
-  }
-  movements: ProductMovement[]
-  total_movements: number
-}
-
-type ProductFormState = {
-  name: string
-  unit: string
-  group: string
-  code: string
-  description: string
-}
-
-export default function InventoryModule({ smartDate }: ModuleComponentProps) {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [groupFilter, setGroupFilter] = useState('all')
-  const [showForm, setShowForm] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [formSuccess, setFormSuccess] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [movementData, setMovementData] = useState<ProductMovementData | null>(null)
-  const [loadingMovement, setLoadingMovement] = useState(false)
-  const [layoutMode, setLayoutMode] = useState<'table' | 'card'>('table')
-  const [sortField, setSortField] = useState<'name' | 'group' | 'inventory' | 'last_sale_price'>('name')
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-  const [pageSize, setPageSize] = useState(20)
-  const [lowStockOnly, setLowStockOnly] = useState(false)
-
-  const emptyForm: ProductFormState = {
-    name: '',
-    unit: '',
-    group: '',
-    code: '',
-    description: '',
-  }
-  const [productForm, setProductForm] = useState<ProductFormState>(emptyForm)
-
-  useEffect(() => {
-    loadProducts()
-  }, [])
-
-  async function loadProducts() {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await apiGet<Product[]>('/api/products?limit=200')
-      setProducts(data)
-    } catch (err) {
-      console.error(err)
-      setError('ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleProductChange = (field: keyof ProductFormState, value: string) => {
-    setProductForm(prev => ({ ...prev, [field]: value }))
-  }
-
-  const resetForm = () => {
-    setProductForm(emptyForm)
-    setFormError(null)
-    setFormSuccess(null)
-  }
-
-  const submitProduct = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!productForm.name.trim()) {
-      setFormError('ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-      return
-    }
-    setCreating(true)
-    setFormError(null)
-    try {
-      const payload = {
-        name: productForm.name.trim(),
-        unit: productForm.unit.trim() || undefined,
-        group: productForm.group.trim() || undefined,
-        description: productForm.description.trim() || undefined,
-        code: productForm.code.trim() || undefined,
-      }
-      const created = await apiPost<Product>('/api/products', payload)
-      const normalized: Product = {
-        ...created,
-        inventory: (created as Product).inventory ?? 0,
-      }
-      setProducts(prev => [normalized, ...prev])
-      setProductForm(emptyForm)
-      setFormSuccess('ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-    } catch (err) {
-      if (err instanceof Error) {
-        setFormError(err.message)
-      } else {
-        setFormError('ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-      }
-    } finally {
-      setCreating(false)
-    }
-  }
-
-  const loadProductMovement = async (product: Product) => {
-    setSelectedProduct(product)
-    setLoadingMovement(true)
-    setMovementData(null)
-    try {
-      const data = await apiGet<ProductMovementData>(`/api/products/${product.id}/movement`)
-      setMovementData(data)
-    } catch (err) {
-      console.error('Failed to load product movement:', err)
-      setError('ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ´ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.')
-    } finally {
-      setLoadingMovement(false)
-    }
-  }
-
-  const exportMovement = () => {
-    if (!movementData) return
-
-    const csv = [
-      ['ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ®', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¹', 'ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨', 'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط›ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط› ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯', 'ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯'].join('\t'),
-      ...movementData.movements.map(m => [
-        new Date(m.invoice_date).toLocaleDateString('fa-IR'),
-        m.type,
-        m.party?.name || '-',
-        m.quantity_change > 0 ? `+${m.quantity}` : `-${m.quantity}`,
-        m.unit_price,
-        m.total_price,
-        m.stock_before,
-        m.stock_after,
-        m.invoice_number,
-      ].join('\t')),
-    ].join('\n')
-
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `movement-${movementData.product.name}-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const exportListToCsv = () => {
-    const headers = ['ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦', 'ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’', 'ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢', 'ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´', 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´']
-    const rows = visibleProducts.map(prod => [
-      prod.name,
-      prod.group ?? '',
-      prod.unit ?? '',
-      prod.inventory ?? 0,
-      prod.last_sale_price ?? 0,
-      prod.avg_sale_price ?? 0,
-    ])
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `inventory-list-${new Date().toISOString().split('T')[0]}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const printList = () => {
-    const popup = window.open('', '_blank', 'width=900,height=600')
-    if (!popup) return
-    const fontStack = "var(--app-font, 'Yekan', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif)"
-    popup.document.write(`<html><head><title>??? ??????</title><style>:root{--app-font:'Yekan',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;} body{font-family:${fontStack};}</style></head><body dir="rtl" style="font-family:${fontStack}; padding:16px;">`)
-    popup.document.write('<h3 style="margin-bottom:12px;">????? ??????</h3>')
-    popup.document.write('<table border="1" cellspacing="0" cellpadding="6" style="width:100%; border-collapse:collapse; font-size:12px;">')
-    popup.document.write('<tr><th>??? ????</th><th>????</th><th>????</th><th>??????</th><th>????? ????</th><th>??????? ????</th></tr>')
-    visibleProducts.forEach(prod => {
-      popup.document.write(
-        `<tr>
-          <td>${prod.name}</td>
-          <td>${prod.group ?? ''}</td>
-          <td>${prod.unit ?? ''}</td>
-          <td>${formatNumberFa(prod.inventory ?? 0)}</td>
-          <td>${formatNumberFa(prod.last_sale_price ?? 0)}</td>
-          <td>${formatNumberFa(prod.avg_sale_price ?? 0)}</td>
-        </tr>`,
-      )
-    })
-    popup.document.write('</table></body></html>')
-    popup.document.close()
-    popup.print()
-  }
-
-  const groups = useMemo(() => {
-    const set = new Set<string>()
-    products.forEach(p => {
-      if (p.group) set.add(p.group)
-    })
-    return Array.from(set).sort()
-  }, [products])
-
-  const filtered = useMemo(() => {
-    const base = products.filter(prod => {
-      if (groupFilter !== 'all' && (prod.group ?? 'other') !== groupFilter) return false
-      if (search) {
-        const hay = `${prod.name} ${prod.group ?? ''}`.toLowerCase()
-        if (!hay.includes(search.toLowerCase())) return false
-      }
-      if (lowStockOnly && (prod.inventory ?? 0) > 5) return false
-      return true
-    })
-    const sorted = [...base].sort((a, b) => {
-      let aVal: any =
-        sortField === 'inventory'
-          ? Number(a.inventory ?? 0)
-          : sortField === 'last_sale_price'
-            ? Number(a.last_sale_price ?? 0)
-            : (a as any)[sortField] ?? ''
-      let bVal: any =
-        sortField === 'inventory'
-          ? Number(b.inventory ?? 0)
-          : sortField === 'last_sale_price'
-            ? Number(b.last_sale_price ?? 0)
-            : (b as any)[sortField] ?? ''
-      if (typeof aVal === 'string') aVal = aVal.toLowerCase()
-      if (typeof bVal === 'string') bVal = bVal.toLowerCase()
-      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1
-      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1
-      return 0
-    })
-    return sorted
-  }, [products, groupFilter, search, sortField, sortOrder])
-
-  const visibleProducts = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize])
-
-  const totals = useMemo(() => {
-    const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
-    const uniqueGroups = groups.length
-    const lowStockCount = products.filter(prod => (prod.inventory ?? 0) <= 5).length
-    return { totalInventory, uniqueGroups, lowStockCount }
-  }, [products, groups])
-
-  if (loading) {
-    return (
-      <div className={`${retroPanel} p-10 flex items-center justify-center`}>
-        <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[#1f2e3b]`}>ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢...</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-8">
-      {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
-      )}
-
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <p className={retroHeading}>Inventory Board</p>
-            <h2 className="text-2xl font-semibold mt-2">ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</h2>
-            <p className={`text-xs ${retroMuted} mt-2`}>
-              ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ® ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯: {smartDate.jalali ?? 'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’'} | {smartDate.isoDate ?? 'ISO TBD'}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={loadProducts}>
-              ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
-            </button>
-            <button
-              className={retroButton}
-              onClick={() => {
-                resetForm()
-                setShowForm(true)
-              }}
-            >
-              ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯
-            </button>
-            <button className={retroButton}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’</button>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§</p>
-            <p className="text-lg font-semibold">{formatNumberFa(products.length)}</p>
-          </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</p>
-            <p className="text-lg font-semibold">{formatNumberFa(totals.totalInventory)}</p>
-          </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§</p>
-            <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
-          </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯</p>
-            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#c35c5c]' : ''}`}>
-              {formatNumberFa(totals.lowStockCount)}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {showForm && (
-        <section className={`${retroPanelPadded} space-y-4`}>
-          <header className="flex items-center justify-between gap-4">
-            <div>
-              <p className={retroHeading}>ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</p>
-              <h3 className="text-lg font-semibold mt-2">ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾</h3>
-            </div>
-            <button
-              className={retroButton}
-              onClick={() => {
-                resetForm()
-                setShowForm(false)
-              }}
-            >
-              ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ 
-            </button>
-          </header>
-
-          <form className="space-y-4" onSubmit={submitProduct}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ *</label>
-                <input
-                  value={productForm.name}
-                  onChange={e => handleProductChange('name', e.target.value)}
-                  className={`${retroInput} w-full`}
-                  placeholder="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¹: ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¹ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¹ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ "
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</label>
-                <input
-                  value={productForm.code}
-                  onChange={e => handleProductChange('code', e.target.value)}
-                  className={`${retroInput} w-full`}
-                  placeholder="ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ SKU"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className={retroHeading}>ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</label>
-                <input
-                  value={productForm.unit}
-                  onChange={e => handleProductChange('unit', e.target.value)}
-                  className={`${retroInput} w-full`}
-                  placeholder="ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ¯ / ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ± / ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ..."
-                />
-              </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’</label>
-                <input
-                  value={productForm.group}
-                  onChange={e => handleProductChange('group', e.target.value)}
-                  className={`${retroInput} w-full`}
-                  placeholder="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¹ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¶ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾</label>
-              <textarea
-                value={productForm.description}
-                onChange={e => handleProductChange('description', e.target.value)}
-                className={`${retroInput} w-full h-24`}
-                placeholder="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±"
-              />
-            </div>
-
-            {formError && (
-              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
-                {formError}
-              </div>
-            )}
-            {formSuccess && (
-              <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
-                {formSuccess}
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-3">
-              <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
-                {creating ? 'ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾...' : 'ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§'}
-              </button>
-              <button
-                type="button"
-                className={`${retroButton} !bg-[#5b4a2f]`}
-                onClick={resetForm}
-                disabled={creating}
-              >
-                ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
-
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-          <div className="lg:col-span-2 space-y-2">
-            <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ </label>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className={`${retroInput} w-full`}
-              placeholder="ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’..."
-            />
-          </div>
-          <div className="space-y-2">
-            <label className={retroHeading}>ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</label>
-            <select
-              value={groupFilter}
-              onChange={e => setGroupFilter(e.target.value)}
-              className={`${retroInput} w-full`}
-            >
-              <option value="all">ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ§</option>
-              {groups.map(group => (
-                <option key={group} value={group}>
-                  {group}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className={`${retroButton} text-[11px] ${layoutMode === 'table' ? '!bg-[#1f2e3b]' : ''}`}
-                onClick={() => setLayoutMode('table')}
-              >
-                ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
-              </button>
-              <button
-                type="button"
-                className={`${retroButton} text-[11px] ${layoutMode === 'card' ? '!bg-[#1f2e3b]' : ''}`}
-                onClick={() => setLayoutMode('card')}
-              >
-                ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
-              </button>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className={retroHeading}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ´</label>
-            <select className={`${retroInput} w-full`} value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
-              {[10, 20, 50, 100].map(n => (
-                <option key={n} value={n}>
-                  {n} ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط·آ¸ط¢آ¾
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={lowStockOnly}
-              onChange={e => setLowStockOnly(e.target.checked)}
-            />
-            <label className={retroHeading}>ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ· ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ (ط·آ£ط¢آ¢ط£آ¢أ¢â€ڑآ¬ط¢آ°ط·آ¢ط¢آ¤ط·آ·ط·â€؛ط·آ¢ط¢آµ)</label>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className={retroButton} onClick={exportListToCsv}>
-              ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ CSV
-            </button>
-            <button className={retroButton} onClick={printList}>
-              ط·آ·ط¢آ¹ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾
-            </button>
-          </div>
-        </div>
-
-        {filtered.length > 0 ? (
-          layoutMode === 'table' ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
-              <thead>
-                <tr>
-                  <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</th>
-                  <th className={`${retroTableHeader} cursor-pointer`} onClick={() => setSortField('group')}>ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’</th>
-                  <th className={retroTableHeader}>ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯</th>
-                  <th className={`${retroTableHeader} cursor-pointer`} onClick={() => setSortField('inventory')}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</th>
-                  <th className={`${retroTableHeader} cursor-pointer`} onClick={() => setSortField('last_sale_price')}>ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´</th>
-                  <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleProducts.map(prod => {
-                  const lowStock = (prod.inventory ?? 0) <= 5
-                  return (
-                    <tr
-                      key={prod.id}
-                      className={`border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer ${lowStock ? 'bg-[#fff3f3]' : ''}`}
-                      onClick={() => loadProductMovement(prod)}
-                    >
-                      <td className="px-3 py-2">
-                        {prod.name}
-                        {prod.description && (
-                          <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                            {prod.description}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{prod.group ?? 'ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’'}</td>
-                      <td className="px-3 py-2">{prod.unit ?? 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ'}</td>
-                      <td className="px-3 py-2 text-left font-semibold">
-                        <div className="flex items-center justify-between gap-2">
-                          <span>{formatNumberFa(prod.inventory ?? 0)}</span>
-                          {lowStock && <span className={`${retroBadge} !bg-[#c35c5c] !text-white text-[10px]`}>ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯</span>}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-left">
-                        {prod.last_sale_price ? (
-                          <div>
-                            <span className="font-semibold">{formatNumberFa(prod.last_sale_price)}</span>
-                            <span className="text-[9px] text-[#7a6b4f] block">ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</span>
-                          </div>
-                        ) : (
-                          <span className="text-[#999]">---</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-left">
-                        {prod.avg_sale_price ? (
-                          <div>
-                            <span className="font-semibold">{formatNumberFa(prod.avg_sale_price)}</span>
-                            <span className="text-[9px] text-[#7a6b4f] block">ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</span>
-                          </div>
-                        ) : (
-                          <span className="text-[#999]">---</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {filtered.map(prod => {
-                const lowStock = (prod.inventory ?? 0) <= 5
-                return (
-                  <div
-                    key={prod.id}
-                    className={`border border-[#c5bca5] bg-[#faf4de] p-3 shadow-[2px_2px_0_#c5bca5] space-y-2 cursor-pointer ${lowStock ? 'ring-2 ring-[#c35c5c]' : ''}`}
-                    onClick={() => loadProductMovement(prod)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold">{prod.name}</p>
-                        <p className="text-[11px] text-[#7a6b4f]">{prod.group ?? 'ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’'}</p>
-                      </div>
-                      <span className={`${retroBadge} text-[10px]`}>{prod.unit || 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ'}</span>
-                    </div>
-                    {prod.description && (
-                      <p className="text-[11px] text-[#7a6b4f] leading-5">{prod.description}</p>
-                    )}
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="border border-dashed border-[#c5bca5] px-2 py-1">
-                        <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</p>
-                        <p className={`font-semibold ${lowStock ? 'text-[#c35c5c]' : ''}`}>
-                          {formatNumberFa(prod.inventory ?? 0)}
-                        </p>
-                      </div>
-                      <div className="border border-dashed border-[#c5bca5] px-2 py-1">
-                        <p className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯</p>
-                        <p className="font-semibold">
-                          {prod.last_purchase_price ? formatNumberFa(prod.last_purchase_price) : '---'}
-                        </p>
-                      </div>
-                      <div className="border border-dashed border-[#c5bca5] px-2 py-1">
-                        <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯</p>
-                        <p className="font-semibold">
-                          {prod.avg_purchase_price ? formatNumberFa(prod.avg_purchase_price) : '---'}
-                        </p>
-                      </div>
-                      <div className="border border-dashed border-[#c5bca5] px-2 py-1">
-                        <p className={retroHeading}>ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´</p>
-                        <p className="font-semibold">
-                          {prod.last_sale_price ? formatNumberFa(prod.last_sale_price) : '---'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        ) : (
-          <div className="text-xs text-[#7a6b4f]">ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ´ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.</div>
-        )}
-      </section>
-
-      {/* Product Movement Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className={`${retroPanelPadded} max-w-6xl w-full max-h-[90vh] overflow-y-auto space-y-4`}>
-            <header className="flex items-center justify-between gap-3 sticky top-0 bg-[#fdf7e6] pb-3 border-b border-[#c5bca5]">
-              <div>
-                <p className={retroHeading}>ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ´ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§</p>
-                <h3 className="text-xl font-semibold mt-2">{selectedProduct.name}</h3>
-                <p className="text-xs text-[#7a6b4f] mt-1">
-                  {selectedProduct.group && `ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’: ${selectedProduct.group} | `}
-                  ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯: {selectedProduct.unit || 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ'}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {movementData && (
-                  <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={exportMovement}>
-                    ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ CSV
-                  </button>
-                )}
-                <button
-                  className={`${retroButton} !bg-[#5b4a2f]`}
-                  onClick={() => {
-                    setSelectedProduct(null)
-                    setMovementData(null)
-                  }}
-                >
-                  ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ 
-                </button>
-              </div>
-            </header>
-
-            {loadingMovement ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="space-y-3 text-center">
-                  <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-                  <p className={`${retroHeading} text-[#1f2e3b]`}>ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ´ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§...</p>
-                </div>
-              </div>
-            ) : movementData ? (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-                    <p className={retroHeading}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</p>
-                    <p className="text-2xl font-semibold text-blue-700">
-                      {formatNumberFa(movementData.product.current_stock)} {movementData.product.unit || 'ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ¯'}
-                    </p>
-                  </div>
-                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-                    <p className={retroHeading}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯</p>
-                    <p className="text-2xl font-semibold">
-                      {formatNumberFa(movementData.total_movements)}
-                    </p>
-                  </div>
-                </div>
-
-                {movementData.movements.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-                      <thead>
-                        <tr>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ®</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¹</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط›ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ¯</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط› ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ¯</th>
-                          <th className={retroTableHeader}>ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {movementData.movements.map(movement => (
-                          <tr key={movement.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
-                            <td className="px-3 py-2 text-xs whitespace-nowrap">
-                              {new Date(movement.invoice_date).toLocaleDateString('fa-IR')}
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={`${retroBadge} ${movement.direction === 'out' ? 'border-red-600 text-red-700' : 'border-green-600 text-green-700'}`}>
-                                {movement.type}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              {movement.party ? (
-                                <div>
-                                  <span className="font-semibold">{movement.party.name}</span>
-                                  <span className="block text-[10px] text-[#7a6b4f]">
-                                    {movement.party.kind === 'customer'
-                                      ? 'ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢'
-                                      : movement.party.kind === 'supplier'
-                                      ? 'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ£ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’'
-                                      : 'ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±'}
-                                  </span>
-                                </div>
-                              ) : (
-                                <span className="text-[#7a6b4f]">-</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono">
-                              <span className={movement.quantity_change > 0 ? 'text-green-700' : 'text-red-700'}>
-                                {movement.quantity_change > 0 ? '+' : ''}
-                                {formatNumberFa(movement.quantity)}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono text-xs">
-                              {formatNumberFa(movement.unit_price)}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono font-semibold">
-                              {formatNumberFa(movement.total_price)}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono text-xs text-[#7a6b4f]">
-                              {formatNumberFa(movement.stock_before)}
-                            </td>
-                            <td className="px-3 py-2 text-left font-mono font-semibold text-blue-700">
-                              {formatNumberFa(movement.stock_after)}
-                            </td>
-                            <td className="px-3 py-2 text-xs">
-                              <button
-                                className="text-blue-700 underline hover:text-blue-900"
-                                onClick={e => {
-                                  e.stopPropagation()
-                                  window.open(`/api/invoices/${movement.invoice_id}/export`, '_blank')
-                                }}
-                              >
-                                {movement.invoice_number}
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center text-[#7a6b4f] py-8">
-                    ط·آ·ط¢آ¹ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ´ ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯.
-                  </div>
-                )}
-              </>
-            ) : null}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+import React, { useEffect, useMemo, useState } from 'react'
+import type { ModuleComponentProps } from '../components/layout/AppShell'
+import { apiGet, apiPost } from '../services/api'
+import { formatNumberFa } from '../utils/num'
+import {
+  retroBadge,
+  retroButton,
+  retroHeading,
+  retroInput,
+  retroPanel,
+  retroPanelPadded,
+  retroTableHeader,
+  retroMuted,
+} from '../components/retroTheme'
+
+interface Product {
+  id: string
+  name: string
+  group: string | null
+  unit: string | null
+  inventory: number | null | undefined
+  description?: string | null
+  last_purchase_price?: number | null
+  avg_purchase_price?: number | null
+  last_sale_price?: number | null
+  avg_sale_price?: number | null
+}
+
+interface ProductMovement {
+  id: number
+  invoice_id: number
+  invoice_number: string
+  invoice_date: string
+  direction: string
+  type: string
+  quantity: number
+  quantity_change: number
+  unit_price: number
+  total_price: number
+  stock_before: number
+  stock_after: number
+  party: {
+    id: string
+    name: string
+    kind: string | null
+  } | null
+  status: string
+}
+
+interface ProductMovementData {
+  product: {
+    id: string
+    name: string
+    unit: string | null
+    group: string | null
+    current_stock: number
+  }
+  movements: ProductMovement[]
+  total_movements: number
+}
+
+type ProductFormState = {
+  name: string
+  unit: string
+  group: string
+  group_l1?: string
+  group_l2?: string
+  group_l3?: string
+  code: string
+  description: string
+}
+
+export default function InventoryModule({ smartDate }: ModuleComponentProps) {
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [groupFilter, setGroupFilter] = useState('all')
+  const [groupL1Filter, setGroupL1Filter] = useState<string>('')
+  const [groupL2Filter, setGroupL2Filter] = useState<string>('')
+  const [groupL3Filter, setGroupL3Filter] = useState<string>('')
+  const [hideZeroInventory, setHideZeroInventory] = useState<boolean>(() => {
+    const raw = localStorage.getItem('inventory.hideZero')
+    return raw === null ? true : raw === 'true'
+  })
+  const [hideNegativeInventory, setHideNegativeInventory] = useState<boolean>(() => {
+    const raw = localStorage.getItem('inventory.hideNegative')
+    return raw === 'true'
+  })
+  const [showForm, setShowForm] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [formSuccess, setFormSuccess] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [movementData, setMovementData] = useState<ProductMovementData | null>(null)
+  const [loadingMovement, setLoadingMovement] = useState(false)
+
+  const emptyForm: ProductFormState = {
+    name: '',
+    unit: '',
+    group: '',
+    group_l1: '',
+    group_l2: '',
+    group_l3: '',
+    code: '',
+    description: '',
+  }
+  const [productForm, setProductForm] = useState<ProductFormState>(emptyForm)
+
+  useEffect(() => {
+    loadProducts()
+  }, [])
+
+  async function loadProducts() {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await apiGet<Product[]>('/api/products?limit=200')
+      setProducts(data)
+    } catch (err) {
+      console.error(err)
+      setError('امکان دریافت فهرست محصولات وجود ندارد.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleProductChange = (field: keyof ProductFormState, value: string) => {
+    setProductForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const resetForm = () => {
+    setProductForm(emptyForm)
+    setFormError(null)
+    setFormSuccess(null)
+  }
+
+  const submitProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!productForm.name.trim()) {
+      setFormError('نام کالا را وارد کنید.')
+      return
+    }
+    const l1 = (productForm.group_l1 || '').trim()
+    const l2 = (productForm.group_l2 || '').trim()
+    const l3 = (productForm.group_l3 || '').trim()
+    const groupPath = [l1, l2, l3].filter(Boolean).join('/')
+    setCreating(true)
+    setFormError(null)
+    try {
+      const payload = {
+        name: productForm.name.trim(),
+        unit: productForm.unit.trim() || undefined,
+        group: (groupPath || productForm.group.trim()).trim() || undefined,
+        description: productForm.description.trim() || undefined,
+        code: productForm.code.trim() || undefined,
+      }
+      const created = await apiPost<Product>('/api/products', payload)
+      const normalized: Product = {
+        ...created,
+        inventory: (created as Product).inventory ?? 0,
+      }
+      setProducts(prev => [normalized, ...prev])
+      setProductForm(emptyForm)
+      setFormSuccess('کالا با موفقیت ثبت شد.')
+    } catch (err) {
+      if (err instanceof Error) {
+        setFormError(err.message)
+      } else {
+        setFormError('ثبت کالا با خطا مواجه شد.')
+      }
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const loadProductMovement = async (product: Product) => {
+    setSelectedProduct(product)
+    setLoadingMovement(true)
+    setMovementData(null)
+    try {
+      const data = await apiGet<ProductMovementData>(`/api/products/${product.id}/movement`)
+      setMovementData(data)
+    } catch (err) {
+      console.error('Failed to load product movement:', err)
+      setError('خطا در دریافت گردش کالا')
+    } finally {
+      setLoadingMovement(false)
+    }
+  }
+
+  const exportMovement = () => {
+    if (!movementData) return
+    
+    const csv = [
+      ['تاریخ', 'نوع', 'طرف حساب', 'تعداد', 'قیمت واحد', 'مبلغ کل', 'موجودی قبل', 'موجودی بعد', 'فاکتور'].join('\t'),
+      ...movementData.movements.map(m => [
+        new Date(m.invoice_date).toLocaleDateString('fa-IR'),
+        m.type,
+        m.party?.name || '-',
+        m.quantity_change > 0 ? `+${m.quantity}` : `-${m.quantity}`,
+        m.unit_price,
+        m.total_price,
+        m.stock_before,
+        m.stock_after,
+        m.invoice_number,
+      ].join('\t'))
+    ].join('\n')
+    
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `گردش-کالا-${movementData.product.name}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const groups = useMemo(() => {
+    const set = new Set<string>()
+    products.forEach(p => {
+      if (p.group) set.add(p.group)
+    })
+    return Array.from(set).sort()
+  }, [products])
+
+  const groupLevels = useMemo(() => {
+    const l1 = new Set<string>()
+    const l2 = new Map<string, Set<string>>()
+    const l3 = new Map<string, Set<string>>()
+    groups.forEach(path => {
+      const parts = path.split('/').map(s => s.trim()).filter(Boolean)
+      if (parts[0]) {
+        l1.add(parts[0])
+        if (!l2.has(parts[0])) l2.set(parts[0], new Set<string>())
+      }
+      if (parts[0] && parts[1]) {
+        l2.get(parts[0])!.add(parts[1])
+        const key = `${parts[0]}/${parts[1]}`
+        if (!l3.has(key)) l3.set(key, new Set<string>())
+      }
+      if (parts[0] && parts[1] && parts[2]) {
+        const key = `${parts[0]}/${parts[1]}`
+        l3.get(key)!.add(parts[2])
+      }
+    })
+    return {
+      l1: Array.from(l1).sort(),
+      l2map: Array.from(l2.entries()).reduce<Record<string, string[]>>((acc, [k, v]) => {
+        acc[k] = Array.from(v).sort()
+        return acc
+      }, {}),
+      l3map: Array.from(l3.entries()).reduce<Record<string, string[]>>((acc, [k, v]) => {
+        acc[k] = Array.from(v).sort()
+        return acc
+      }, {}),
+    }
+  }, [groups])
+
+  const filtered = useMemo(() => {
+    return products.filter(prod => {
+      // hierarchical filter takes precedence if any level selected
+      if (groupL1Filter || groupL2Filter || groupL3Filter) {
+        const parts: string[] = (prod.group || '').split('/').map(s => s.trim()).filter(Boolean)
+        if (groupL1Filter && parts[0] !== groupL1Filter) return false
+        if (groupL2Filter && parts[1] !== groupL2Filter) return false
+        if (groupL3Filter && parts[2] !== groupL3Filter) return false
+      } else if (groupFilter !== 'all' && (prod.group ?? 'other') !== groupFilter) {
+        return false
+      }
+      if (hideZeroInventory && (prod.inventory ?? 0) === 0) return false
+      if (hideNegativeInventory && (prod.inventory ?? 0) < 0) return false
+      if (search) {
+        const hay = `${prod.name} ${prod.group ?? ''}`.toLowerCase()
+        if (!hay.includes(search.toLowerCase())) return false
+      }
+      return true
+    })
+  }, [products, groupFilter, groupL1Filter, groupL2Filter, groupL3Filter, search, hideZeroInventory, hideNegativeInventory])
+
+  const [sortKey, setSortKey] = useState<'name'|'group'|'unit'|'inventory'|'last_purchase_price'|'avg_purchase_price'|'last_sale_price'|'avg_sale_price'>(()=>{
+    const raw = localStorage.getItem('inventory.sort.key')
+    const allowed = ['name','group','unit','inventory','last_purchase_price','avg_purchase_price','last_sale_price','avg_sale_price']
+    return (raw && allowed.includes(raw)) ? (raw as any) : 'name'
+  })
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>(()=>{
+    const raw = localStorage.getItem('inventory.sort.dir')
+    return raw === 'asc' || raw === 'desc' ? raw : 'asc'
+  })
+  const sorted = useMemo(() => {
+    const arr = [...filtered]
+    const cmp = (a: any, b: any) => {
+      const ak = sortKey === 'inventory' ? (a.inventory ?? 0) : (a[sortKey] ?? '')
+      const bk = sortKey === 'inventory' ? (b.inventory ?? 0) : (b[sortKey] ?? '')
+      if (typeof ak === 'string' && typeof bk === 'string') {
+        const res = ak.localeCompare(bk, 'fa', { sensitivity: 'base' })
+        return sortDir === 'asc' ? res : -res
+      }
+      const na = Number(ak) || 0
+      const nb = Number(bk) || 0
+      const res = na - nb
+      return sortDir === 'asc' ? res : -res
+    }
+    arr.sort(cmp)
+    return arr
+  }, [filtered, sortKey, sortDir])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('inventory.sort.key', sortKey)
+      localStorage.setItem('inventory.sort.dir', sortDir)
+    } catch {}
+  }, [sortKey, sortDir])
+
+  useEffect(() => {
+    try { localStorage.setItem('inventory.hideZero', String(hideZeroInventory)) } catch {}
+  }, [hideZeroInventory])
+
+  useEffect(() => {
+    try { localStorage.setItem('inventory.hideNegative', String(hideNegativeInventory)) } catch {}
+  }, [hideNegativeInventory])
+
+  const totals = useMemo(() => {
+    const totalInventory = products.reduce((acc, prod) => acc + (prod.inventory ?? 0), 0)
+    const uniqueGroups = groups.length
+    const lowStockCount = products.filter(prod => (prod.inventory ?? 0) <= 5 && (prod.inventory ?? 0) >= 0).length
+    const shortageCount = products.filter(prod => (prod.inventory ?? 0) < 0).length
+    return { totalInventory, uniqueGroups, lowStockCount, shortageCount }
+  }, [products, groups])
+
+  if (loading) {
+    return (
+      <div className={`${retroPanel} p-10 flex items-center justify-center`}>
+        <div className="space-y-3 text-center">
+          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+          <p className={`${retroHeading} text-[#1f2e3b]`}>در حال دریافت موجودی...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {error && (
+        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
+          {error}
+        </div>
+      )}
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div>
+            <p className={retroHeading}>Inventory Board</p>
+            <h2 className="text-2xl font-semibold mt-2">مدیریت موجودی کالا</h2>
+            <p className={`text-xs ${retroMuted} mt-2`}>
+              تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | {smartDate.isoDate ?? 'ISO TBD'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={loadProducts}>
+              بروزرسانی موجودی
+            </button>
+            <button
+              className={retroButton}
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+            >
+              افزودن کالای جدید
+            </button>
+            <button className={retroButton}>ورود انبار</button>
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>تعداد کالاها</p>
+            <p className="text-lg font-semibold">{formatNumberFa(products.length)}</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>جمع موجودی</p>
+            <p className="text-lg font-semibold">{formatNumberFa(totals.totalInventory)}</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>گروه‌ها</p>
+            <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>کالاهای کم‌موجودی (≤۵)</p>
+            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#a35c2c]' : ''}`}>
+              {formatNumberFa(totals.lowStockCount)}
+            </p>
+            <p className="text-[11px] text-[#7a6b4f]">کمبود (منفی): <span className={`font-semibold ${totals.shortageCount ? 'text-[#c35c5c]' : ''}`}>{formatNumberFa(totals.shortageCount)}</span></p>
+          </div>
+        </div>
+      </section>
+
+      {showForm && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header className="flex items-center justify-between gap-4">
+            <div>
+              <p className={retroHeading}>فرم ثبت کالا</p>
+              <h3 className="text-lg font-semibold mt-2">افزودن کالای جدید به سیستم</h3>
+            </div>
+            <button
+              className={retroButton}
+              onClick={() => {
+                resetForm()
+                setShowForm(false)
+              }}
+            >
+              بستن فرم
+            </button>
+          </header>
+
+          <form className="space-y-4" onSubmit={submitProduct}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>نام کالا *</label>
+                <input
+                  value={productForm.name}
+                  onChange={e => handleProductChange('name', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="مانند: لپ‌تاپ مدل X"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>کد کالا</label>
+                <input
+                  value={productForm.code}
+                  onChange={e => handleProductChange('code', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="اختیاری"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>واحد اندازه‌گیری</label>
+                <input
+                  value={productForm.unit}
+                  onChange={e => handleProductChange('unit', e.target.value)}
+                  className={`${retroInput} w-full`}
+                  placeholder="عدد / کیلو / بسته..."
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>گروه کالا (تا ۳ سطح)</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <input
+                      value={productForm.group_l1}
+                      onChange={e => handleProductChange('group_l1', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l1"
+                      placeholder="سطح ۱ (مثلاً: الکترونیک)"
+                    />
+                    <datalist id="group-l1">
+                      {groupLevels.l1.map(g => (
+                        <option key={`l1-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <input
+                      value={productForm.group_l2}
+                      onChange={e => handleProductChange('group_l2', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l2"
+                      placeholder="سطح ۲ (مثلاً: لپ‌تاپ)"
+                      disabled={!productForm.group_l1}
+                    />
+                    <datalist id="group-l2">
+                      {(groupLevels.l2map[productForm.group_l1 || ''] || []).map(g => (
+                        <option key={`l2-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <input
+                      value={productForm.group_l3}
+                      onChange={e => handleProductChange('group_l3', e.target.value)}
+                      className={`${retroInput} w-full`}
+                      list="group-l3"
+                      placeholder="سطح ۳ (مثلاً: گیمینگ)"
+                      disabled={!productForm.group_l1 || !productForm.group_l2}
+                    />
+                    <datalist id="group-l3">
+                      {(groupLevels.l3map[`${(productForm.group_l1||'')}/${(productForm.group_l2||'')}`] || []).map(g => (
+                        <option key={`l3-${g}`} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+                <div className="text-[11px] text-[#7a6b4f] mt-1">
+                  مسیر گروه نهایی: {[productForm.group_l1, productForm.group_l2, productForm.group_l3].filter(Boolean).join('/') || (productForm.group || '—')}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={retroHeading}>توضیحات</label>
+              <textarea
+                value={productForm.description}
+                onChange={e => handleProductChange('description', e.target.value)}
+                className={`${retroInput} w-full h-24`}
+                placeholder="ویژگی‌ها یا یادداشت‌های مهم"
+              />
+            </div>
+
+            {formError && (
+              <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-3 py-2 shadow-[3px_3px_0_#c35c5c] text-sm">
+                {formError}
+              </div>
+            )}
+            {formSuccess && (
+              <div className="border-2 border-[#4f704f] bg-[#e7f4e7] text-[#295329] px-3 py-2 shadow-[3px_3px_0_#4f704f] text-sm">
+                {formSuccess}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <button className={`${retroButton} !bg-[#1f2e3b]`} disabled={creating} type="submit">
+                {creating ? 'در حال ثبت...' : 'ثبت کالا'}
+              </button>
+              <button
+                type="button"
+                className={`${retroButton} !bg-[#5b4a2f]`}
+                onClick={resetForm}
+                disabled={creating}
+              >
+                پاک‌سازی فرم
+              </button>
+            </div>
+          </form>
+        </section>
+      )}
+
+      <section className={`${retroPanelPadded} space-y-4`}>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+          <div className="lg:col-span-2 space-y-2">
+            <label className={retroHeading}>جستجو</label>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className={`${retroInput} w-full`}
+              placeholder="نام کالا یا گروه..."
+            />
+          </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>گروه کالا (فیلتر سلسله‌مراتبی)</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <select
+                  value={groupL1Filter}
+                  onChange={e => { setGroupL1Filter(e.target.value); setGroupL2Filter(''); setGroupL3Filter('') }}
+                  className={`${retroInput} w-full`}
+                >
+                  <option value="">سطح ۱: همه</option>
+                  {groupLevels.l1.map(g => (
+                    <option key={`fl1-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={groupL2Filter}
+                  onChange={e => { setGroupL2Filter(e.target.value); setGroupL3Filter('') }}
+                  className={`${retroInput} w-full`}
+                  disabled={!groupL1Filter}
+                >
+                  <option value="">سطح ۲: همه</option>
+                  {(groupLevels.l2map[groupL1Filter || ''] || []).map(g => (
+                    <option key={`fl2-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <select
+                  value={groupL3Filter}
+                  onChange={e => setGroupL3Filter(e.target.value)}
+                  className={`${retroInput} w-full`}
+                  disabled={!groupL1Filter || !groupL2Filter}
+                >
+                  <option value="">سطح ۳: همه</option>
+                  {(groupLevels.l3map[`${groupL1Filter}/${groupL2Filter}`] || []).map(g => (
+                    <option key={`fl3-${g}`} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="text-[11px] text-[#7a6b4f]">مسیر انتخاب‌شده: {[groupL1Filter, groupL2Filter, groupL3Filter].filter(Boolean).join('/') || '—'}</div>
+          </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>نمایش</label>
+            <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
+              {formatNumberFa(sorted.length)} کالا مطابق فیلترها نمایش داده شده است.
+            </div>
+            <label className="flex items-center gap-2 text-xs mt-1">
+              <input type="checkbox" checked={hideZeroInventory} onChange={e => setHideZeroInventory(e.target.checked)} />
+              عدم نمایش موجودی صفر
+            </label>
+            <label className="flex items-center gap-2 text-xs mt-1">
+              <input type="checkbox" checked={hideNegativeInventory} onChange={e => setHideNegativeInventory(e.target.checked)} />
+              عدم نمایش موجودی منفی
+            </label>
+          </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>مرتب‌سازی</label>
+            <div className="grid grid-cols-2 gap-2">
+              <select value={sortKey} onChange={e => setSortKey(e.target.value as any)} className={`${retroInput} w-full`}>
+                <option value="name">نام کالا</option>
+                <option value="group">گروه</option>
+                <option value="unit">واحد</option>
+                <option value="inventory">موجودی</option>
+                <option value="last_purchase_price">آخرین خرید</option>
+                <option value="avg_purchase_price">میانگین خرید</option>
+                <option value="last_sale_price">آخرین فروش</option>
+                <option value="avg_sale_price">میانگین فروش</option>
+              </select>
+              <select value={sortDir} onChange={e => setSortDir(e.target.value as any)} className={`${retroInput} w-full`}>
+                <option value="asc">صعودی</option>
+                <option value="desc">نزولی</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {sorted.length > 0 ? (
+          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-xs">
+            <thead>
+              <tr>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='name') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('name') }}>نام کالا {sortKey==='name' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='group') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('group') }}>گروه {sortKey==='group' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='unit') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('unit') }}>واحد {sortKey==='unit' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='inventory') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('inventory') }}>موجودی {sortKey==='inventory' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='last_purchase_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('last_purchase_price') }}>آخرین خرید {sortKey==='last_purchase_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='avg_purchase_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('avg_purchase_price') }}>میانگین خرید {sortKey==='avg_purchase_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='last_sale_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('last_sale_price') }}>آخرین فروش {sortKey==='last_sale_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+                <th className={retroTableHeader}><button className="underline" onClick={()=> { if (sortKey==='avg_sale_price') setSortDir(d=> d==='asc'?'desc':'asc'); else setSortKey('avg_sale_price') }}>میانگین فروش {sortKey==='avg_sale_price' ? (sortDir==='asc'?'↑':'↓') : ''}</button></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(prod => {
+                const inv = prod.inventory ?? 0
+                const isNegative = inv < 0
+                const isZero = inv === 0
+                const isPositive = inv > 0
+                const isLowPositive = isPositive && inv <= 5
+                return (
+                  <tr 
+                    key={prod.id} 
+                    className={`border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer ${isNegative ? 'bg-[#fff3f3]' : ''}`}
+                    onClick={() => loadProductMovement(prod)}
+                  >
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{prod.name}</span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          موجودی: {formatNumberFa(prod.inventory ?? 0)}
+                        </span>
+                        {typeof prod.last_purchase_price === 'number' && (
+                          <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                            آخرین خرید: {formatNumberFa(prod.last_purchase_price)}
+                          </span>
+                        )}
+                        {typeof prod.last_sale_price === 'number' && (
+                          <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                            آخرین فروش: {formatNumberFa(prod.last_sale_price)}
+                          </span>
+                        )}
+                      </div>
+                      {prod.description && (
+                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                          {prod.description}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{prod.group ?? 'بدون گروه'}</td>
+                    <td className="px-3 py-2">{prod.unit ?? 'عدد'}</td>
+                    <td className="px-3 py-2 text-left font-semibold">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`${isLowPositive ? 'text-red-700' : isPositive ? 'text-green-700' : isZero ? 'text-gray-500' : 'text-red-700'}`}>
+                          {formatNumberFa(isLowPositive ? -inv : inv)}
+                        </span>
+                        {isNegative && (
+                          <span className={`${retroBadge} !bg-[#c35c5c] !text-white text-[10px]`}>کمبود</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.last_purchase_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.last_purchase_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.avg_purchase_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.avg_purchase_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.last_sale_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.last_sale_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-left">
+                      {prod.avg_sale_price ? (
+                        <div>
+                          <span className="font-semibold">{formatNumberFa(prod.avg_sale_price)}</span>
+                          <span className="text-[9px] text-[#7a6b4f] block">ریال</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#999]">---</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <div className="text-xs text-[#7a6b4f]">کالایی با شرایط فعلی یافت نشد.</div>
+        )}
+      </section>
+
+      {/* Product Movement Modal */}
+      {selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className={`${retroPanelPadded} max-w-6xl w-full max-h-[90vh] overflow-y-auto space-y-4`}>
+            <header className="flex items-center justify-between gap-3 sticky top-0 bg-[#fdf7e6] pb-3 border-b border-[#c5bca5]">
+              <div>
+                <p className={retroHeading}>گردش کالا</p>
+                <h3 className="text-xl font-semibold mt-2">{selectedProduct.name}</h3>
+                <p className="text-xs text-[#7a6b4f] mt-1">
+                  {selectedProduct.group && `گروه: ${selectedProduct.group} | `}
+                  واحد: {selectedProduct.unit || 'عدد'}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {movementData && (
+                  <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={exportMovement}>
+                    خروجی CSV
+                  </button>
+                )}
+                <button
+                  className={`${retroButton} !bg-[#5b4a2f]`}
+                  onClick={() => {
+                    setSelectedProduct(null)
+                    setMovementData(null)
+                  }}
+                >
+                  بستن
+                </button>
+              </div>
+            </header>
+
+            {loadingMovement ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="space-y-3 text-center">
+                  <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+                  <p className={`${retroHeading} text-[#1f2e3b]`}>در حال بارگذاری گردش کالا...</p>
+                </div>
+              </div>
+            ) : movementData ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                    <p className={retroHeading}>موجودی فعلی</p>
+                    <p className="text-2xl font-semibold text-blue-700">
+                      {formatNumberFa(movementData.product.current_stock)} {movementData.product.unit || 'عدد'}
+                    </p>
+                  </div>
+                  <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                    <p className={retroHeading}>تعداد تراکنش‌ها</p>
+                    <p className="text-2xl font-semibold">
+                      {formatNumberFa(movementData.total_movements)}
+                    </p>
+                  </div>
+                </div>
+
+                {movementData.movements.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                      <thead>
+                        <tr>
+                          <th className={retroTableHeader}>تاریخ</th>
+                          <th className={retroTableHeader}>نوع</th>
+                          <th className={retroTableHeader}>طرف حساب</th>
+                          <th className={retroTableHeader}>تعداد</th>
+                          <th className={retroTableHeader}>قیمت واحد</th>
+                          <th className={retroTableHeader}>مبلغ کل</th>
+                          <th className={retroTableHeader}>موجودی قبل</th>
+                          <th className={retroTableHeader}>موجودی بعد</th>
+                          <th className={retroTableHeader}>سند</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movementData.movements.map(movement => (
+                          <tr key={movement.id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df]">
+                            <td className="px-3 py-2 text-xs whitespace-nowrap">
+                              {new Date(movement.invoice_date).toLocaleDateString('fa-IR')}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`${retroBadge} ${movement.direction === 'out' ? 'border-red-600 text-red-700' : 'border-green-600 text-green-700'}`}>
+                                {movement.type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {movement.party ? (
+                                <div>
+                                  <span className="font-semibold">{movement.party.name}</span>
+                                  <span className="block text-[10px] text-[#7a6b4f]">
+                                    {movement.party.kind === 'customer' ? 'مشتری' : movement.party.kind === 'supplier' ? 'تأمین‌کننده' : 'سایر'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[#7a6b4f]">-</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono">
+                              <span className={movement.quantity_change > 0 ? 'text-green-700' : 'text-red-700'}>
+                                {movement.quantity_change > 0 ? '+' : ''}{formatNumberFa(movement.quantity)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono text-xs">
+                              {formatNumberFa(movement.unit_price)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono font-semibold">
+                              {formatNumberFa(movement.total_price)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono text-xs text-[#7a6b4f]">
+                              {formatNumberFa(movement.stock_before)}
+                            </td>
+                            <td className="px-3 py-2 text-left font-mono font-semibold text-blue-700">
+                              {formatNumberFa(movement.stock_after)}
+                            </td>
+                            <td className="px-3 py-2 text-xs">
+                              <button 
+                                className="text-blue-700 underline hover:text-blue-900"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  window.open(`/api/invoices/${movement.invoice_id}/export`, '_blank')
+                                }}
+                              >
+                                {movement.invoice_number}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center text-[#7a6b4f] py-8">
+                    هیچ تراکنشی برای این کالا ثبت نشده است.
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -195,9 +195,24 @@ Status:               Active ✅
 - ✅ Refresh token: available (optional 2FA)
 
 ### 3. OTP (Optional 2FA)
-- ✅ Time-based OTP (TOTP)
-- ✅ 6-digit codes
-- ✅ 30-second window
+ - ✅ Time-based OTP (TOTP) و OTP از طریق پیامک برای ورود موبایلی
+ - ✅ 6 رقم
+ - ✅ پنجره زمانی 30 ثانیه برای TOTP
+ - ✅ کدهای OTP پیامکی با هش SHA-256 + salt ذخیره می‌شوند، یک‌بارمصرف و انقضای 3 دقیقه
+ - ✅ محدودیت نرخ: حداکثر 3 درخواست در 5 دقیقه برای هر موبایل
+ - ✅ ممیزی غیرقابل‌تغییر: ثبت رویدادهای درخواست/تأیید در زنجیره، ساخت Batch مرکل و ارائه Merkle Proof
+
+#### Backend Endpoints (OTP & Audit)
+- `POST /api/auth/otp/start` — صدور کد OTP و ثبت ممیزی
+- `POST /api/auth/otp/verify` — تأیید هش، مصرف کد، صدور توکن‌ها و ثبت ممیزی
+- `GET  /api/audit/otp/batch/latest` — اطلاعات آخرین Batch مرکل (timestamp, count, merkle_root)
+- `POST /api/audit/otp/batch/build` — ساخت Batch جدید
+- `GET  /api/audit/otp/proof?entity_id=...&entry_id=...` — Merkle Proof و شاخص اعتبار زنجیره
+- `GET  /api/audit/otp/recent` — رویدادهای اخیر OTP برای بررسی سریع
+
+#### Client Behavior
+- `LoginForm` در حالت OTP دکمه‌ها را هنگام پردازش غیرفعال می‌کند و Toast موفق/خطا نمایش می‌دهد.
+- در مسیر تأیید، ابتدا توکن‌ها ذخیره می‌شوند، رویداد `auth-updated` منتشر می‌شود و سپس به داشبورد هدایت می‌گردد.
 - ✅ Endpoints:
   - `POST /api/auth/otp/enable` — Enable 2FA
   - `POST /api/auth/otp/verify` — Verify OTP code

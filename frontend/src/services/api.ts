@@ -1,6 +1,33 @@
 import authService from './auth'
 
-type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+function appendFyParam(path: string): string {
+  try {
+    const activeFy = localStorage.getItem('hesabpak_active_fy_id')
+    const fyId = activeFy ? Number(activeFy) : null
+    if (!fyId || !Number.isFinite(fyId)) return path
+    const u = new URL(path, window.location.origin)
+    const targets = [
+      '/api/invoices',
+      '/api/payments',
+      '/api/reports/pnl',
+      '/api/reports/person',
+      '/api/persons/balances',
+    ]
+    const isPartyLedger = u.pathname.startsWith('/api/ledger/party/')
+    const isProductMovement = /\/api\/products\/.+\/movement$/.test(u.pathname)
+    if (targets.includes(u.pathname) || isPartyLedger || isProductMovement) {
+      if (!u.searchParams.has('fy_id')) {
+        u.searchParams.set('fy_id', String(fyId))
+      }
+      return u.pathname + '?' + u.searchParams.toString()
+    }
+    return path
+  } catch {
+    return path
+  }
+}
+
+type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT'
 
 /**
  * Date format for API:
@@ -12,8 +39,10 @@ type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 async function parseResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = res.statusText || 'Request failed'
+    let payload: any = null
     try {
       const data = await res.json()
+      payload = data
       if (typeof data?.detail === 'string') {
         detail = data.detail
       } else if (data && typeof data === 'object') {
@@ -22,6 +51,11 @@ async function parseResponse<T>(res: Response): Promise<T> {
     } catch {
       // ignore body parse errors
     }
+    // Broadcast a global error event for UI toast handling
+    try {
+      const evt = new CustomEvent('api-error', { detail: { status: res.status, message: detail, payload } })
+      window.dispatchEvent(evt)
+    } catch {}
     throw new Error(detail)
   }
   if (res.status === 204) {
@@ -39,7 +73,7 @@ export async function apiRequest<T>(
   method: HttpMethod = 'GET',
   init?: RequestInit,
 ): Promise<T> {
-  const response = await authService.fetchWithAuth(path, {
+  const response = await authService.fetchWithAuth(appendFyParam(path), {
     ...(init || {}),
     method,
     // Default to Jalali date format in responses
@@ -96,3 +130,15 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
 }
+
+export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit) {
+  return apiRequest<T>(path, 'PUT', {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...init,
+  })
+}
+

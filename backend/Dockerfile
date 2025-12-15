@@ -4,15 +4,16 @@ WORKDIR /app
 # Install system deps including tesseract and poppler for PDF->image
 RUN apt-get update \
 	 && apt-get install -y --no-install-recommends \
-		 build-essential libpq-dev tesseract-ocr libtesseract-dev poppler-utils pkg-config libcairo2-dev libffi-dev \
+		 build-essential libpq-dev tesseract-ocr libtesseract-dev poppler-utils pkg-config libcairo2-dev libffi-dev dos2unix curl \
 	 && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-# Normalize line endings for entrypoint to avoid exec format errors and ensure executable bit
-RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh || true
+# Normalize Windows CRLF line endings to LF to avoid exec errors
+RUN dos2unix /app/entrypoint.sh || true
+RUN chmod +x /app/entrypoint.sh || true
 
 EXPOSE 8000
 CMD ["/app/entrypoint.sh"]

@@ -1,7 +1,7 @@
 """Add Dashboard Widgets configuration for customizable dashboard
 
-Revision ID: 0031
-Revises: 0030
+Revision ID: 0031_dashboard_widgets
+Revises: 0030_add_person_accounting_fields
 Create Date: 2025-11-15
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '0031'
-down_revision = '0030'
+revision = '0031_dashboard_widgets'
+down_revision = '0030_add_person_accounting_fields'
 branch_labels = None
 depends_on = None
 

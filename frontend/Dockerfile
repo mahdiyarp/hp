@@ -2,20 +2,23 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install dependencies (fallback to npm install if lockfile missing)
-COPY package.json package-lock.json* ./
-COPY tsconfig.json tsconfig.json
-COPY vite.config.ts vite.config.ts
-COPY postcss.config.cjs postcss.config.cjs
-COPY tailwind.config.cjs tailwind.config.cjs
-RUN if [ -f package-lock.json ]; then npm ci --silent; else echo "[INFO] package-lock.json missing -> using npm install" && npm install --silent; fi
+# Install dependencies
+COPY package.json package.json
+COPY package-lock.json package-lock.json
+# Ensure devDependencies (like Vite) are installed in builder reproducibly
+RUN npm ci --include=dev
 
 # Copy source and build
 COPY . .
+# Enable optional developer autologin in build-time env when desired
+ENV VITE_DEV_AUTOLOGIN=true
+# Mitigate potential memory issues during build
+ENV NODE_OPTIONS=--max-old-space-size=512
 RUN npm run build
 
 ### Production image
 FROM nginx:stable-alpine
+RUN apk add --no-cache curl
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # ensure nginx serves index.html for SPA routing

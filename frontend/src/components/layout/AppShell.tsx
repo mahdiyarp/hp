@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { retroBadge, retroButton, retroHeading, retroPanel, retroMuted } from '../retroTheme'
 import { useI18n } from '../../i18n/I18nContext'
+import StatusBar from '../StatusBar'
 import SidebarMenu from './SidebarMenu'
 import type { SyncRecord } from '../../App'
 import GlobalSearch from '../GlobalSearch'
 import { formatNumberFa, toPersianDigits } from '../../utils/num'
+import { useFY } from '../../context/FYContext'
 
 export interface SmartDateState {
   isoDate: string | null
@@ -26,6 +28,8 @@ export interface ModuleDefinition {
   component: React.ComponentType<ModuleComponentProps>
   badge?: string
   icon?: React.ReactNode
+  hidden?: boolean
+  feature?: string
 }
 
 interface AppShellProps {
@@ -33,6 +37,7 @@ interface AppShellProps {
   sync: SyncRecord | null
   user: { username: string; role: string } | null
   onLogout: () => void
+  orgFeatures?: string[]
 }
 
 const SMART_DATE_ISO_KEY = 'hesabpak_selected_date'
@@ -43,35 +48,31 @@ function normalizeIsoDate(value: string | null | undefined) {
   return value.length >= 10 ? value.slice(0, 10) : value
 }
 
-export default function AppShell({ modules, sync, user, onLogout }: AppShellProps) {
+export default function AppShell({ modules, sync, user, onLogout, orgFeatures }: AppShellProps) {
   const { t } = useI18n()
+  const visibleModules = useMemo(() => {
+    const allowAll = !!(user && (user.role === 'Admin' || /Developer/i.test(user.role)))
+    return modules.filter(m => {
+      if (m.hidden) return false
+      if (allowAll) return true
+      return !m.feature || (orgFeatures || []).includes(m.feature)
+    })
+  }, [modules, orgFeatures, user])
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
-    modules.forEach(m => map.set(m.id, m))
+    visibleModules.forEach(m => map.set(m.id, m))
     return map
-  }, [modules])
+  }, [visibleModules])
 
   const initialModuleId = useMemo(() => {
     const hash = window.location.hash.replace('#', '')
     if (hash && moduleMap.has(hash)) return hash
-    return modules[0]?.id ?? ''
-  }, [moduleMap, modules])
+    return visibleModules[0]?.id ?? ''
+  }, [moduleMap, visibleModules])
 
   const [activeModuleId, setActiveModuleId] = useState(initialModuleId)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('hesabpak_sidebar_collapsed_v1') === '1'
-    } catch (e) {
-      return false
-    }
-  })
-  const [sidebarSide, setSidebarSide] = useState<'left' | 'right'>(() => {
-    try {
-      return (localStorage.getItem('hesabpak_sidebar_side_v1') === 'left') ? 'left' : 'right'
-    } catch (e) {
-      return 'right'
-    }
-  })
+  // حذف قابلیت کوچک‌سازی منو؛ همیشه باز است
+  const [sidebarSide] = useState<'left' | 'right'>(() => 'right')
   const [smartDate, setSmartDate] = useState<SmartDateState>({
     isoDate: normalizeIsoDate(localStorage.getItem(SMART_DATE_ISO_KEY)),
     jalali: localStorage.getItem(SMART_DATE_JALALI_KEY),
@@ -86,13 +87,9 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     [moduleMap],
   )
 
-  const toggleSidebar = useCallback(() => {
-    setSidebarCollapsed(prev => {
-      const next = !prev
-      try { localStorage.setItem('hesabpak_sidebar_collapsed_v1', next ? '1' : '0') } catch (e) {}
-      return next
-    })
-  }, [])
+  // دکمه کوچک‌سازی حذف شد
+
+  // دکمه تغییر سمت حذف شد؛ منو همیشه سمت راست است.
 
   useEffect(() => {
     const handler = () => {
@@ -119,18 +116,12 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     }
   }, [moduleMap, navigate])
 
-  // Listen to storage events so sidebar side can be changed elsewhere (Settings)
+  // فقط تغییرات مربوط به کوچک/بزرگ‌شدن منو را گوش می‌دهیم
+  // شنود مربوط به کوچک‌سازی حذف شد
+
+  // سمت منو را همیشه راست ثبت می‌کنیم
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'hesabpak_sidebar_side_v1') {
-        setSidebarSide(e.newValue === 'left' ? 'left' : 'right')
-      }
-      if (e.key === 'hesabpak_sidebar_collapsed_v1') {
-        setSidebarCollapsed(e.newValue === '1')
-      }
-    }
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    try { localStorage.setItem('hesabpak_sidebar_side_v1', 'right') } catch (e) {}
   }, [])
 
   const handleSmartDateChange = useCallback((next: SmartDateState) => {
@@ -153,8 +144,11 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
     setSmartDate({ isoDate: storedIso, jalali: storedJalali })
   }, [])
 
-  const activeModule = moduleMap.get(activeModuleId) ?? modules[0]
+  const activeModule = moduleMap.get(activeModuleId) ?? visibleModules[0]
   const ActiveComponent = activeModule?.component
+
+  const fyCtx = useFY()
+  const activeFy = fyCtx?.activeFy ?? null
 
   const clockDriftMs = useMemo(() => {
     if (!sync?.epochMs) return null
@@ -164,37 +158,26 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
   }, [sync])
   const asideElement = (
     <aside
-      className={`${sidebarCollapsed ? 'w-20' : 'w-72'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col transition-all duration-200 ease-in-out`}
+      className={`${'w-72'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col`}
     >
       <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
         <div>
           <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
-          <div className={`${sidebarCollapsed ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'} transition-opacity duration-200`}>
-            {!sidebarCollapsed && (
-              <>
-                <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
-                <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
-                  ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
-                  کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
-                </p>
-              </>
-            )}
+          <div>
+            <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
+            <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
+              ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
+              کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
+            </p>
           </div>
         </div>
-        <button
-          title={sidebarCollapsed ? 'باز کردن منو' : 'کوچک‌سازی منو'}
-          onClick={toggleSidebar}
-          className="text-xs px-2 py-1 bg-[#1f2e3b] rounded border border-[#2d3b45]"
-        >
-          {sidebarCollapsed ? '›' : '‹'}
-        </button>
+        {/* دکمه‌های مربوط به کوچک‌سازی/تغییر سمت حذف شدند */}
       </div>
 
       <SidebarMenu
-        modules={modules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
+        modules={visibleModules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
         activeModuleId={activeModuleId}
         onNavigate={navigate}
-        collapsed={sidebarCollapsed}
       />
 
       <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
@@ -216,9 +199,9 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
 
   return (
     <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex">
-      {sidebarSide === 'left' && asideElement}
-      <div className="flex-1 flex flex-col bg-[var(--retro-surface-bg)] text-[var(--retro-table-header-text)]">
-        <header className="border-b-4 border-[#d7caa4] bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] shadow-[0_6px_0_#b7a77a]">
+      {sidebarSide === 'right' && asideElement}
+      <div className="flex-1 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
+        <header className="border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a]">
           <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
@@ -233,6 +216,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
               <div className="flex flex-col items-start lg:items-end text-sm gap-1">
                 <span>کاربر: {user?.username ?? '---'}</span>
                 <span>نقش دسترسی: {user?.role ?? '---'}</span>
+                {/* FY selector removed from header per request */}
                 <div className="flex flex-wrap gap-2 mt-2">
                   <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>
                     {smartDate.jalali ? `Jalali: ${smartDate.jalali}` : 'JALALI TBD'}
@@ -240,6 +224,13 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
                   <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>
                     {smartDate.isoDate ? `ISO: ${smartDate.isoDate}` : 'ISO TBD'}
                   </span>
+                  {/* Active FY badge */}
+                  <span className={`${retroBadge} bg-[#3a4a57] border-[#4b5f6f]`}>
+                    {activeFy
+                      ? `سال مالی: ${activeFy.name ?? activeFy.label ?? activeFy.id}`
+                      : 'سال مالی: نامشخص'}
+                  </span>
+                    <StatusBar />
                 </div>
             </div>
           </div>
@@ -307,7 +298,7 @@ export default function AppShell({ modules, sync, user, onLogout }: AppShellProp
           </div>
         </main>
       </div>
-      {sidebarSide !== 'left' && asideElement}
+      {sidebarSide === 'left' && asideElement}
     </div>
   )
 }

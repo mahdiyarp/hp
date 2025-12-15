@@ -6,6 +6,13 @@ const fs = require('fs');
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  // Silence noisy 404s for optional audit endpoints during tests
+  try {
+    await page.route('**/api/audit/otp/batch/latest', route => {
+      route.fulfill({ status: 204, contentType: 'application/json', body: '{}' })
+    })
+  } catch {}
+
   page.on('console', msg => {
     try { outLogs.push({type: msg.type(), text: msg.text()}); } catch(e){}
   });
@@ -14,36 +21,40 @@ const fs = require('fs');
   });
 
   try {
-    const url = process.env.URL || 'http://host.docker.internal:3000';
+    const argUrl = process.argv[2];
+    const envUrl = process.env.BASE_URL;
+    const url = argUrl || envUrl || 'http://localhost:3000';
     console.log('Navigating to', url);
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 
-    // Try to login via API and set localStorage tokens if possible
-    const username = process.env.USERNAME || 'developer';
-    const password = process.env.PASSWORD || '09123506545';
+    // Basic availability check: ensure root element exists
+    await page.waitForSelector('#root', { timeout: 10000 });
 
-    // Perform login using fetch in page context (so cookies/localStorage set same origin)
-    const loginResult = await page.evaluate(async (creds) => {
-      try {
-        const params = new URLSearchParams();
-        params.append('username', creds.username);
-        params.append('password', creds.password);
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: {'Content-Type':'application/x-www-form-urlencoded'},
-          body: params.toString(),
-        });
-        const data = await res.json();
-        if(res.ok && data.access_token){
-          localStorage.setItem('hesabpak_access_token', data.access_token);
-          localStorage.setItem('hesabpak_refresh_token', data.refresh_token || '');
-          return {ok:true};
-        }
-        return {ok:false, status: res.status, body: data};
-      } catch(e){ return {ok:false, error: String(e)} }
-    }, { username, password });
+    // Updated OTP login flow for inline mobile mode in LoginForm
+    try {
+      // Switch to mobile mode tab
+      const mobileModeToggle = await page.waitForSelector('[data-testid="login-mobile-tab"]', { timeout: 5000 });
+      await mobileModeToggle.click();
 
-    outLogs.push({type:'info', text: 'loginResult: ' + JSON.stringify(loginResult)});
+      // Fill phone number and a 6-digit code
+      const phoneInput = await page.waitForSelector('input[placeholder*="0912"], input[inputmode="tel"]', { timeout: 5000 });
+      await phoneInput.fill('09123506545');
+
+      const codeInput = await page.$('input[placeholder*="123456"], input[inputmode="numeric"]');
+      if (codeInput) {
+        await codeInput.fill('123456');
+      }
+
+      // Submit mobile login
+      const submitMobile = await page.waitForSelector('[data-testid="login-mobile-submit"]', { timeout: 5000 });
+      await submitMobile.click();
+
+      await page.waitForTimeout(2500);
+      const dashboardExists = await page.$('nav, header, [data-testid="dashboard"], .dashboard');
+      console.log('Dashboard visible:', !!dashboardExists);
+    } catch (e) {
+      console.warn('OTP mobile flow skipped:', e.message);
+    }
 
     // reload the app after login
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });

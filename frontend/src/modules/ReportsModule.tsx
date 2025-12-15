@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet } from '../services/api'
-import { formatNumberFa, isoToJalali } from '../utils/num'
-import { exportToCsv } from '../utils/export'
+import { formatNumberFa, isoToJalali, jalaliToIso } from '../utils/num'
 import {
   retroBadge,
   retroButton,
@@ -77,6 +76,13 @@ interface PersonOption {
 
 export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   const [rangeDays, setRangeDays] = useState(30)
+  const [useCustomRange, setUseCustomRange] = useState(false)
+  const [jalaliStart, setJalaliStart] = useState('')
+  const [jalaliEnd, setJalaliEnd] = useState('')
+  const [costMethod, setCostMethod] = useState<'FIFO' | 'LIFO'>(() => {
+    const raw = localStorage.getItem('reports.costMethod')
+    return raw === 'LIFO' ? 'LIFO' : 'FIFO'
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
@@ -84,73 +90,63 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   const [cashAll, setCashAll] = useState<CashReport | null>(null)
   const [cashMethods, setCashMethods] = useState<Record<string, number>>({})
   const [stock, setStock] = useState<StockValuation[]>([])
-  const [persons, setPersons] = useState<PersonOption[]>([])
-  const [selectedPerson, setSelectedPerson] = useState<string>('')
-  const [personReport, setPersonReport] = useState<PersonReportEntry | null>(null)
-  const [personLoading, setPersonLoading] = useState(false)
-  const [nlQuery, setNlQuery] = useState('')
-  const [queryLoading, setQueryLoading] = useState(false)
-  const [queryMatches, setQueryMatches] = useState<InvoiceMatch[]>([])
-  const [queryError, setQueryError] = useState<string | null>(null)
-
-  const pnlChartData = useMemo(() => {
-    if (!pnl) return null
-    return {
-      labels: ['فروش', 'خرید', 'سود ناخالص'],
-      datasets: [
-        {
-          label: 'ریال',
-          data: [pnl.sales, pnl.purchases, pnl.gross_profit],
-          backgroundColor: ['#4f6f52', '#c35c5c', '#1f2e3b'],
-          borderWidth: 0,
-        },
-      ],
-    }
-  }, [pnl])
-
-  const cashChartData = useMemo(() => {
-    const entries = Object.entries(cashMethods)
-    if (entries.length === 0) return null
-    return {
-      labels: entries.map(([method]) => method),
-      datasets: [
-        {
-          label: 'تراز',
-          data: entries.map(([, value]) => value),
-          backgroundColor: entries.map((_, idx) =>
-            ['#154b5f', '#d7caa4', '#f4a259', '#8fb339', '#6c4a4a'][idx % 5],
-          ),
-          borderWidth: 0,
-        },
-      ],
-    }
-  }, [cashMethods])
+  const [hideZeroStock, setHideZeroStock] = useState<boolean>(() => {
+    try { return localStorage.getItem('reports.stock.hideZero') !== 'false' } catch { return true }
+  })
+  const [hideNegativeStock, setHideNegativeStock] = useState<boolean>(() => {
+    try { return localStorage.getItem('reports.stock.hideNegative') === 'true' } catch { return false }
+  })
+  const [computedSales, setComputedSales] = useState(0)
+  const [computedCOGS, setComputedCOGS] = useState(0)
+  const [salesTrend, setSalesTrend] = useState<Array<{ date: string; total: number }>>([])
+  const [productLedgerOpen, setProductLedgerOpen] = useState<null | { product_id: string; name: string; entries: Array<{ date: string; type: 'purchase' | 'sale'; qty: number; unit: number; total: number; running: number }> }>(null)
 
   useEffect(() => {
-    loadReports(rangeDays)
+    loadReports()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeDays, smartDate.isoDate])
+  }, [rangeDays, smartDate.isoDate, useCustomRange, jalaliStart, jalaliEnd, costMethod])
 
   useEffect(() => {
-    void loadPersons()
-  }, [])
+    try { localStorage.setItem('reports.costMethod', costMethod) } catch {}
+  }, [costMethod])
 
-  async function loadReports(days: number) {
+  useEffect(() => {
+    try { localStorage.setItem('reports.stock.hideZero', String(hideZeroStock)) } catch {}
+  }, [hideZeroStock])
+
+  useEffect(() => {
+    try { localStorage.setItem('reports.stock.hideNegative', String(hideNegativeStock)) } catch {}
+  }, [hideNegativeStock])
+
+  function resolveRange(): { startIso: string; endIso: string; days: number } {
+    // end inclusive -> add 1 day when calling backend daily endpoints
+    const endDate = smartDate.isoDate ? new Date(`${smartDate.isoDate}T00:00:00Z`) : new Date()
+    if (useCustomRange && jalaliStart && jalaliEnd) {
+      const s = jalaliToIso(jalaliStart)
+      const e = jalaliToIso(jalaliEnd)
+      const startIso = s || endDate.toISOString()
+      const endIso = e || endDate.toISOString()
+      const diffDays = Math.max(1, Math.ceil((new Date(endIso).getTime() - new Date(startIso).getTime()) / (24*3600*1000)))
+      return { startIso, endIso, days: diffDays }
+    }
+    const startDate = new Date(endDate.getTime())
+    startDate.setUTCDate(startDate.getUTCDate() - rangeDays)
+    return { startIso: startDate.toISOString(), endIso: endDate.toISOString(), days: rangeDays }
+  }
+
+  async function loadReports() {
     setLoading(true)
     setError(null)
     const newWarnings: string[] = []
     try {
-      const endDate = smartDate.isoDate ? new Date(`${smartDate.isoDate}T00:00:00Z`) : new Date()
-      const startDate = new Date(endDate.getTime())
-      startDate.setUTCDate(startDate.getUTCDate() - days)
-
-      const startParam = startDate.toISOString()
-      const endParam = new Date(endDate.getTime() + 24 * 3600 * 1000).toISOString()
+      const { startIso, endIso, days } = resolveRange()
+      const startParam = startIso
+      const endParam = new Date(new Date(endIso).getTime() + 24 * 3600 * 1000).toISOString()
       try {
         const pnlData = await apiGet<PnLReport>(
           `/api/reports/pnl?start=${encodeURIComponent(startParam)}&end=${encodeURIComponent(
             endParam,
-          )}`,
+          )}&method=${encodeURIComponent(costMethod)}`,
         )
         setPnl(pnlData)
       } catch (err) {
@@ -188,6 +184,19 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
         console.error(err)
         newWarnings.push('گزارش ارزش موجودی ناموفق بود.')
       }
+
+      // Load invoices to compute FIFO/LIFO based gross profit and product-ledger base
+      // prefer server-side calculations; fallback removed for simplicity and performance
+      if (pnl && (pnl as any).sales != null) setComputedSales((pnl as any).sales as number)
+      if (pnl && (pnl as any).cogs != null) setComputedCOGS((pnl as any).cogs as number)
+
+      // Load sales trends for chart
+      try {
+        const trend = await apiGet<{ days: number; series: Array<{ date: string; total: number }> }>(`/api/dashboard/sales-trends?days=${days}`)
+        setSalesTrend(trend.series || [])
+      } catch (err) {
+        console.error(err)
+      }
     } catch (err) {
       console.error(err)
       setError('بارگذاری گزارش‌ها با خطا روبه‌رو شد.')
@@ -197,98 +206,101 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     }
   }
 
-  const stockTotals = useMemo(() => {
-    const count = stock.length
-    const totalValue = stock.reduce((acc, item) => acc + (item.total_value || 0), 0)
-    return { count, totalValue }
-  }, [stock])
-
-  const exportPnl = () => {
-    if (!pnl) return
-    exportToCsv(
-      [
-        {
-          بازه_شروع: pnl.start ?? smartDate.isoDate ?? '---',
-          بازه_پایان: pnl.end ?? smartDate.isoDate ?? '---',
-          فروش: pnl.sales,
-          خرید: pnl.purchases,
-          سود_ناخالص: pnl.gross_profit,
-        },
-      ],
-      `pnl-${smartDate.isoDate || 'report'}`,
-    )
-  }
-
-  const exportCash = () => {
-    if (!cashAll) return
-    const rows = Object.entries(cashMethods).map(([method, balance]) => ({
-      روش: method,
-      مانده: balance,
-    }))
-    exportToCsv(rows, 'cash-balances')
-  }
-
-  const exportStock = () => {
-    if (stock.length === 0) return
-    const rows = stock.map(item => ({
-      شناسه: item.product_id,
-      نام: item.name,
-      موجودی: item.inventory,
-      قیمت_واحد: item.unit_price ?? '',
-      ارزش_کل: item.total_value,
-    }))
-    exportToCsv(rows, 'stock-valuation')
-  }
-
-  async function loadPersons() {
-    try {
-      const list = await apiGet<PersonOption[]>('/api/persons')
-      setPersons(list)
-      if (list.length > 0) {
-        setSelectedPerson(list[0].id)
-        void loadPersonReport(list[0].id)
+  function computePnLWithCost(invoices: Array<any>, startT: number, endT: number, method: 'FIFO'|'LIFO') {
+    // Build events up to endT; compute revenue in [startT,endT] and COGS based on layers
+    const byProduct: Record<string, Array<any>> = {}
+    for (const inv of invoices) {
+      const t = inv.server_time ? new Date(inv.server_time).getTime() : 0
+      if (!t) continue
+      if (t > endT) continue
+      const type = inv.invoice_type
+      for (const it of inv.items) {
+        if (!it.product_id) continue
+        byProduct[it.product_id] = byProduct[it.product_id] || []
+        byProduct[it.product_id].push({ t, type, qty: Number(it.quantity||0), unit: Number(it.unit_price||0), total: Number(it.total||0), name: it.description || '' })
       }
-    } catch (err) {
-      console.error(err)
+    }
+    let totalRevenue = 0
+    let totalCOGS = 0
+    for (const pid of Object.keys(byProduct)) {
+      const events = byProduct[pid].sort((a,b)=> a.t - b.t)
+      const layers: Array<{ qty: number; cost: number }> = []
+      let lastCost = 0
+      const takeFromLayers = (need: number) => {
+        let takenCost = 0
+        while (need > 0) {
+          const idx = method === 'FIFO' ? 0 : layers.length - 1
+          const layer = layers[idx]
+          if (!layer) {
+            // no layers left, fallback to lastCost
+            takenCost += need * lastCost
+            need = 0
+            break
+          }
+          const use = Math.min(need, layer.qty)
+          takenCost += use * layer.cost
+          layer.qty -= use
+          need -= use
+          if (layer.qty <= 0) layers.splice(idx, 1)
+        }
+        return takenCost
+      }
+      for (const ev of events) {
+        if (ev.type === 'purchase') {
+          // purchase increases layers
+          layers.push({ qty: ev.qty, cost: ev.unit })
+          lastCost = ev.unit || lastCost
+        } else if (ev.type === 'sale') {
+          // sale decreases layers
+          const lineRevenue = ev.total
+          if (ev.t >= startT) {
+            totalRevenue += lineRevenue
+            const cost = takeFromLayers(ev.qty)
+            totalCOGS += cost
+          } else {
+            // before period: consume without counting revenue/cost
+            takeFromLayers(ev.qty)
+          }
+        }
+      }
+    }
+    return { sales: Math.round(totalRevenue), cogs: Math.round(totalCOGS) }
+  }
+
+  function openProductLedger(p: StockValuation) {
+    try {
+      const { startIso, endIso } = resolveRange()
+      apiGet<Array<{date:string;type:'purchase'|'sale';qty:number;unit:number;total:number;running:number}>>(`/api/ledger/product/${encodeURIComponent(p.product_id)}?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`)
+        .then(rows => {
+          const entries = (rows || []).map(r => ({ ...r, date: r.date }))
+          setProductLedgerOpen({ product_id: p.product_id, name: p.name, entries })
+        })
+        .catch(err => {
+          console.error(err)
+        })
+    } catch (e) {
+      console.error(e)
     }
   }
 
-  async function loadPersonReport(partyId: string) {
-    if (!partyId) {
-      setPersonReport(null)
-      return
-    }
-    setPersonLoading(true)
-    try {
-      const data = await apiGet<PersonReportEntry>(
-        `/api/reports/person?party_id=${encodeURIComponent(partyId)}`,
-      )
-      setPersonReport(data)
-    } catch (err) {
-      console.error(err)
-      setPersonReport(null)
-    } finally {
-      setPersonLoading(false)
-    }
-  }
+  const stockTotals = useMemo(() => {
+    const filtered = stock.filter(it => {
+      if (hideZeroStock && (it.inventory ?? 0) === 0) return false
+      if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
+      return true
+    })
+    const count = filtered.length
+    const totalValue = filtered.reduce((acc, item) => acc + (item.total_value || 0), 0)
+    return { count, totalValue }
+  }, [stock, hideZeroStock, hideNegativeStock])
 
-  async function runNaturalQuery() {
-    if (!nlQuery.trim()) {
-      setQueryError('لطفاً متن جستجو را وارد کنید.')
-      return
-    }
-    setQueryLoading(true)
-    setQueryError(null)
-    try {
-      const result = await apiPost<ReportsQueryResponse>('/api/reports/query', { q: nlQuery })
-      setQueryMatches(result.matches || [])
-    } catch (err: any) {
-      setQueryError(err?.message || 'جستجو ناموفق بود.')
-      setQueryMatches([])
-    } finally {
-      setQueryLoading(false)
-    }
-  }
+  const filteredStock = useMemo(() => {
+    return stock.filter(it => {
+      if (hideZeroStock && (it.inventory ?? 0) === 0) return false
+      if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
+      return true
+    })
+  }, [stock, hideZeroStock, hideNegativeStock])
 
   if (loading) {
     return (
@@ -330,24 +342,39 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-3 items-center">
-            <label className={`${retroHeading} flex items-center gap-2`}>
-              بازه (روز)
-              <select
-                value={rangeDays}
-                onChange={e => setRangeDays(Number(e.target.value))}
-                className={`${retroInput} w-28`}
-              >
-                <option value={7}>۷</option>
-                <option value={30}>۳۰</option>
-                <option value={90}>۹۰</option>
-                <option value={365}>۳۶۵</option>
+            <div className="flex items-center gap-2">
+              <label className={`${retroHeading}`}>محاسبه سود با</label>
+              <select className={`${retroInput}`} value={costMethod} onChange={e=> setCostMethod((e.target.value as 'FIFO'|'LIFO'))}>
+                <option value="FIFO">FIFO</option>
+                <option value="LIFO">LIFO</option>
               </select>
-            </label>
-            <button className={`${retroButton}`} onClick={() => loadReports(rangeDays)}>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className={`${retroHeading}`}>بازه سفارشی (شمسی)</label>
+              <input value={jalaliStart} onChange={e=> setJalaliStart(e.target.value)} placeholder="۱۴۰۴/۰۹/۰۱" className={`${retroInput} w-28`} />
+              <span className="text-xs">تا</span>
+              <input value={jalaliEnd} onChange={e=> setJalaliEnd(e.target.value)} placeholder="۱۴۰۴/۰۹/۳۰" className={`${retroInput} w-28`} />
+              <label className="text-xs flex items-center gap-1">
+                <input type="checkbox" checked={useCustomRange} onChange={e=> setUseCustomRange(e.target.checked)} /> فعال
+              </label>
+            </div>
+            {!useCustomRange && (
+              <label className={`${retroHeading} flex items-center gap-2`}>
+                بازه (روز)
+                <select
+                  value={rangeDays}
+                  onChange={e => setRangeDays(Number(e.target.value))}
+                  className={`${retroInput} w-28`}
+                >
+                  <option value={7}>۷</option>
+                  <option value={30}>۳۰</option>
+                  <option value={90}>۹۰</option>
+                  <option value={365}>۳۶۵</option>
+                </select>
+              </label>
+            )}
+            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadReports()}>
               بازخوانی
-            </button>
-            <button className={`${retroButton}`} onClick={exportPnl} disabled={!pnl}>
-              خروجی CSV
             </button>
           </div>
         </header>
@@ -356,50 +383,60 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>فروش</p>
-              <p className="text-lg font-semibold">{formatNumberFa(pnl.sales)} ریال</p>
+              <p className="text-lg font-semibold">{formatNumberFa(computedSales || pnl.sales)} ریال</p>
             </div>
-            <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
-              <p className={retroHeading}>خرید</p>
-              <p className="text-lg font-semibold">{formatNumberFa(pnl.purchases)} ریال</p>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>بهای تمام‌شده (COGS)</p>
+              <p className="text-lg font-semibold">{formatNumberFa(computedCOGS)} ریال</p>
             </div>
             <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>سود ناخالص</p>
-              <p className="text-lg font-semibold">{formatNumberFa(pnl.gross_profit)} ریال</p>
+              <p className="text-lg font-semibold">{formatNumberFa((computedSales || 0) - (computedCOGS || 0))} ریال</p>
             </div>
           </div>
         ) : (
           <p className="text-xs text-[#7a6b4f]">گزارش سود و زیان بارگذاری نشد.</p>
         )}
-
-        {pnlChartData && (
-          <div className="bg-white border border-[#d9cfb6] rounded-sm p-3">
-            <Bar
-              data={pnlChartData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: true, position: 'top' as const } },
-              }}
-              height={220}
-            />
-          </div>
-        )}
       </section>
 
+      {/* Sales Trend Chart */}
+      {salesTrend.length > 0 && (
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <header>
+            <p className={retroHeading}>Sales Trend</p>
+            <h3 className="text-lg font-semibold mt-2">نمودار فروش</h3>
+          </header>
+          <div className="w-full overflow-x-auto">
+            <svg width={Math.max(600, salesTrend.length * 18)} height={180} role="img">
+              {(() => {
+                const max = Math.max(1, ...salesTrend.map(s=> s.total))
+                const barW = 12
+                const gap = 6
+                return salesTrend.map((s, idx) => {
+                  const h = Math.round((s.total / max) * 140)
+                  const x = idx * (barW + gap) + 40
+                  const y = 160 - h
+                  return (
+                    <g key={s.date}>
+                      <rect x={x} y={y} width={barW} height={h} fill="#5b4a2f" />
+                    </g>
+                  )
+                })
+              })()}
+              {/* Axis */}
+              <line x1={30} y1={160} x2={Math.max(560, salesTrend.length * 18)} y2={160} stroke="#c5bca5"/>
+            </svg>
+          </div>
+        </section>
+      )}
+
       <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div>
-            <p className={retroHeading}>Cash Position</p>
-            <h3 className="text-lg font-semibold mt-2">تراز نقدی</h3>
-          </div>
-          <div className="flex gap-2">
-            <button className={retroButton} onClick={exportCash} disabled={!cashAll}>
-              خروجی CSV
-            </button>
-          </div>
+        <header>
+          <p className={retroHeading}>Cash Position</p>
+          <h3 className="text-lg font-semibold mt-2">تراز نقدی</h3>
         </header>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
+          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>کل منابع نقدی</p>
             <p className="text-lg font-semibold">
               {formatNumberFa(cashAll?.balance ?? 0)} ریال
@@ -416,37 +453,29 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
             </div>
           </div>
         </div>
-
-        {cashChartData && (
-          <div className="max-w-xl mx-auto">
-            <Doughnut
-              data={cashChartData}
-              options={{
-                plugins: {
-                  legend: { position: 'bottom' as const, labels: { usePointStyle: true } },
-                },
-              }}
-            />
-          </div>
-        )}
       </section>
 
       <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div>
-            <p className={retroHeading}>Stock Valuation</p>
-            <h3 className="text-lg font-semibold mt-2">ارزش موجودی</h3>
-            <p className={`text-xs ${retroMuted} mt-2`}>
-              تعداد کالا: {formatNumberFa(stockTotals.count)} | ارزش کل:{' '}
-              {formatNumberFa(stockTotals.totalValue)} ریال
-            </p>
+        <header>
+          <p className={retroHeading}>Stock Valuation</p>
+          <h3 className="text-lg font-semibold mt-2">ارزش موجودی</h3>
+          <p className={`text-xs ${retroMuted} mt-2`}>
+            تعداد کالا: {formatNumberFa(stockTotals.count)} | ارزش کل:{' '}
+            {formatNumberFa(stockTotals.totalValue)} ریال
+          </p>
+          <div className="flex items-center gap-4 mt-2 text-xs">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={hideZeroStock} onChange={e=> setHideZeroStock(e.target.checked)} />
+              عدم نمایش موجودی صفر
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={hideNegativeStock} onChange={e=> setHideNegativeStock(e.target.checked)} />
+              عدم نمایش موجودی منفی
+            </label>
           </div>
-          <button className={retroButton} onClick={exportStock} disabled={stock.length === 0}>
-            خروجی CSV
-          </button>
         </header>
-        {stock.length > 0 ? (
-          <table className="w-full border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] text-sm">
+        {filteredStock.length > 0 ? (
+          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
             <thead>
               <tr>
                 <th className={retroTableHeader}>کالا</th>
@@ -456,8 +485,8 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
               </tr>
             </thead>
             <tbody>
-              {stock.slice(0, 12).map(item => (
-                <tr key={item.product_id} className="border-b border-[#d9cfb6]">
+              {filteredStock.slice(0, 50).map(item => (
+                <tr key={item.product_id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer" onClick={() => openProductLedger(item)}>
                   <td className="px-3 py-2">{item.name}</td>
                   <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
                   <td className="px-3 py-2 text-left">
@@ -484,95 +513,46 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
         </section>
       )}
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          <div>
-            <p className={retroHeading}>Person Turnover</p>
-            <h3 className="text-lg font-semibold mt-2">گردش طرف حساب</h3>
+      {productLedgerOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={()=> setProductLedgerOpen(null)}>
+          <div className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=> e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-[#1f2e3b]">گردش کالا: {productLedgerOpen.name}</h4>
+              <button className={`${retroButton}`} onClick={()=> setProductLedgerOpen(null)}>بستن</button>
+            </div>
+            {productLedgerOpen.entries.length ? (
+              <div className="overflow-x-auto max-h-[60vh]">
+                <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                  <thead>
+                    <tr>
+                      <th className={retroTableHeader}>تاریخ</th>
+                      <th className={retroTableHeader}>نوع</th>
+                      <th className={retroTableHeader}>مقدار</th>
+                      <th className={retroTableHeader}>فی</th>
+                      <th className={retroTableHeader}>جمع</th>
+                      <th className={retroTableHeader}>مانده</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productLedgerOpen.entries.map((r,idx)=> (
+                      <tr key={idx} className="border-b border-[#d9cfb6]">
+                        <td className="px-3 py-2 text-xs">{isoToJalali(r.date)}</td>
+                        <td className="px-3 py-2 text-xs">{r.type === 'purchase' ? 'خرید' : 'فروش'}</td>
+                        <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.qty)}</td>
+                        <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.unit)}</td>
+                        <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.total)}</td>
+                        <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.running)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-xs text-[#7a6b4f]">رکوردی در بازه انتخابی یافت نشد.</div>
+            )}
           </div>
-          <select
-            className={`${retroInput} w-full lg:w-64`}
-            value={selectedPerson}
-            onChange={e => {
-              setSelectedPerson(e.target.value)
-              void loadPersonReport(e.target.value)
-            }}
-          >
-            {persons.map(person => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
-        </header>
-        {personLoading ? (
-          <p className="text-xs text-[#7a6b4f]">در حال محاسبه...</p>
-        ) : personReport ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-              <p className={retroHeading}>فروش</p>
-              <p className="text-lg font-semibold">{formatNumberFa(personReport.total_sale)} ریال</p>
-            </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-              <p className={retroHeading}>خرید</p>
-              <p className="text-lg font-semibold">{formatNumberFa(personReport.total_purchase)} ریال</p>
-            </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-              <p className={retroHeading}>خالص</p>
-              <p className="text-lg font-semibold">{formatNumberFa(personReport.net)} ریال</p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-[#7a6b4f]">اطلاعاتی برای این طرف حساب یافت نشد.</p>
-        )}
-      </section>
-
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header>
-          <p className={retroHeading}>Natural Query</p>
-          <h3 className="text-lg font-semibold mt-2">تحلیل متنی گزارش‌ها</h3>
-        </header>
-        <div className="flex flex-col lg:flex-row gap-3">
-          <input
-            className={`${retroInput} flex-1`}
-            placeholder="مثلاً: فاکتورهای فروش این ماه برای شرکت طلوع افق"
-            value={nlQuery}
-            onChange={e => setNlQuery(e.target.value)}
-          />
-          <button className={retroButton} onClick={runNaturalQuery} disabled={queryLoading}>
-            {queryLoading ? 'در حال جستجو...' : 'اجرا'}
-          </button>
         </div>
-        {queryError && <p className="text-xs text-[#7a1f1f]">{queryError}</p>}
-        {queryMatches.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>شماره</th>
-                <th className={retroTableHeader}>طرف حساب</th>
-                <th className={retroTableHeader}>مبلغ</th>
-                <th className={retroTableHeader}>زمان</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queryMatches.map(match => (
-                <tr key={match.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">{match.invoice_number || `#${match.id}`}</td>
-                  <td className="px-3 py-2">{match.party_name || '-'}</td>
-                  <td className="px-3 py-2 text-left">
-                    {formatNumberFa(match.total || 0)} <span className="text-xs">ریال</span>
-                  </td>
-                  <td className="px-3 py-2 text-left">
-                    {match.server_time ? isoToJalali(match.server_time) : '---'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          !queryLoading && nlQuery && <p className="text-xs text-[#7a6b4f]">نتیجه‌ای یافت نشد.</p>
-        )}
-      </section>
+      )}
     </div>
   )
 }

@@ -24,8 +24,6 @@ class Permission(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     roles = relationship('Role', secondary='role_permissions', back_populates='permissions')
-
-
 class RolePermission(Base):
     __tablename__ = 'role_permissions'
     id = Column(Integer, primary_key=True, index=True)
@@ -147,6 +145,11 @@ class Person(Base):
     kind = Column(String(32), nullable=True)  # customer, vendor, etc.
     mobile = Column(String(32), nullable=True)
     description = Column(Text, nullable=True)
+    tax_id = Column(String(64), nullable=True)
+    national_id = Column(String(64), nullable=True)
+    address = Column(Text, nullable=True)
+    payment_terms = Column(String(128), nullable=True)  # e.g., Net 30
+    credit_limit = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -377,6 +380,7 @@ class UserPreferences(Base):
     currency = Column(String(3), nullable=False, default='irr')  # irr, usd, aed
     auto_convert_currency = Column(Boolean, nullable=False, default=False)
     theme_preference = Column(String(50), nullable=True, default='default')
+    active_financial_year_id = Column(Integer, ForeignKey('financial_years.id'), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -420,6 +424,21 @@ class DeveloperApiKey(Base):
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     
     user = relationship('User', backref='api_keys')
+
+
+class NftAsset(Base):
+    __tablename__ = 'nft_assets'
+    id = Column(Integer, primary_key=True, index=True)
+    token_id = Column(String(128), nullable=False, unique=True, index=True)
+    chain = Column(String(64), nullable=False, default='hesabpak')
+    contract_address = Column(String(128), nullable=True)
+    metadata_json = Column("metadata", JSON, nullable=True)
+    owner_user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    
+    owner_user = relationship('User', backref='nft_assets')
 
 
 class BlockchainEntry(Base):

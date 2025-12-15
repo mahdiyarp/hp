@@ -69,6 +69,7 @@ class UserUpdate(BaseModel):
     mobile: Optional[str] = None
     role_id: Optional[int] = None
     is_active: Optional[bool] = None
+    active_financial_year_id: Optional[int] = None
 
 
 class Token(BaseModel):
@@ -230,6 +231,16 @@ class PersonBase(BaseModel):
     mobile: Optional[str] = None
     description: Optional[str] = None
     code: Optional[str] = None
+    tax_id: Optional[str] = None
+    national_id: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    credit_limit: Optional[int] = None
+    tax_id: Optional[str] = None
+    national_id: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    credit_limit: Optional[int] = None
 
 
 class PersonCreate(PersonBase):
@@ -238,7 +249,7 @@ class PersonCreate(PersonBase):
 
 class PersonOut(PersonBase):
     id: str
-    code: str
+    code: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -660,6 +671,7 @@ class UserPreferencesOut(BaseModel):
     currency: str  # irr, usd, aed
     auto_convert_currency: bool
     theme_preference: Optional[str]
+    active_financial_year_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

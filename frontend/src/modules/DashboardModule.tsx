@@ -1,5 +1,69 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { apiGet, apiPost, apiPatch } from '../services/api'
+import { apiGet } from '../services/api'
+function AuditStatusCard() {
+  const [latest, setLatest] = useState<{ ts:string; merkle_root:string; count:number } | null>(null)
+  const [chainOk, setChainOk] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState<boolean>(false)
+  async function refreshStatus() {
+    try {
+      const batch = await apiGet<any>('/api/audit/otp/batch/latest')
+      setLatest({ ts: batch.ts, merkle_root: batch.merkle_root, count: batch.count })
+      const entryIds: number[] = Array.isArray(batch.entry_ids) ? batch.entry_ids : []
+      if (entryIds.length > 0) {
+        try {
+          const proof = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`)
+          setChainOk(Boolean(proof?.chain_is_valid))
+        } catch { setChainOk(null) }
+      } else {
+        setChainOk(null)
+      }
+    } catch {
+      setLatest(null)
+      setChainOk(null)
+    }
+  }
+  useEffect(() => {
+    refreshStatus()
+    const id = setInterval(refreshStatus, 30000)
+    return () => clearInterval(id)
+  }, [])
+  async function buildBatch() {
+    if (busy) return
+    setBusy(true)
+    try {
+      await apiGet<any>('/api/audit/otp/batch/build')
+      await refreshStatus()
+    } catch {}
+    setBusy(false)
+  }
+  return (
+    <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
+        <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={refreshStatus} disabled={busy}>بروزرسانی</button>
+      </div>
+      {latest ? (
+        <div className="mt-2 text-xs space-y-1">
+          <div>آخرین Batch: {new Date(latest.ts).toLocaleString()}</div>
+          <div>تعداد رویدادها: {latest.count}</div>
+          <div className="break-all">مرکل‌روت: {latest.merkle_root}</div>
+          <div className="flex items-center gap-2">
+            <span>اعتبار زنجیره:</span>
+            <span className={`${chainOk === null ? 'bg-[#f3f4f6] text-[#374151]' : (chainOk ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fee2e2] text-[#7f1d1d]')} px-2 py-0.5 rounded-sm border`}>{chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر ✅' : 'نامعتبر ❌')}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 text-xs flex items-center gap-3">
+          <span>Batch موجود نیست</span>
+          <button className="border border-[#111827] bg-white px-2 py-1 text-[11px] disabled:opacity-50" onClick={buildBatch} disabled={busy}>
+            {busy ? 'در حال ساخت…' : 'ساخت Batch'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+import { fetchWithAuth } from '../services/auth'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
 import {
@@ -78,10 +142,7 @@ interface Product {
   inventory: number | null
 }
 
-interface TrendPoint {
-  date: string
-  total: number
-}
+interface TrendPoint { label: string; value: number }
 
 interface OldStockItem {
   product_id: string
@@ -134,6 +195,11 @@ export default function DashboardModule({
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [trend, setTrend] = useState<TrendPoint[]>([])
+  const [trendRange, setTrendRange] = useState<'today' | '3days' | 'custom'>('today')
+  const [customFrom, setCustomFrom] = useState<string>('')
+  const [customTo, setCustomTo] = useState<string>('')
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true)
+  const [refreshMs, setRefreshMs] = useState<number>(30000)
   const [oldStock, setOldStock] = useState<OldStockItem[]>([])
   const [checksDue, setChecksDue] = useState<CheckDue[]>([])
   const [prices, setPrices] = useState<PriceFeed | null>(null)
@@ -161,6 +227,36 @@ export default function DashboardModule({
     loadDashboardData()
   }, [])
 
+  async function loadTrend() {
+    let fromIso = ''
+    let toIso = ''
+    const now = new Date()
+    const end = new Date(now)
+    const start = new Date(now)
+    if (trendRange === 'today') {
+      start.setHours(0, 0, 0, 0)
+    } else if (trendRange === '3days') {
+      start.setDate(start.getDate() - 2)
+      start.setHours(0, 0, 0, 0)
+    } else {
+      fromIso = customFrom
+      toIso = customTo
+    }
+    if (!fromIso) fromIso = start.toISOString()
+    if (!toIso) toIso = end.toISOString()
+    const res = await fetchWithAuth(`/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange === 'today' ? 'hour' : 'day'}`)
+    const data = await res.json().catch(() => ({}))
+    setTrend(Array.isArray(data.points) ? data.points : [])
+  }
+
+  useEffect(() => {
+    if (!autoRefresh) return
+    const id = setInterval(() => {
+      loadTrend().catch(() => {})
+    }, Math.max(10000, refreshMs))
+    return () => clearInterval(id)
+  }, [autoRefresh, refreshMs, trendRange, customFrom, customTo])
+
   async function loadDashboardData() {
     setLoading(true)
     setError(null)
@@ -171,7 +267,7 @@ export default function DashboardModule({
         apiGet<DashboardSummary>('/api/dashboard/summary'),
         apiGet<Invoice[]>(`/api/invoices?limit=50`),
         apiGet<Product[]>(`/api/products?limit=50`),
-        apiGet<{ series: TrendPoint[] }>('/api/dashboard/sales-trends?days=30'),
+        Promise.resolve({ series: [] as TrendPoint[] }),
         apiGet<OldStockItem[]>(`/api/dashboard/old-stock?days=60&limit=50`),
         apiGet<CheckDue[]>(`/api/dashboard/checks-due?within_days=21&limit=50`),
         apiGet<PriceFeed>('/api/dashboard/prices'),
@@ -180,19 +276,7 @@ export default function DashboardModule({
         apiGet<RoadmapResponse>('/api/roadmap'),
       ])
 
-      const [
-        financialRes,
-        summaryRes,
-        invoicesRes,
-        productsRes,
-        trendRes,
-        oldStockRes,
-        checksRes,
-        pricesRes,
-        personsRes,
-        widgetsRes,
-        roadmapRes,
-      ] = results
+      const [financialRes, summaryRes, invoicesRes, productsRes, _trendRes, oldStockRes, checksRes, pricesRes] = results
 
       if (financialRes.status === 'fulfilled') {
         setFinancialData(financialRes.value)
@@ -218,9 +302,9 @@ export default function DashboardModule({
         newWarnings.push('فهرست محصولات اخیر قابل دسترس نیست.')
       }
 
-      if (trendRes.status === 'fulfilled') {
-        setTrend(trendRes.value.series ?? [])
-      } else {
+      try {
+        await loadTrend()
+      } catch {
         newWarnings.push('روند فروش قابل نمایش نیست.')
       }
 
@@ -284,7 +368,7 @@ export default function DashboardModule({
     return { start, end }
   }, [financialData])
 
-  const maxTrend = useMemo(() => trend.reduce((acc, cur) => Math.max(acc, cur.total), 0), [trend])
+  const maxTrend = useMemo(() => trend.reduce((acc, cur) => Math.max(acc, cur.value), 0), [trend])
 
   const handleSuggestion = (label: string | null) => {
     if (!label) return
@@ -447,84 +531,12 @@ export default function DashboardModule({
     )
   }
 
-  // دکمه تبدیل نمای و selector تعداد آیتم‌ها
-  const ViewToggle = () => (
-    <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-      <button
-        onClick={() => setViewMode('widgets')}
-        className="px-4 py-2 border-2 border-[#c5bca5] bg-[#faf4de] text-[#1f2e3b] hover:bg-white font-bold"
-      >
-        نمای تنظیم‌پذیر
-      </button>
-      <div className="flex items-center gap-3 text-sm">
-        <label className={`${retroHeading} whitespace-nowrap`}>تعداد آیتم‌های نمایشی:</label>
-        <input
-          type="range"
-          min="5"
-          max="15"
-          value={itemLimit}
-          onChange={(e) => {
-            const newLimit = parseInt(e.target.value)
-            setItemLimit(newLimit)
-          }}
-          className="w-32 cursor-pointer"
-        />
-        <span className={`${retroHeading} w-10 text-center font-bold`}>{itemLimit}</span>
-      </div>
-    </div>
-  )
+  // کنترل‌های نمای تنظیم‌پذیر و تعداد آیتم‌ها حذف شدند.
 
   return (
     <div className="space-y-4">
-      <ViewToggle />
-      {viewMode === 'widgets' ? (
-        <section className={retroPanelPadded}>
-          <header className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <div>
-              <p className={retroHeading}>Dashboard Widgets</p>
-              <h3 className="text-lg font-semibold mt-2">چیدمان ساده ویجت‌ها</h3>
-            </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              <select className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1" value={newWidget.type} onChange={e=>setNewWidget(prev=>({...prev, type: e.target.value}))}>
-                <option value="payments">پرداخت‌ها</option>
-                <option value="invoices">فاکتورها</option>
-                <option value="checks">چک‌ها</option>
-                <option value="stock">موجودی</option>
-              </select>
-              <input className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1" placeholder="عنوان (اختیاری)" value={newWidget.title} onChange={e=>setNewWidget(prev=>({...prev, title: e.target.value}))} />
-              <button className={`${retroButton} text-[11px]`} onClick={createWidget}>افزودن ویجت</button>
-              <button className={`${retroButton} text-[11px]`} onClick={reloadWidgets} disabled={widgetsLoading}>بروزرسانی</button>
-            </div>
-          </header>
-          {widgets.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {widgets.slice(0, itemLimit).map(w => (
-                <div key={w.id} className="border border-[#c5bca5] bg-[#faf4de] shadow-[3px_3px_0_#c5bca5] p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className={retroHeading}>{w.title || w.widget_type}</p>
-                      <p className={`text-[10px] ${retroMuted}`}>موقعیت: {w.position_x},{w.position_y} • اندازه: {w.width}×{w.height}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button className={`${retroButton} text-[11px]`} onClick={()=>moveWidget(w,'up')}>↑</button>
-                      <button className={`${retroButton} text-[11px]`} onClick={()=>moveWidget(w,'down')}>↓</button>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <button className={`${retroButton} text-[11px]`} onClick={()=>toggleWidget(w)}>
-                      {w.enabled ? 'غیرفعال' : 'فعال'}
-                    </button>
-                    <button className={`${retroButton} text-[11px]`} onClick={()=>removeWidget(w)}>حذف</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">ویجتی تعریف نشده است. با دکمه بالا یک ویجت اضافه کنید.</p>
-          )}
-        </section>
-      ) : (
       <div className="space-y-8">
+      <AuditStatusCard />
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
           {error}
@@ -703,23 +715,27 @@ export default function DashboardModule({
               به‌روزرسانی
             </button>
           </header>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('today'); loadTrend()}}>امروز</button>
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('3days'); loadTrend()}}>۳ روز</button>
+            <input className="input text-xs" type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} title="شروع بازه" placeholder="شروع بازه" />
+            <input className="input text-xs" type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)} title="پایان بازه" placeholder="پایان بازه" />
+            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('custom'); loadTrend()}}>اعمال بازه</button>
+            <label className="flex items-center gap-2 ml-2">
+              <input type="checkbox" checked={autoRefresh} onChange={e=>setAutoRefresh(e.target.checked)} />
+              <span>بروزرسانی خودکار</span>
+            </label>
+            <input className="input text-xs w-24" type="number" min={10000} step={5000} value={refreshMs} onChange={e=>setRefreshMs(Number(e.target.value)||30000)} title="فاصله بروزرسانی (ms)" placeholder="ms" />
+          </div>
           {trend.length > 0 ? (
             <div className="h-48 flex items-end gap-1">
               {trend.map(point => {
-                const ratio = maxTrend > 0 ? point.total / maxTrend : 0
+                const ratio = maxTrend > 0 ? point.value / maxTrend : 0
                 const barHeight = Math.max(6, ratio * 100)
                 return (
-                  <div key={point.date} className="flex-1 flex flex-col items-center gap-2">
-                    <div
-                      className="w-full bg-[#154b5f] transition-all duration-300"
-                      style={{ height: (barHeight as number) + '%' }}
-                      title={`${point.date} : ${formatNumberFa(point.total)} ریال`}
-                    ></div>
-                    <span className="text-[10px] text-[#7a6b4f]">
-                      {new Intl.DateTimeFormat('fa-IR', { month: 'numeric', day: '2-digit' }).format(
-                        new Date(point.date),
-                      )}
-                    </span>
+                  <div key={point.label} className="flex-1 flex flex-col items-center gap-2">
+                    <div className={`w-full bg-[#154b5f] transition-all duration-300`} style={{ height: `${barHeight}%` }} title={`${point.label} : ${formatNumberFa(point.value)} ریال`}></div>
+                    <span className="text-[10px] text-[#7a6b4f]">{point.label}</span>
                   </div>
                 )
               })}

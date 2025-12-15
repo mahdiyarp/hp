@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet, apiPost, apiDelete } from '../services/api'
+import { apiGet, apiPost, apiDelete, apiPut } from '../services/api'
 import { formatNumberFa } from '../utils/num'
+import { useAuth } from '../context/AuthContext'
 import {
   retroButton,
   retroHeading,
@@ -19,6 +20,11 @@ interface Person {
   mobile: string | null
   code: string | null
   description: string | null
+  tax_id?: string | null
+  national_id?: string | null
+  address?: string | null
+  payment_terms?: string | null
+  credit_limit?: number | null
   created_at: string
 }
 
@@ -27,42 +33,6 @@ interface PersonBalance {
   debit: number
   credit: number
   balance: number
-}
-
-interface PersonWithBalance extends Person {
-  debit: number
-  credit: number
-  balance: number
-}
-
-type KindFilter = 'all' | 'customer' | 'supplier' | 'other'
-type SortField = 'name' | 'debit' | 'credit' | 'balance' | 'created_at'
-type SortOrder = 'asc' | 'desc'
-
-interface LedgerEntry {
-  id: string
-  description: string
-  debit_account: string
-  credit_account: string
-  amount: number
-  entry_date: string
-  ref_type: string | null
-  ref_id: string | null
-  running_balance: number
-  invoice: {
-    id: number
-    invoice_number: string
-    issue_date: string
-    total_amount: number
-    status: string
-  } | null
-  payment: {
-    id: number
-    amount: number
-    payment_date: string
-    method: string
-    reference: string | null
-  } | null
 }
 
 interface PersonLedger {
@@ -81,39 +51,142 @@ interface PersonLedger {
 }
 
 export default function PeopleModule({ smartDate }: ModuleComponentProps) {
+  const { user } = useAuth()
+  const canEdit = !!user && ['Admin', 'Accountant', 'Manager'].includes(user.role)
   const [people, setPeople] = useState<Person[]>([])
   const [balances, setBalances] = useState<PersonBalance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
-  const [sortField, setSortField] = useState<SortField>('name')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [sortField, setSortField] = useState<SortField>(()=>{
+    const raw = localStorage.getItem('people.sort.field')
+    const allowed: SortField[] = ['name','debit','credit','balance','created_at']
+    return (raw && (allowed as any).includes(raw)) ? (raw as SortField) : 'name'
+  })
+  const [sortOrder, setSortOrder] = useState<SortOrder>(()=>{
+    const raw = localStorage.getItem('people.sort.order')
+    return raw === 'asc' || raw === 'desc' ? raw : 'asc'
+  })
+  const [pageSize, setPageSize] = useState<number>(()=>{
+    const raw = localStorage.getItem('people.pageSize')
+    const n = raw ? parseInt(raw) : 10
+    return [5,10,20,50,100].includes(n) ? n : 10
+  })
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [formSuccess, setFormSuccess] = useState<string | null>(null)
   const [selectedPerson, setSelectedPerson] = useState<PersonWithBalance | null>(null)
+  const [editingPerson, setEditingPerson] = useState<PersonWithBalance | null>(null)
   const [ledgerData, setLedgerData] = useState<PersonLedger | null>(null)
   const [loadingLedger, setLoadingLedger] = useState(false)
-  const [activities, setActivities] = useState<Array<{ id: number; person_id: string; kind?: string | null; content: string; created_at: string; created_by?: number | null; next_action_at?: string | null }> | null>(null)
-  const [loadingActivities, setLoadingActivities] = useState(false)
-  const [newActivity, setNewActivity] = useState('')
-  const [newActivityKind, setNewActivityKind] = useState<'note' | 'call' | 'sms' | 'task'>('note')
-  const [actError, setActError] = useState<string | null>(null)
+  const [kindOptions, setKindOptions] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('hp_kind_options')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch {}
+    return ['customer', 'supplier', 'other']
+  })
+  const [newKind, setNewKind] = useState('')
+  const [historyOpen, setHistoryOpen] = useState<{ personId: string, items: Array<{ id: string|number; user?: string; time: string; note?: string; changes?: any }> } | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  // Hierarchical person groups (L1/L2/L3), stored locally and used for filtering/assignment
+  const [personGroups, setPersonGroups] = useState<Record<string, { l1?: string; l2?: string; l3?: string }>>(() => {
+    try {
+      const raw = localStorage.getItem('hp_person_groups_v1')
+      return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+  })
+  const [groupL1Filter, setGroupL1Filter] = useState<string>('')
+  const [groupL2Filter, setGroupL2Filter] = useState<string>('')
+  const [groupL3Filter, setGroupL3Filter] = useState<string>('')
   const emptyForm = {
     name: '',
     kind: 'customer',
     mobile: '',
     code: '',
     description: '',
+    tax_id: '',
+    national_id: '',
+    address: '',
+    payment_terms: '',
+    credit_limit: '',
   }
   const [personForm, setPersonForm] = useState<typeof emptyForm>(emptyForm)
+  const [auditNote, setAuditNote] = useState('')
+  // form group states (hierarchical person grouping only set in create/edit)
+  const [formGroupL1, setFormGroupL1] = useState('')
+  const [formGroupL2, setFormGroupL2] = useState('')
+  const [formGroupL3, setFormGroupL3] = useState('')
+  // live suggestions for name field
+  const [suggestions, setSuggestions] = useState<Array<{id:string,name:string,mobile?:string, source?: 'local'|'public'}>>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [suggestionQuery, setSuggestionQuery] = useState('')
+  const fetchSuggestions = async (q: string) => {
+    const term = (q||'').trim()
+    if (!term) { setSuggestions([]); setSuggestionsOpen(false); return }
+    setSuggestionsLoading(true)
+    // debounce
+    const current = term
+    setTimeout(async () => {
+      if ((suggestionQuery||'').trim() !== current) return
+      try {
+        const [local, pub] = await Promise.all([
+          apiGet<Array<any>>(`/api/people/search?q=${encodeURIComponent(current)}`).catch(()=>[]),
+          apiGet<Array<any>>(`/api/public/counterparties?q=${encodeURIComponent(current)}`).catch(()=>[]),
+        ])
+        const mapLocal = (local||[]).map((x:any)=> ({ id: String(x.id||x.name), name: x.name, mobile: x.mobile, source: 'local' as const }))
+        const mapPub = (pub||[]).map((x:any)=> ({ id: String(x.id||x.name), name: x.name, mobile: x.mobile, source: 'public' as const }))
+        const merged = [...mapLocal, ...mapPub]
+        setSuggestions(merged)
+        setSuggestionsOpen(true)
+      } finally {
+        setSuggestionsLoading(false)
+      }
+    }, 300)
+  }
 
   useEffect(() => {
     loadPeople()
     loadBalances()
   }, [])
+
+  // Listen for cross-module deep link to open a person's history
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const ce = e as CustomEvent<{ person_id: string }>
+        const pid = ce.detail?.person_id
+        if (!pid) return
+        const p = balances.find(b => String(b.person.id) === String(pid)) || null
+        if (p) {
+          openPersonHistory(p.person as any)
+        } else {
+          // Fallback: try load people if not present yet
+          loadBalances().then(() => {
+            const after = balances.find(b => String(b.person.id) === String(pid)) || null
+            if (after) openPersonHistory(after.person as any)
+          })
+        }
+      } catch {}
+    }
+    window.addEventListener('open-person-history', handler as EventListener)
+    return () => window.removeEventListener('open-person-history', handler as EventListener)
+  }, [balances])
+
+  useEffect(() => {
+    try { localStorage.setItem('hp_kind_options', JSON.stringify(kindOptions)) } catch {}
+  }, [kindOptions])
+
+  // persist person groups map
+  useEffect(() => {
+    try { localStorage.setItem('hp_person_groups_v1', JSON.stringify(personGroups)) } catch {}
+  }, [personGroups])
 
   async function loadPeople() {
     setLoading(true)
@@ -146,6 +219,30 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       setSortOrder('asc')
     }
   }
+
+  const openPersonHistory = async (p: PersonWithBalance) => {
+    setHistoryOpen({ personId: p.id, items: [] })
+    setHistoryLoading(true)
+    try {
+      const items = await apiGet<Array<{ id: string|number; user?: string; time: string; note?: string; changes?: any }>>(`/api/persons/${p.id}/history`).catch(()=>[])
+      setHistoryOpen({ personId: p.id, items: items || [] })
+    } catch {
+      setHistoryOpen({ personId: p.id, items: [] })
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('people.sort.field', sortField)
+      localStorage.setItem('people.sort.order', sortOrder)
+    } catch {}
+  }, [sortField, sortOrder])
+
+  useEffect(() => {
+    try { localStorage.setItem('people.pageSize', String(pageSize)) } catch {}
+  }, [pageSize])
 
   const loadPersonLedger = async (person: PersonWithBalance) => {
     setSelectedPerson(person)
@@ -207,6 +304,10 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
     setPersonForm(emptyForm)
     setFormError(null)
     setFormSuccess(null)
+    setAuditNote('')
+    setFormGroupL1('')
+    setFormGroupL2('')
+    setFormGroupL3('')
   }
 
   const submitPerson = async (e: React.FormEvent) => {
@@ -215,20 +316,64 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       setFormError('نام مخاطب را وارد کنید.')
       return
     }
+    if (personForm.mobile && !/^0\d{10}$/.test(personForm.mobile)) {
+      setFormError('فرمت شماره همراه صحیح نیست (مانند 09xxxxxxxxx).')
+      return
+    }
+    if (personForm.national_id && !/^\d{10}$/.test(personForm.national_id)) {
+      setFormError('کد ملی باید 10 رقم باشد.')
+      return
+    }
     setCreating(true)
     setFormError(null)
     try {
+      const computedKind = (formGroupL1 || (editingPerson?.kind ?? personForm.kind) || 'other').trim()
       const payload = {
         name: personForm.name.trim(),
-        kind: personForm.kind.trim() || undefined,
+        kind: computedKind || undefined,
         mobile: personForm.mobile.trim() || undefined,
         code: personForm.code.trim() || undefined,
         description: personForm.description.trim() || undefined,
+        tax_id: personForm.tax_id.trim() || undefined,
+        national_id: personForm.national_id.trim() || undefined,
+        address: personForm.address.trim() || undefined,
+        payment_terms: personForm.payment_terms.trim() || undefined,
+        credit_limit: personForm.credit_limit ? Number(personForm.credit_limit) : undefined,
+        audit_note: auditNote.trim() || undefined,
       }
-      const created = await apiPost<Person>('/api/persons', payload)
-      setPeople(prev => [created, ...prev])
+      if (editingPerson) {
+        const updated = await apiPut<Person>(`/api/persons/${editingPerson.id}`, payload)
+        setPeople(prev => prev.map(p => (p.id === editingPerson.id ? { ...p, ...updated } : p)))
+        // update local hierarchical groups for this person
+        setPersonGroups(prev => ({
+          ...prev,
+          [editingPerson.id]: {
+            l1: formGroupL1 || undefined,
+            l2: formGroupL2 || undefined,
+            l3: formGroupL3 || undefined,
+          },
+        }))
+        setEditingPerson(null)
+        setFormSuccess('مخاطب با موفقیت ویرایش شد.')
+      } else {
+        const created = await apiPost<Person>('/api/persons', payload)
+        setPeople(prev => [created, ...prev])
+        // set hierarchical groups for new person locally
+        setPersonGroups(prev => ({
+          ...prev,
+          [created.id]: {
+            l1: formGroupL1 || undefined,
+            l2: formGroupL2 || undefined,
+            l3: formGroupL3 || undefined,
+          },
+        }))
+        setFormSuccess('مخاطب با موفقیت ثبت شد.')
+      }
       setPersonForm(emptyForm)
-      setFormSuccess('مخاطب با موفقیت ثبت شد.')
+      setAuditNote('')
+      setFormGroupL1('')
+      setFormGroupL2('')
+      setFormGroupL3('')
     } catch (err) {
       if (err instanceof Error) {
         setFormError(err.message)
@@ -254,6 +399,13 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
 
   const filtered = useMemo(() => {
     let result = peopleWithBalances.filter(p => {
+      // hierarchical person-group filters
+      if (groupL1Filter || groupL2Filter || groupL3Filter) {
+        const g = personGroups[p.id] || {}
+        if (groupL1Filter && (g.l1 || '') !== groupL1Filter) return false
+        if (groupL2Filter && (g.l2 || '') !== groupL2Filter) return false
+        if (groupL3Filter && (g.l3 || '') !== groupL3Filter) return false
+      }
       if (kindFilter !== 'all') {
         const kind = p.kind ?? 'other'
         if (kind !== kindFilter) return false
@@ -291,8 +443,36 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
       return 0
     })
 
-    return result
-  }, [peopleWithBalances, kindFilter, search, sortField, sortOrder])
+    return result.slice(0, pageSize)
+  }, [peopleWithBalances, kindFilter, search, sortField, sortOrder, pageSize])
+
+  // build hierarchical group suggestions from assigned person groups
+  const groupLevels = useMemo(() => {
+    const l1 = new Set<string>()
+    const l2 = new Map<string, Set<string>>()
+    const l3 = new Map<string, Set<string>>()
+    Object.values(personGroups).forEach(g => {
+      const a = (g.l1 || '').trim(); const b = (g.l2 || '').trim(); const c = (g.l3 || '').trim()
+      if (a) {
+        l1.add(a)
+        if (!l2.has(a)) l2.set(a, new Set<string>())
+      }
+      if (a && b) {
+        l2.get(a)!.add(b)
+        const key = `${a}/${b}`
+        if (!l3.has(key)) l3.set(key, new Set<string>())
+      }
+      if (a && b && c) {
+        const key = `${a}/${b}`
+        l3.get(key)!.add(c)
+      }
+    })
+    return {
+      l1: Array.from(l1).sort(),
+      l2map: Array.from(l2.entries()).reduce<Record<string,string[]>>((acc,[k,v])=>{ acc[k]=Array.from(v).sort(); return acc }, {}),
+      l3map: Array.from(l3.entries()).reduce<Record<string,string[]>>((acc,[k,v])=>{ acc[k]=Array.from(v).sort(); return acc }, {}),
+    }
+  }, [personGroups])
 
   if (loading) {
     return (
@@ -335,6 +515,14 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
             >
               افزودن مخاطب جدید
             </button>
+            {editingPerson && (
+              <button
+                className={`${retroButton} !bg-[#5b4a2f]`}
+                onClick={() => { setEditingPerson(null); resetForm(); }}
+              >
+                لغو ویرایش
+              </button>
+            )}
           </div>
         </header>
 
@@ -344,16 +532,12 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
             <p className="text-lg font-semibold">{formatNumberFa(people.length)}</p>
           </div>
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>مشتریان</p>
-            <p className="text-lg font-semibold">
-              {formatNumberFa(people.filter(p => p.kind === 'customer').length)}
-            </p>
+            <p className={retroHeading}>گروه‌های سطح ۱ یکتا</p>
+            <p className="text-lg font-semibold">{formatNumberFa(Object.values(personGroups).reduce((acc, g) => { if (g.l1) acc.add(g.l1); return acc }, new Set<string>()).size)}</p>
           </div>
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>تأمین‌کنندگان</p>
-            <p className="text-lg font-semibold">
-              {formatNumberFa(people.filter(p => p.kind === 'supplier').length)}
-            </p>
+            <p className={retroHeading}>دارای گروه</p>
+            <p className="text-lg font-semibold">{formatNumberFa(Object.values(personGroups).filter(g => g.l1 || g.l2 || g.l3).length)}</p>
           </div>
         </div>
       </section>
@@ -383,23 +567,86 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                 <input
                   className={`${retroInput} w-full`}
                   value={personForm.name}
-                  onChange={e => handleFormChange('name', e.target.value)}
+                  onChange={async e => {
+                    const v = e.target.value
+                    handleFormChange('name', v)
+                    setSuggestionQuery(v)
+                    await fetchSuggestions(v)
+                  }}
                   placeholder="مانند: شرکت الف"
                   required
                 />
+                {suggestionsOpen && (
+                  <div className="border border-[#c5bca5] bg-[#faf4de] mt-1 rounded shadow-[3px_3px_0_#c5bca5] max-h-40 overflow-auto">
+                    {suggestionsLoading ? (
+                      <div className="text-xs text-[#7a6b4f] px-3 py-2">در حال جستجو...</div>
+                    ) : suggestions.length ? (
+                      suggestions.map(s => (
+                        <div key={`${s.source}-${s.id}`} className="px-3 py-2 text-sm flex items-center justify-between hover:bg-[#f6f1df] cursor-pointer" onClick={() => {
+                          setPersonForm(prev=> ({ ...prev, name: s.name, mobile: s.mobile || prev.mobile }))
+                          setSuggestionsOpen(false)
+                        }}>
+                          <div>
+                            <div className="font-semibold">{s.name}</div>
+                            {(s.mobile || s.source) && (
+                              <div className="text-[11px] text-[#7a6b4f]">{s.mobile ? s.mobile : ''} {s.source ? `• ${s.source}` : ''}</div>
+                            )}
+                          </div>
+                          <button type="button" className={`${retroButton} text-[11px]`} onClick={(e)=>{ e.stopPropagation(); setPersonForm(prev=> ({ ...prev, name: s.name, mobile: s.mobile || prev.mobile })); setSuggestionsOpen(false) }}>انتخاب</button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-[#7a6b4f] px-3 py-2">موردی یافت نشد.</div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <label className={retroHeading}>نوع</label>
-                <select
-                  value={personForm.kind}
-                  onChange={e => handleFormChange('kind', e.target.value)}
-                  className={`${retroInput} w-full`}
-                >
-                  <option value="customer">مشتری</option>
-                  <option value="supplier">تأمین‌کننده</option>
-                  <option value="other">سایر</option>
-                </select>
+            </div>
+
+            {/* Hierarchical grouping fields (set only in create/edit) */}
+            <div className="space-y-2">
+              <label className={retroHeading}>گروه‌بندی مخاطب (سلسله‌مراتبی)</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <input
+                    className={`${retroInput} w-full`}
+                    placeholder="سطح ۱"
+                    value={formGroupL1}
+                    onChange={e=> { setFormGroupL1(e.target.value); if (!e.target.value) { setFormGroupL2(''); setFormGroupL3('') } }}
+                    list="form-pg-l1"
+                  />
+                  <datalist id="form-pg-l1">
+                    {groupLevels.l1.map(g => <option key={`fl1-${g}`} value={g} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <input
+                    className={`${retroInput} w-full`}
+                    placeholder="سطح ۲"
+                    value={formGroupL2}
+                    onChange={e=> { setFormGroupL2(e.target.value); if (!e.target.value) { setFormGroupL3('') } }}
+                    list="form-pg-l2"
+                    disabled={!formGroupL1}
+                  />
+                  <datalist id="form-pg-l2">
+                    {(groupLevels.l2map[formGroupL1 || ''] || []).map(g => <option key={`fl2-${g}`} value={g} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <input
+                    className={`${retroInput} w-full`}
+                    placeholder="سطح ۳"
+                    value={formGroupL3}
+                    onChange={e=> setFormGroupL3(e.target.value)}
+                    list="form-pg-l3"
+                    disabled={!formGroupL1 || !formGroupL2}
+                  />
+                  <datalist id="form-pg-l3">
+                    {(groupLevels.l3map[`${formGroupL1}/${formGroupL2}`] || []).map(g => <option key={`fl3-${g}`} value={g} />)}
+                  </datalist>
+                </div>
               </div>
+              <div className="text-[11px] text-[#7a6b4f]">مسیر انتخاب‌شده: {[formGroupL1, formGroupL2, formGroupL3].filter(Boolean).join('/') || '—'}</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -423,6 +670,58 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>شناسه مالیاتی</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={personForm.tax_id}
+                  onChange={e => handleFormChange('tax_id', e.target.value)}
+                  placeholder="اختیاری"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>شناسه/کد ملی</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={personForm.national_id}
+                  onChange={e => handleFormChange('national_id', e.target.value)}
+                  placeholder="اختیاری"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className={retroHeading}>شرایط پرداخت</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={personForm.payment_terms}
+                  onChange={e => handleFormChange('payment_terms', e.target.value)}
+                  placeholder="مانند: Net 30"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className={retroHeading}>سقف اعتبار (ریال)</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={personForm.credit_limit}
+                  onChange={e => handleFormChange('credit_limit', e.target.value)}
+                  placeholder="مثلاً 10000000"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={retroHeading}>آدرس</label>
+              <textarea
+                className={`${retroInput} w-full h-20`}
+                value={personForm.address}
+                onChange={e => handleFormChange('address', e.target.value)}
+                placeholder="نشانی کامل مخاطب"
+              />
+            </div>
+
             <div className="space-y-2">
               <label className={retroHeading}>توضیحات</label>
               <textarea
@@ -430,6 +729,16 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                 value={personForm.description}
                 onChange={e => handleFormChange('description', e.target.value)}
                 placeholder="یادداشت مرتبط با این مخاطب"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className={retroHeading}>توضیح سیستمی برای مدیر (غیرچاپی)</label>
+              <textarea
+                className={`${retroInput} w-full h-16`}
+                value={auditNote}
+                onChange={e => setAuditNote(e.target.value)}
+                placeholder="برای ثبت در تاریخچه؛ در چاپ نمی‌آید"
               />
             </div>
 
@@ -473,24 +782,51 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
             />
           </div>
           <div className="space-y-2">
-            <label className={retroHeading}>نوع مخاطب</label>
-            <select
-              value={kindFilter}
-              onChange={e => setKindFilter(e.target.value as KindFilter)}
-              className={`${retroInput} w-full`}
-            >
-              <option value="all">همه</option>
-              <option value="customer">مشتری</option>
-              <option value="supplier">تأمین‌کننده</option>
-              <option value="other">سایر</option>
-            </select>
-          </div>
-          <div className="space-y-2">
             <label className={retroHeading}>نتیجه</label>
             <div className="border border-dashed border-[#c5bca5] px-3 py-2 text-xs text-[#7a6b4f] rounded-sm">
-              {formatNumberFa(filtered.length)} مخاطب نمایش داده می‌شود.
+              {formatNumberFa(filtered.length)} مخاطب نمایش داده می‌شود (حداکثر {formatNumberFa(pageSize)}).
             </div>
           </div>
+          <div className="space-y-2">
+            <label className={retroHeading}>تعداد نمایشی</label>
+            <select
+              value={pageSize}
+              onChange={e => setPageSize(parseInt(e.target.value))}
+              className={`${retroInput} w-full`}
+            >
+              <option value={5}>۵</option>
+              <option value={10}>۱۰</option>
+              <option value={20}>۲۰</option>
+              <option value={50}>۵۰</option>
+              <option value={100}>۱۰۰</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Hierarchical group filters for persons */}
+        <div className="space-y-2">
+          <label className={retroHeading}>گروه‌بندی مخاطب (فیلتر سلسله‌مراتبی)</label>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <select value={groupL1Filter} onChange={e=>{ setGroupL1Filter(e.target.value); setGroupL2Filter(''); setGroupL3Filter('') }} className={`${retroInput} w-full`}>
+                <option value="">سطح ۱: همه</option>
+                {groupLevels.l1.map(g=> <option key={`pl1-${g}`} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <select value={groupL2Filter} onChange={e=>{ setGroupL2Filter(e.target.value); setGroupL3Filter('') }} className={`${retroInput} w-full`} disabled={!groupL1Filter}>
+                <option value="">سطح ۲: همه</option>
+                {(groupLevels.l2map[groupL1Filter||'']||[]).map(g=> <option key={`pl2-${g}`} value={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <select value={groupL3Filter} onChange={e=> setGroupL3Filter(e.target.value)} className={`${retroInput} w-full`} disabled={!groupL1Filter || !groupL2Filter}>
+                <option value="">سطح ۳: همه</option>
+                {(groupLevels.l3map[`${groupL1Filter}/${groupL2Filter}`]||[]).map(g=> <option key={`pl3-${g}`} value={g}>{g}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="text-[11px] text-[#7a6b4f]">مسیر انتخاب‌شده: {[groupL1Filter, groupL2Filter, groupL3Filter].filter(Boolean).join('/') || '—'}</div>
         </div>
 
         {filtered.length > 0 ? (
@@ -501,7 +837,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                   <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('name')}>
                     نام {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
-                  <th className={retroTableHeader}>نوع</th>
+                  <th className={retroTableHeader}>گروه</th>
                   <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('debit')}>
                     بدهکار {sortField === 'debit' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
@@ -513,6 +849,8 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                   </th>
                   <th className={retroTableHeader}>کد</th>
                   <th className={retroTableHeader}>موبایل</th>
+                  <th className={retroTableHeader}>سقف اعتبار</th>
+                  <th className={retroTableHeader}>شرایط پرداخت</th>
                   <th className={`${retroTableHeader} cursor-pointer hover:bg-[#c5bca5]`} onClick={() => handleSort('created_at')}>
                     تاریخ ثبت {sortField === 'created_at' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
@@ -526,10 +864,21 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                     onClick={() => loadPersonLedger(person)}
                   >
                     <td className="px-3 py-2 font-semibold">
-                      {person.name}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span>{person.name}</span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          بدهکار: {formatNumberFa(person.debit || 0)}
+                        </span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          بستانکار: {formatNumberFa(person.credit || 0)}
+                        </span>
+                        <span className="text-[10px] px-2 py-[2px] border border-[#c5bca5] bg-[#faf4de] rounded">
+                          مانده: {formatNumberFa(Math.abs(person.balance || 0))}{(person.balance||0)>0?' بده':''}{(person.balance||0)<0?' بستان':''}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-xs">
-                      {person.kind === 'customer' ? 'مشتری' : person.kind === 'supplier' ? 'تأمین‌کننده' : 'سایر'}
+                      {[(personGroups[person.id]?.l1||''),(personGroups[person.id]?.l2||''),(personGroups[person.id]?.l3||'')].filter(Boolean).join('/') || '—'}
                     </td>
                     <td className="px-3 py-2 text-left font-mono">
                       {person.debit > 0 ? (
@@ -557,8 +906,57 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                     </td>
                     <td className="px-3 py-2 text-xs">{person.code ?? '-'}</td>
                     <td className="px-3 py-2 text-xs">{person.mobile ?? '-'}</td>
+                    <td className="px-3 py-2 text-xs font-mono">{person.credit_limit != null ? formatNumberFa(person.credit_limit) : '-'}</td>
+                    <td className="px-3 py-2 text-xs">{(person as any).payment_terms ?? '-'}</td>
                     <td className="px-3 py-2 text-xs text-[#7a6b4f]">
                       {new Date(person.created_at).toLocaleDateString('fa-IR')}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      <div className="flex gap-2">
+                        <button
+                          className="underline text-blue-700 hover:text-blue-900"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingPerson(person)
+                            setPersonForm({
+                              name: person.name,
+                              kind: person.kind ?? 'other',
+                              mobile: person.mobile ?? '',
+                              code: person.code ?? '',
+                              description: person.description ?? '',
+                              tax_id: (person as any).tax_id ?? '',
+                              national_id: (person as any).national_id ?? '',
+                              address: (person as any).address ?? '',
+                              payment_terms: (person as any).payment_terms ?? '',
+                              credit_limit: (person as any).credit_limit ? String((person as any).credit_limit) : '',
+                            })
+                            const pg = personGroups[person.id] || {}
+                            setFormGroupL1(pg.l1 || person.kind || '')
+                            setFormGroupL2(pg.l2 || '')
+                            setFormGroupL3(pg.l3 || '')
+                            setShowForm(true)
+                          }}
+                        >
+                          ویرایش
+                        </button>
+                        <button
+                          className="underline text-red-700 hover:text-red-900"
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            if (!confirm('حذف این مخاطب؟')) return
+                            await apiDelete(`/api/persons/${person.id}`)
+                            setPeople(prev => prev.filter(p => p.id !== person.id))
+                          }}
+                        >
+                          حذف
+                        </button>
+                        <button
+                          className="underline text-[#1f2e3b] hover:text-[#5b4a2f]"
+                          onClick={(e) => { e.stopPropagation(); openPersonHistory(person) }}
+                        >
+                          تاریخچه
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -570,6 +968,38 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
         )}
       </section>
 
+      {historyOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setHistoryOpen(null)}>
+          <div className="w-[520px] max-w-[90vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-[#1f2e3b]">تاریخچه مخاطب #{historyOpen.personId}</h4>
+              <button className={`${retroButton}`} onClick={()=> setHistoryOpen(null)}>بستن</button>
+            </div>
+            {historyLoading ? (
+              <div className="text-xs text-[#7a6b4f]">در حال دریافت تاریخچه...</div>
+            ) : historyOpen.items.length ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {historyOpen.items.map(h => (
+                  <div key={h.id} className="bg-[#f8f5ee] px-3 py-2 rounded border border-[#e5ddc5] text-xs">
+                    <div className="flex justify-between">
+                      <span className="font-semibold">{h.user || 'کاربر'}</span>
+                      <span className="text-[11px] text-[#7a6b4f]">{h.time ? new Date(h.time).toLocaleDateString('fa-IR') : ''}</span>
+                    </div>
+                    {h.note && <div className="mt-1 text-[#5b4a2f]">یادداشت: {h.note}</div>}
+                    {(h as any).audit_note && (
+                      <div className="mt-1 text-[#1f2e3b] font-semibold">توضیح سیستمی: {(h as any).audit_note}</div>
+                    )}
+                    {h.changes && <pre className="mt-2 text-[10px] bg-[#f6f1df] px-2 py-1 rounded overflow-x-auto">{JSON.stringify(h.changes, null, 2)}</pre>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-[#7a6b4f]">تاریخچه‌ای ثبت نشده است.</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Ledger Modal */}
       {selectedPerson && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -579,9 +1009,19 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                 <p className={retroHeading}>گردش حساب</p>
                 <h3 className="text-xl font-semibold mt-2">{selectedPerson.name}</h3>
                 <p className="text-xs text-[#7a6b4f] mt-1">
-                  {selectedPerson.kind === 'customer' ? 'مشتری' : selectedPerson.kind === 'supplier' ? 'تأمین‌کننده' : 'سایر'}
+                  {(() => {
+                    const g = personGroups[selectedPerson.id] || {}
+                    const path = [g.l1, g.l2, g.l3].filter(Boolean).join('/')
+                    if (path) return `گروه: ${path}`
+                    if (selectedPerson.kind) return `نوع: ${selectedPerson.kind}`
+                    return ''
+                  })()}
                   {selectedPerson.mobile && ` | ${selectedPerson.mobile}`}
                   {selectedPerson.code && ` | کد: ${selectedPerson.code}`}
+                  {(selectedPerson as any).tax_id && ` | کد اقتصادی: ${(selectedPerson as any).tax_id}`}
+                  {(selectedPerson as any).national_id && ` | کد ملی: ${(selectedPerson as any).national_id}`}
+                  {(selectedPerson as any).payment_terms && ` | شرایط پرداخت: ${(selectedPerson as any).payment_terms}`}
+                  {(selectedPerson as any).credit_limit != null && ` | سقف اعتبار: ${formatNumberFa((selectedPerson as any).credit_limit)} ریال`}
                 </p>
               </div>
               <div className="flex gap-2">
