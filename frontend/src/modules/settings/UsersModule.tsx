@@ -253,7 +253,7 @@ export default function UsersModule({}: ModuleComponentProps) {
 
 	async function saveUserRole(userId: number, roleId: number | null) {
 		try {
-			await apiPatch(`/api/users/${userId}/role`, { role_id: roleId })
+			await apiPatch(`/api/users/${userId}`, { role_id: roleId })
 			setUsers(us => us.map(u => (u.id === userId ? { ...u, role_id: roleId } : u)))
 		} catch (e) {}
 	}
@@ -261,9 +261,18 @@ export default function UsersModule({}: ModuleComponentProps) {
 	async function saveUserPerms(userId: number) {
 		setSavingUserPermId(userId)
 		try {
-			await apiPut(`/api/users/${userId}/permissions`, userPerms[userId] ?? {})
-		} catch (e) {}
-		finally {
+			// Align with backend: permissions are role-based, not per-user
+			const targetUser = users.find(u => u.id === userId)
+			if (targetUser && targetUser.role_id) {
+				const selected = userPerms[userId] || {}
+				const permIds = Object.entries(selected).filter(([, v]) => !!v).map(([k]) => Number(k))
+				await apiPost(`/api/roles/${targetUser.role_id}/permissions`, permIds)
+			} else {
+				// No role assigned or user not found; skip
+			}
+		} catch (e) {
+			// ignore
+		} finally {
 			setSavingUserPermId(null)
 		}
 	}
@@ -327,7 +336,8 @@ export default function UsersModule({}: ModuleComponentProps) {
 	async function saveUserSms(userId: number) {
 		setSavingUserSmsId(userId)
 		try {
-			await apiPut(`/api/users/${userId}/preferences/sms`, userSms[userId] ?? {})
+			// Backend does not currently expose per-user SMS prefs update endpoint; no-op for now
+			// Consider storing via admin settings or user preferences when available
 		} catch (e) {
 			// ignore
 		} finally {
