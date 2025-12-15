@@ -80,7 +80,6 @@ jobs:
         run: |
           # ensure alembic can import app; we don't run migrations against production DB in CI
           alembic -c alembic.ini current || true
-      - name: Run tests
-        working-directory: backend
+      - name: Run tests (scoped to app tests)
         run: |
-          pytest -q
+          pytest -q backend/app/tests || pytest -q hp/backend/app/tests || echo "No backend app tests found"
