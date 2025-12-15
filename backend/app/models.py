@@ -356,6 +356,29 @@ class FinancialYear(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     opening_balances = Column(Text, nullable=True)  # JSON: account -> amount
 
+# Ensure unique FY name at insert time by appending numeric suffix if needed
+from sqlalchemy import event, text
+
+@event.listens_for(FinancialYear, 'before_insert')
+def _ensure_unique_financial_year_name(mapper, connection, target):
+    try:
+        base = (target.name or '').strip()
+        if not base:
+            return
+        name = base
+        i = 1
+        while True:
+            row = connection.execute(text("SELECT 1 FROM financial_years WHERE name = :n LIMIT 1"), { 'n': name }).first()
+            if not row:
+                # no conflict, use this name
+                target.name = name
+                break
+            i += 1
+            name = f"{base}-{i}"
+    except Exception:
+        # best-effort safeguard; fall back to original name
+        pass
+
 
 class UserSmsConfig(Base):
     __tablename__ = 'user_sms_configs'
