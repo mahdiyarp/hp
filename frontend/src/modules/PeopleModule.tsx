@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet, apiPost, apiDelete, apiPut } from '../services/api'
 import { formatNumberFa } from '../utils/num'
@@ -12,6 +12,39 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+
+type RegisteredUser = {
+  id: number
+  username: string
+  mobile?: string | null
+  full_name?: string | null
+  verification_level?: string | null
+  credit?: number | null
+  public_profile?: boolean | null
+}
+
+const REGISTERED_USERS_CACHE_KEY = 'hp.registered_users_cache.v1'
+
+function loadRegisteredUsersCache(): { items: RegisteredUser[]; updatedAt: string | null } {
+  try {
+    const raw = localStorage.getItem(REGISTERED_USERS_CACHE_KEY)
+    if (!raw) return { items: [], updatedAt: null }
+    const parsed = JSON.parse(raw)
+    const items: RegisteredUser[] = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.items)
+      ? parsed.items
+      : []
+    const updatedAt: string | null = typeof parsed?.updatedAt === 'string' ? parsed.updatedAt : null
+    if (updatedAt) {
+      const ageMs = Date.now() - new Date(updatedAt).getTime()
+      if (Number.isFinite(ageMs) && ageMs > 24 * 60 * 60 * 1000) return { items: [], updatedAt: null }
+    }
+    return { items, updatedAt }
+  } catch {
+    return { items: [], updatedAt: null }
+  }
+}
 
 interface Person {
   id: string
@@ -53,6 +86,7 @@ interface PersonLedger {
 export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   const { user } = useAuth()
   const canEdit = !!user && ['Admin', 'Accountant', 'Manager'].includes(user.role)
+  const initialRegisteredUsersCache = useMemo(() => loadRegisteredUsersCache(), [])
   const [people, setPeople] = useState<Person[]>([])
   const [balances, setBalances] = useState<PersonBalance[]>([])
   const [loading, setLoading] = useState(true)
@@ -118,6 +152,100 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   }
   const [personForm, setPersonForm] = useState<typeof emptyForm>(emptyForm)
   const [auditNote, setAuditNote] = useState('')
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(initialRegisteredUsersCache.items)
+  const [registeredUsersUpdatedAt, setRegisteredUsersUpdatedAt] = useState<string | null>(initialRegisteredUsersCache.updatedAt)
+  const [registeredUsersError, setRegisteredUsersError] = useState<string | null>(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const registeredUsersStaleRefresh = useRef(false)
+
+  const registeredUsersUpdatedLabel = useMemo(() => {
+    if (!registeredUsersUpdatedAt) return '—'
+    try {
+      return new Date(registeredUsersUpdatedAt).toLocaleString('fa-IR')
+    } catch {
+      return registeredUsersUpdatedAt
+    }
+  }, [registeredUsersUpdatedAt])
+
+  const registeredUsersAgeLabel = useMemo(() => {
+    if (!registeredUsersUpdatedAt) return null
+    const ageMs = Date.now() - new Date(registeredUsersUpdatedAt).getTime()
+    if (!Number.isFinite(ageMs) || ageMs < 0) return null
+    const minutes = Math.floor(ageMs / 60000)
+    if (minutes < 60) return `${minutes} دقیقه پیش`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours} ساعت پیش`
+    const days = Math.floor(hours / 24)
+    return `${days} روز پیش`
+  }, [registeredUsersUpdatedAt])
+
+  const clearRegisteredUsersCache = () => {
+    setRegisteredUsers([])
+    setRegisteredUsersUpdatedAt(null)
+    setRegisteredUsersError(null)
+    try { localStorage.removeItem(REGISTERED_USERS_CACHE_KEY) } catch {}
+    void refreshRegisteredUsers()
+  }
+
+  async function refreshRegisteredUsers() {
+    if (loadingUsers) return
+    setLoadingUsers(true)
+    setRegisteredUsersError(null)
+    try {
+      const list = await apiGet<RegisteredUser[]>('/api/users')
+      if (Array.isArray(list)) {
+        const updatedAt = new Date().toISOString()
+        setRegisteredUsers(list)
+        setRegisteredUsersUpdatedAt(updatedAt)
+        try {
+          localStorage.setItem(REGISTERED_USERS_CACHE_KEY, JSON.stringify({ items: list, updatedAt }))
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('registered users unavailable', err)
+      setRegisteredUsersError('عدم موفقیت در دریافت کاربران. بعدا دوباره تلاش کنید.')
+      if (!registeredUsersUpdatedAt) clearRegisteredUsersCache()
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
+  useEffect(() => {
+    registeredUsersStaleRefresh.current = false
+  }, [registeredUsersUpdatedAt])
+
+  useEffect(() => {
+    if (!showForm) return
+    if (registeredUsers.length === 0) {
+      void refreshRegisteredUsers()
+      return
+    }
+    if (!registeredUsersUpdatedAt) return
+    // background refresh if cache is stale (>15 minutes)
+    const ageMs = Date.now() - new Date(registeredUsersUpdatedAt).getTime()
+    const stale15m = ageMs > 15 * 60 * 1000
+    const stale6h = ageMs > 6 * 60 * 60 * 1000
+    if (stale6h && !registeredUsersStaleRefresh.current) {
+      registeredUsersStaleRefresh.current = true
+      void refreshRegisteredUsers()
+      return
+    }
+    if (stale15m) void refreshRegisteredUsers()
+  }, [showForm, registeredUsers.length, registeredUsersUpdatedAt])
+
+  const filteredRegisteredUsers = useMemo(() => {
+    const term = userSearch.trim().toLowerCase()
+    const base = registeredUsers
+    if (!term) return base.slice(0, 12)
+    return base
+      .filter(u =>
+        (u.username || '').toLowerCase().includes(term) ||
+        (u.mobile || '').toLowerCase().includes(term) ||
+        (u.full_name || '').toLowerCase().includes(term)
+      )
+      .slice(0, 20)
+  }, [userSearch, registeredUsers])
   // form group states (hierarchical person grouping only set in create/edit)
   const [formGroupL1, setFormGroupL1] = useState('')
   const [formGroupL2, setFormGroupL2] = useState('')
@@ -547,6 +675,67 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
               بستن فرم
             </button>
           </header>
+
+          <div className={`${retroPanel} p-3 space-y-2`}>
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <div>
+                <p className={retroHeading}>انتخاب از کاربران ثبت‌شده</p>
+                <p className="text-xs text-[#7a6b4f]">برای اتصال مخاطب به کاربر تأییدشده از همینجا انتخاب کنید.</p>
+                <p className="text-[11px] text-[#7a6b4f]">آخرین بروزرسانی کاربران: {registeredUsersUpdatedLabel}</p>
+                {registeredUsersAgeLabel && (
+                  <p className="text-[11px] text-[#7a6b4f]">سن داده کش: {registeredUsersAgeLabel}</p>
+                )}
+                {registeredUsersError && (
+                  <p className="text-[11px] text-red-700">{registeredUsersError}</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  className={`${retroInput} w-48`}
+                  placeholder="نام، موبایل یا نام کاربری"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+                <button type="button" className={retroButton} onClick={() => refreshRegisteredUsers()} disabled={loadingUsers}>
+                  {loadingUsers ? 'در حال بروزرسانی…' : 'بروزرسانی کاربران'}
+                </button>
+                <button type="button" className={retroButton} onClick={() => clearRegisteredUsersCache()} disabled={loadingUsers}>
+                  پاکسازی کش کاربران
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {filteredRegisteredUsers.map(u => (
+                <div key={u.id} className="border border-[#d9cfb6] bg-[#faf4de] rounded p-3 space-y-2 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-sm">{u.full_name || u.username}</span>
+                    {u.public_profile ? <span className="text-[11px] bg-[#e9dfc3] px-2 py-0.5 rounded">عمومی</span> : null}
+                  </div>
+                  <p className="text-xs text-[#7a6b4f]">{u.mobile || u.username}</p>
+                  <div className="text-[11px] text-[#6a5c3d] space-x-1 space-x-reverse">
+                    {u.verification_level && <span className="inline-block bg-[#efe6cd] px-2 py-0.5 rounded">تأیید: {u.verification_level}</span>}
+                    {typeof u.credit === 'number' && <span className="inline-block bg-[#efe6cd] px-2 py-0.5 rounded">اعتبار: {formatNumberFa(u.credit)}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                      type="button"
+                      className={retroButton}
+                      onClick={() => setPersonForm(prev => ({ ...prev, name: u.full_name || u.username || prev.name, mobile: u.mobile || prev.mobile }))}
+                    >
+                      انتخاب این کاربر
+                    </button>
+                    <span className="text-[11px] text-[#7a6b4f]">با انتخاب، نام و موبایل به فرم منتقل می‌شود.</span>
+                  </div>
+                </div>
+              ))}
+              {!loadingUsers && filteredRegisteredUsers.length === 0 && (
+                <div className="text-sm text-[#7a6b4f]">کاربری مطابق جستجو یافت نشد.</div>
+              )}
+              {loadingUsers && (
+                <div className="text-sm text-[#7a6b4f]">در حال دریافت کاربران...</div>
+              )}
+            </div>
+          </div>
 
           <form className="space-y-4" onSubmit={submitPerson}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
