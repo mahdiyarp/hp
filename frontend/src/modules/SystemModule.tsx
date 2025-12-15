@@ -40,27 +40,7 @@ interface ActivityLog {
   username: string | null
 }
 
-interface User {
-  id: number
-  username: string
-  email: string | null
-  full_name: string | null
-  role_id: number | null
-  is_active: boolean
-}
-
-interface Role {
-  id: number
-  name: string
-  description: string
-}
-
-interface Permission {
-  id: number
-  name: string
-  description?: string | null
-  module?: string | null
-}
+// user/role/permission types moved to Settings > Users module
 
 interface SystemSetting {
   id: number
@@ -79,19 +59,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [activities, setActivities] = useState<ActivityLog[]>([])
-  // moved to AccessControlModule
-  const [users, setUsers] = useState<User[]>([])
-  const [roles, setRoles] = useState<Role[]>([])
-  const [perms, setPerms] = useState<Permission[]>([])
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null)
-  const [rolePermIds, setRolePermIds] = useState<number[]>([])
+  // users/roles UI moved to Settings > Users module
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
   const [creatingBackup, setCreatingBackup] = useState(false)
-  const [showUserForm, setShowUserForm] = useState(false)
-  const [newUser, setNewUser] = useState({ username: '', email: '', full_name: '', password: '', role_id: 2 })
-  const [newRole, setNewRole] = useState({ name: '', description: '' })
+  
   const showLegacyAccess = false
 
   // SMS state removed; migrated to Developer settings (sms.ir)
@@ -300,50 +273,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     }
   }
 
-  async function createUser() {
-    try {
-      await apiPost('/api/users', newUser)
-      setShowUserForm(false)
-      setNewUser({ username: '', email: '', full_name: '', password: '', role_id: 2 })
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('ایجاد کاربر جدید موفق نبود.')
-    }
-  }
-
-  async function deleteUser(userId: number) {
-    if (!window.confirm('آیا مطمئن هستید؟')) return
-    try {
-      await apiDelete(`/api/users/${userId}`)
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('حذف کاربر موفق نبود.')
-    }
-  }
-
-  async function createRole() {
-    try {
-      await apiPost('/api/roles', newRole)
-      setNewRole({ name: '', description: '' })
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('ایجاد نقش جدید موفق نبود.')
-    }
-  }
-
-  async function saveRolePermissions() {
-    if (!selectedRoleId) return
-    try {
-      await apiPost(`/api/roles/${selectedRoleId}/permissions`, rolePermIds)
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('ذخیره دسترسی‌های نقش موفق نبود.')
-    }
-  }
+  // user/role creation removed; now handled in Settings > Users
 
   // SMS utility functions removed
 
@@ -404,67 +334,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         </div>
       )}
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header>
-          {showLegacyAccess && (
-            <>
-              <p className={retroHeading}>Roles & Permissions</p>
-              <h3 className="text-lg font-semibold mt-2">نقش‌ها و دسترسی‌ها</h3>
-            </>
-          )}
-        </header>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <p className={retroHeading}>افزودن نقش جدید</p>
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام نقش" value={newRole.name} onChange={e=>setNewRole({...newRole, name: e.target.value})} />
-            <input className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="توضیحات" value={newRole.description} onChange={e=>setNewRole({...newRole, description: e.target.value})} />
-            <button className={retroButton} onClick={createRole}>ایجاد نقش</button>
-          </div>
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <p className={retroHeading}>ویرایش دسترسی‌های نقش</p>
-            <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={selectedRoleId ?? ''} onChange={e=>{
-              const rid = e.target.value? parseInt(e.target.value): null
-              setSelectedRoleId(rid)
-              if (rid) {
-                const r = roles.find(x=>x.id===rid) as (Role & { permissions?: Permission[] }) | undefined
-                if (r && (r as any).permissions) {
-                  const ids = ((r as any).permissions as Permission[]).map(p=>p.id)
-                  setRolePermIds(ids)
-                } else {
-                  setRolePermIds([])
-                }
-              } else {
-                setRolePermIds([])
-              }
-            }}>
-              <option value="">انتخاب نقش...</option>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            {selectedRoleId && (
-              <div className="max-h-64 overflow-y-auto border border-[#c5bca5] bg-[#faf4de] p-2">
-                {perms.map(p => {
-                  const checked = rolePermIds.includes(p.id)
-                  return (
-                    <label key={p.id} className="flex items-center gap-2 py-1 text-sm">
-                      <input type="checkbox" checked={checked} onChange={e=>{
-                        setRolePermIds(prev => e.target.checked ? Array.from(new Set([...prev, p.id])) : prev.filter(id=>id!==p.id))
-                      }}/>
-                      <span>{p.name}</span>
-                      <span className={`${retroBadge}`}>{p.module ?? '—'}</span>
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-            <div className="flex gap-2">
-              {showLegacyAccess && (
-                <button className={retroButton} onClick={saveRolePermissions} disabled={!selectedRoleId}>ذخیره</button>
-              )}
-              <span className={retroMuted}>ابتدا نقش را انتخاب و دسترسی‌ها را تیک بزنید.</span>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Roles & permissions moved to Settings > Users */}
 
       {/* SMS Gateway moved to Developer settings. Removed from SystemModule to avoid undefined state. */}
 
@@ -532,84 +402,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         />
       </section>
 
-      {/* Combined: Users + Roles & Permissions + SMS Register */}
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex items-center justify-between">
-          <div>
-            <p className={retroHeading}>مدیریت کاربران و نقش‌ها</p>
-            <h3 className="text-lg font-semibold mt-2">زیبا، منسجم و کاربردی</h3>
-          </div>
-        </header>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          {/* Card: نقش‌ها و دسترسی‌ها */}
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <div className="flex items-center justify-between">
-              <p className={`${retroHeading} text-[#7a6b4f]`}>نقش‌ها و دسترسی‌ها</p>
-              <span className={`${retroBadge}`}>{roles.length} نقش</span>
-            </div>
-            <div className="space-y-2 max-h-[320px] overflow-auto">
-              {roles.map(r => (
-                <div key={r.id} className="border border-[#d9cfb6] rounded p-2 bg-[#faf4de]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{r.name}</span>
-                    <span className={`${retroBadge}`}>{(r.permissions||[]).length} مجوز</span>
-                  </div>
-                  <p className="text-xs text-[#7a6b4f] mt-1">{r.description || '—'}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {(r.permissions||[]).slice(0,8).map(p => (
-                      <span key={`${r.id}-${p.id}`} className={`${retroBadge}`}>{p.name}</span>
-                    ))}
-                    {(r.permissions||[]).length > 8 && (
-                      <span className={`${retroBadge} bg-[#1f2e3b]`}>+{(r.permissions||[]).length - 8}</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {roles.length === 0 && (
-                <p className={retroMuted}>نقشی ثبت نشده است.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Card: ارسال پیامک و ثبت کاربر — removed (migrated to Developer settings) */}
-
-          {/* Card: مدیریت کاربران */}
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <div className="flex items-center justify-between">
-              <p className={`${retroHeading} text-[#7a6b4f]`}>مدیریت کاربران</p>
-              <button className={retroButton} onClick={()=>setShowUserForm(!showUserForm)}>{showUserForm?'لغو':'کاربر جدید'}</button>
-            </div>
-            {showUserForm && (
-              <div className="space-y-2">
-                <input type="text" placeholder="نام کاربری" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} />
-                <input type="email" placeholder="ایمیل" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} />
-                <input type="text" placeholder="نام کامل" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.full_name} onChange={e => setNewUser({ ...newUser, full_name: e.target.value })} />
-                <input type="password" placeholder="رمز عبور" className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
-                <select className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" value={newUser.role_id || ''} onChange={e => setNewUser({ ...newUser, role_id: e.target.value ? Number(e.target.value) : undefined })}>
-                  <option value="">انتخاب نقش</option>
-                  {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-                <button className={retroButton} onClick={createUser}>ثبت</button>
-              </div>
-            )}
-            <div className="space-y-2 max-h-[320px] overflow-auto">
-              {users.length === 0 && <p className={retroMuted}>کاربری یافت نشد.</p>}
-              {users.map(u => (
-                <div key={u.id} className="flex items-center justify-between border border-[#d9cfb6] rounded p-2 bg-[#faf4de]">
-                  <div className="flex items-center gap-2">
-                    <span className={`${retroBadge}`}>{u.username}</span>
-                    <span className={retroMuted}>{u.email || '—'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`${retroBadge}`}>{u.role || '—'}</span>
-                    <span className={`${retroBadge} ${u.is_active? '' : 'opacity-50'}`}>{u.is_active? 'فعال' : 'غیرفعال'}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Users moved to Settings > Users */}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -699,107 +492,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         )}
       </section>
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <p className={retroHeading}>Users</p>
-            <h3 className="text-lg font-semibold mt-2">مدیریت کاربران</h3>
-          </div>
-          <button
-            className={retroButton}
-            onClick={() => setShowUserForm(!showUserForm)}
-          >
-            {showUserForm ? 'لغو' : 'کاربر جدید'}
-          </button>
-        </header>
-
-        {showUserForm && (
-          <div className={`${retroPanel} p-4 space-y-3`}>
-            <input
-              type="text"
-              placeholder="نام کاربری"
-              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-              value={newUser.username}
-              onChange={e => setNewUser({ ...newUser, username: e.target.value })}
-            />
-            <input
-              type="email"
-              placeholder="ایمیل"
-              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-              value={newUser.email}
-              onChange={e => setNewUser({ ...newUser, email: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="نام کامل"
-              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-              value={newUser.full_name}
-              onChange={e => setNewUser({ ...newUser, full_name: e.target.value })}
-            />
-            <input
-              type="password"
-              placeholder="رمز عبور"
-              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-              value={newUser.password}
-              onChange={e => setNewUser({ ...newUser, password: e.target.value })}
-            />
-            <select
-              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-              value={newUser.role_id}
-              onChange={e => setNewUser({ ...newUser, role_id: parseInt(e.target.value) })}
-            >
-              {roles.map(role => (
-                <option key={role.id} value={role.id}>{role.name}</option>
-              ))}
-            </select>
-            <button className={retroButton} onClick={createUser}>
-              ایجاد کاربر
-            </button>
-          </div>
-        )}
-
-        {users.length > 0 ? (
-          <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-            <thead>
-              <tr>
-                <th className={retroTableHeader}>نام کاربری</th>
-                <th className={retroTableHeader}>ایمیل</th>
-                <th className={retroTableHeader}>نام کامل</th>
-                <th className={retroTableHeader}>نقش</th>
-                <th className={retroTableHeader}>فعال</th>
-                <th className={retroTableHeader}>عملیات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map(user => (
-                <tr key={user.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">{user.username}</td>
-                  <td className="px-3 py-2 text-left text-xs">{user.email || '-'}</td>
-                  <td className="px-3 py-2 text-left">{user.full_name || '-'}</td>
-                  <td className="px-3 py-2">
-                    <span className={retroBadge}>
-                      {roles.find(r => r.id === user.role_id)?.name || '-'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {user.is_active ? '✓' : '✗'}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      className="text-red-600 hover:text-red-800 text-xs"
-                      onClick={() => deleteUser(user.id)}
-                    >
-                      حذف
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-xs text-[#7a6b4f]">هیچ کاربری وجود ندارد.</p>
-        )}
-      </section>
+      {/* Users table removed; now in Settings > Users */}
 
       <section className={`${retroPanelPadded} space-y-4`}>
         <header>

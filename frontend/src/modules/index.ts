@@ -6,7 +6,7 @@ import InventoryModule from './InventoryModule'
 import PeopleModule from './PeopleModule'
 import ReportsModule from './ReportsModule'
 import SystemModule from './SystemModule'
-import AccessControlModule from './settings/AccessControlModule'
+import UsersModule from './settings/UsersModule'
 import BanksModule from './settings/BanksModule'
 import DevConsole from './developer/DevConsole'
 import SmsPanel from './sms/SmsPanel'
@@ -125,13 +125,12 @@ export const modules: ModuleDefinition[] = [
     feature: 'settings',
   },
   {
-    id: 'access-control',
-    label: 'نقش‌ها و دسترسی‌ها',
-    description: 'مدیریت نقش‌ها، کاربران، مجوزها و گزارش فعالیت',
-    component: AccessControlModule,
-    badge: 'ADMIN',
-    // نمایش فقط برای کاربر دولوپر NFT
-    hidden: !isDeveloperMobileUser(),
+    id: 'settings-users',
+    label: 'کاربران',
+    description: 'مدیریت کاربران، نقش‌ها، مجوزها و گزارش فعالیت',
+    component: UsersModule,
+    badge: 'USERS',
+    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
   },
   {
