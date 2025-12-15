@@ -1365,19 +1365,18 @@ def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end
     if method not in ('FIFO', 'LIFO'):
         method = 'FIFO'
     # Normalize datetime awareness to avoid naive/aware comparison errors
-    try:
-        if start is not None and start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-    except Exception:
-        pass
-    try:
-        if end is not None and end.tzinfo is None:
-            end = end.replace(tzinfo=timezone.utc)
-    except Exception:
-        pass
+    def _aware(dt: Optional[datetime]) -> Optional[datetime]:
+        if dt is None:
+            return None
+        try:
+            return dt if getattr(dt, 'tzinfo', None) is not None else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            return dt
+    start = _aware(start)
+    end = _aware(end)
     # Fetch all finalized invoices up to `end` to build layers
     inv_q = session.query(models.Invoice).filter(models.Invoice.status == 'final')
-        if end:
+    if end:
         inv_q = inv_q.filter(models.Invoice.server_time <= end)
     invs = inv_q.all()
     if not invs:
@@ -1390,13 +1389,9 @@ def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end
         items_by_inv.setdefault(it.invoice_id, []).append(it)
     # Compose events per product
     by_product: dict[str, list] = {}
-        for inv in invs:
-            t = inv.server_time or inv.client_time
-            try:
-                if t is not None and getattr(t, 'tzinfo', None) is None:
-                    t = t.replace(tzinfo=timezone.utc)
-            except Exception:
-                pass
+    for inv in invs:
+        t = inv.server_time or inv.client_time
+        t = _aware(t)
         if not t:
             continue
         its = items_by_inv.get(inv.id, [])
@@ -1439,9 +1434,10 @@ def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end
                 last_cost = e['unit'] or last_cost
             elif e['type'] == 'sale':
                 in_range = True
-                if start and e['t'] < start:
+                t_ev = _aware(e['t'])
+                if start and t_ev and t_ev < start:
                     in_range = False
-                if end and e['t'] > end:
+                if end and t_ev and t_ev > end:
                     in_range = False
                 if in_range:
                     total_revenue += e['total']
