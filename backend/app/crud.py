@@ -1390,8 +1390,13 @@ def report_pnl_with_cost(session: Session, start: Optional[datetime] = None, end
         items_by_inv.setdefault(it.invoice_id, []).append(it)
     # Compose events per product
     by_product: dict[str, list] = {}
-    for inv in invs:
-        t = inv.server_time or inv.client_time
+        for inv in invs:
+            t = inv.server_time or inv.client_time
+            try:
+                if t is not None and getattr(t, 'tzinfo', None) is None:
+                    t = t.replace(tzinfo=timezone.utc)
+            except Exception:
+                pass
         if not t:
             continue
         its = items_by_inv.get(inv.id, [])
