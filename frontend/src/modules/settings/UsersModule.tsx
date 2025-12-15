@@ -349,6 +349,59 @@ export default function UsersModule(): JSX.Element {
 				{loading && <div className={`${retroMuted} mt-2`}>در حال بارگذاری…</div>}
 
 			</div>
+
+			{/* تأیید هویت و پروفایل عمومی */}
+			<section className={`${retroPanel} space-y-3`}>
+				<div className="space-y-1">
+					<p className={`${retroHeading} text-[#1f2e3b]`}>تأیید هویت و پروفایل عمومی</p>
+					<p className={`${retroMuted}`}>سه‌مرحله‌ای: موبایل → هویت ملی (Shahkar3) → توانمندسازی کسب‌وکار</p>
+				</div>
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+					{/* مرحله ۱: موبایل (OTP) - از قبل در سیستم موجود است */}
+					<div className="space-y-2">
+						<p className={retroBadge}>مرحله ۱: موبایل (OTP)</p>
+						<p className={`${retroMuted}`}>ورود/ثبت‌نام با OTP؛ برای دمو فعال است.</p>
+					</div>
+					{/* مرحله ۲: هویت ملی (Shahkar3) */}
+					<div className="space-y-2">
+						<p className={retroBadge}>مرحله ۲: هویت ملی</p>
+						<div className="grid grid-cols-1 gap-2">
+							<input className="input w-full" placeholder="شماره موبایل (09xxxxxxxxx)" id="verify_mobile" />
+							<input className="input w-full" placeholder="کد ملی" id="verify_national_id" />
+							<button className={retroButton} onClick={async () => {
+								try {
+									const mobile = (document.getElementById('verify_mobile') as HTMLInputElement)?.value?.trim() || ''
+									const nid = (document.getElementById('verify_national_id') as HTMLInputElement)?.value?.trim() || ''
+									if (!mobile || !nid) { alert('موبایل و کد ملی الزامی است'); return }
+									await apiPost('/api/papi/proxy/api/sw1/shahkar3', { mobile, national_id: nid })
+									alert('درخواست Shahkar3 ارسال شد')
+								} catch (e: any) {
+									alert(e?.message || 'ارسال ناموفق بود')
+								}
+							}}>ارسال Shahkar3</button>
+						</div>
+					</div>
+					{/* مرحله ۳: توانمندسازی کسب‌وکار */}
+					<div className="space-y-2">
+						<p className={retroBadge}>مرحله ۳: کسب‌وکار و مالی</p>
+						<div className="grid grid-cols-1 gap-2">
+							<input className="input w-full" placeholder="شناسه کسب‌وکار/مجوز" id="biz_license" />
+							<button className={retroButton} onClick={async () => {
+								try {
+									const lic = (document.getElementById('biz_license') as HTMLInputElement)?.value?.trim() || ''
+									if (!lic) { alert('شناسه/مجوز الزامی است'); return }
+									await apiPost('/api/papi/proxy/api/sw1/VideoMatch', { license: lic })
+									await apiPost('/api/papi/proxy/api/sw1/License', { license: lic })
+									alert('درخواست‌های مرحله ۳ ارسال شد')
+								} catch (e: any) {
+									alert(e?.message || 'ارسال ناموفق بود')
+								}
+							}}>ارسال VideoMatch/License</button>
+						</div>
+					</div>
+				</div>
+				<p className={`${retroMuted}`}>نکته: برای کار با این سرویس‌ها لازم است API Key در «تنظیمات سیستم → PApi/SApi» ذخیره شده باشد.</p>
+			</section>
 			<section className={`${retroPanel} space-y-3`}>
 				<div className="space-y-1">
 					<p className={`${retroHeading} text-[#1f2e3b]`}>نقش‌ها</p>
@@ -503,7 +556,7 @@ export default function UsersModule(): JSX.Element {
 													<input className="input" type="number" min={0} max={23} value={pref.schedule?.daily_reminder_hour ?? 9} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, schedule: { ...pref.schedule, daily_reminder_hour: Number(e.target.value) } } }))} />
 													<input className="input" value={pref.schedule?.timezone ?? 'Asia/Tehran'} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, schedule: { ...pref.schedule, timezone: e.target.value } } }))} />
 												</div>
-												<button className={retroButton} onClick={() => saveUserSms(u.id)} disabled={savingUserSmsId === u.id}>{savingUserSmsId === u.id ? 'در حال ذخیره…' : 'ذخیره'}</button>
+												{/* ذخیره SMS کاربر فعلاً غیرفعال است چون اندپوینت نوشتن در بک‌اند وجود ندارد */}
 											</div>
 										)
 									})()}
@@ -530,7 +583,7 @@ export default function UsersModule(): JSX.Element {
 								</td>
 								<td>
 									<button className={`${retroButton}`} onClick={() => saveUserPerms(u.id)} disabled={savingUserPermId === u.id}>
-										{savingUserPermId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
+										{savingUserPermId === u.id ? 'در حال ذخیره…' : 'ذخیره به نقش'}
 									</button>
 								</td>
 								<td>
