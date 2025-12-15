@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import type { ModuleComponentProps } from '../../components/layout/AppShell'
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '../../services/api'
 import {
 	retroHeading,
@@ -74,7 +73,7 @@ interface UserSmsSettingsPayload {
 	}
 }
 
-export default function UsersModule({}: ModuleComponentProps) {
+export default function UsersModule(): JSX.Element {
 	const [users, setUsers] = useState<User[]>([])
 	const [userSortKey, setUserSortKey] = useState<'id' | 'username' | 'full_name' | 'email' | 'role_id' | 'is_active'>('id')
 	const [userSortDir, setUserSortDir] = useState<'asc' | 'desc'>('asc')
@@ -333,31 +332,13 @@ export default function UsersModule({}: ModuleComponentProps) {
 		}
 	}
 
-	async function saveUserSms(userId: number) {
+	function saveUserSms(userId: number) {
 		setSavingUserSmsId(userId)
-		try {
-			// Backend does not currently expose per-user SMS prefs update endpoint; no-op for now
-			// Consider storing via admin settings or user preferences when available
-		} catch (e) {
-			// ignore
-		} finally {
-			setSavingUserSmsId(null)
-		}
+		// Backend does not currently expose per-user SMS prefs update endpoint; no-op for now
+		setSavingUserSmsId(null)
 	}
 
-	const byRole = useMemo(() => {
-		const map: Record<string, User[]> = {}
-		users.forEach(u => {
-			const key = String(u.role_id ?? 'بدون نقش')
-			if (!map[key]) map[key] = []
-			map[key].push(u)
-		})
-		return map
-	}, [users])
 
-	const smsPerms = useMemo(() => {
-		return perms.filter(p => (p.module || '').toLowerCase().includes('sms'))
-	}, [perms])
 
 	return (
 		<div className={`${retroPanelPadded} space-y-6`}>
@@ -444,7 +425,7 @@ export default function UsersModule({}: ModuleComponentProps) {
 						<button className={retroButton} onClick={async () => {
 							try {
 								const payload: any = { email: (userForm.email ?? '').trim() || undefined, mobile: (userForm.username ?? '').trim() || undefined, role_id: userForm.role_id ?? undefined }
-								const res = await apiPost('/api/admin/users/invite', payload)
+											await apiPost('/api/admin/users/invite', payload)
 								alert('دعوت ارسال شد')
 							} catch (e) {
 								alert('ارسال دعوت ناموفق بود')
