@@ -32,12 +32,16 @@ export default function SidebarMenu({
     async function loadOrder() {
       // Try server-side first (authenticated)
       try {
-        const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
-        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
-          const ids = modules.map(m => m.id)
-          const merged = [...serverOrder.filter((id: string) => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
-          if (!cancelled) setOrder(merged)
-          return
+        // Avoid early 401s: only fetch from server after auth tokens exist
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (hasToken) {
+          const serverOrder = await apiGet<string[]>('/api/users/preferences/sidebar-order')
+          if (Array.isArray(serverOrder) && serverOrder.length > 0) {
+            const ids = modules.map(m => m.id)
+            const merged = [...serverOrder.filter((id: string) => ids.includes(id)), ...ids.filter(id => !serverOrder.includes(id))]
+            if (!cancelled) setOrder(merged)
+            return
+          }
         }
       } catch (e) {
         // ignore - fallback to localStorage

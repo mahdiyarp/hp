@@ -187,11 +187,13 @@ def api_papi_send(payload: dict, session: Session = Depends(db.get_db), current_
 @app.post('/api/papi/otp/start')
 def api_papi_otp_start(payload: dict, session: Session = Depends(db.get_db)):
     mobile = str((payload or {}).get('mobile') or '').strip()
+    code = str((payload or {}).get('code') or '').strip() or None
     if not mobile:
         raise HTTPException(status_code=400, detail='mobile الزامی است')
+    # If client provided a code (demo/testing), use it to initialize session
     from .papi import start_otp as _start
     from .blockchain import create_blockchain_entry, hash_data
-    ok, info = _start(session, mobile)
+    ok, info = _start(session, mobile, code)
     try:
         create_blockchain_entry(
             session,
@@ -205,7 +207,16 @@ def api_papi_otp_start(payload: dict, session: Session = Depends(db.get_db)):
         pass
     if not ok:
         raise HTTPException(status_code=502, detail=info)
-    return {'success': True, 'detail': info}
+    # In dev mode, include debug info (current code) to ease testing
+    resp = {'success': True, 'detail': info}
+    try:
+        from .papi import get_otp_debug
+        dbg = get_otp_debug(mobile)
+        if DEV_ENABLED and dbg.get('exists'):
+            resp['debug'] = dbg
+    except Exception:
+        pass
+    return resp
 
 @app.post('/api/papi/otp/verify')
 def api_papi_otp_verify(payload: dict, session: Session = Depends(db.get_db)):

@@ -6,6 +6,13 @@ const fs = require('fs');
   const context = await browser.newContext();
   const page = await context.newPage();
 
+  // Silence noisy 404s for optional audit endpoints during tests
+  try {
+    await page.route('**/api/audit/otp/batch/latest', route => {
+      route.fulfill({ status: 204, contentType: 'application/json', body: '{}' })
+    })
+  } catch {}
+
   page.on('console', msg => {
     try { outLogs.push({type: msg.type(), text: msg.text()}); } catch(e){}
   });
@@ -23,30 +30,30 @@ const fs = require('fs');
     // Basic availability check: ensure root element exists
     await page.waitForSelector('#root', { timeout: 10000 });
 
-    // Try a minimal OTP login interaction if elements are present
+    // Updated OTP login flow for inline mobile mode in LoginForm
     try {
-      const loginButton = await page.$('button:has-text("ورود")');
-      if (loginButton) await loginButton.click();
+      // Switch to mobile mode tab
+      const mobileModeToggle = await page.waitForSelector('[data-testid="login-mobile-tab"]', { timeout: 5000 });
+      await mobileModeToggle.click();
 
-      const mobileModeToggle = await page.$('button:has-text("ورود با موبایل")');
-      if (mobileModeToggle) await mobileModeToggle.click();
+      // Fill phone number and a 6-digit code
+      const phoneInput = await page.waitForSelector('input[placeholder*="0912"], input[inputmode="tel"]', { timeout: 5000 });
+      await phoneInput.fill('09123506545');
 
-      const phoneInput = await page.$('input[type="tel"], input[name="mobile"], input[placeholder*="موبایل"], input[placeholder*="شماره"]');
-      if (phoneInput) await phoneInput.fill('09123506545');
+      const codeInput = await page.$('input[placeholder*="123456"], input[inputmode="numeric"]');
+      if (codeInput) {
+        await codeInput.fill('123456');
+      }
 
-      const sendOtpBtn = await page.$('button:has-text("ارسال کد")') || await page.$('button:has-text("ارسال OTP")');
-      if (sendOtpBtn) await sendOtpBtn.click();
+      // Submit mobile login
+      const submitMobile = await page.waitForSelector('[data-testid="login-mobile-submit"]', { timeout: 5000 });
+      await submitMobile.click();
 
-      await page.waitForTimeout(1500);
-
-      const verifyBtn = await page.$('button:has-text("تایید")') || await page.$('button:has-text("ورود")');
-      if (verifyBtn) await verifyBtn.click();
-
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(2500);
       const dashboardExists = await page.$('nav, header, [data-testid="dashboard"], .dashboard');
       console.log('Dashboard visible:', !!dashboardExists);
     } catch (e) {
-      console.warn('Optional OTP flow skipped:', e.message);
+      console.warn('OTP mobile flow skipped:', e.message);
     }
 
     // reload the app after login

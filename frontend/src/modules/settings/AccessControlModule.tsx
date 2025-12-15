@@ -140,9 +140,12 @@ export default function AccessControlModule({}: ModuleComponentProps) {
       } catch (_) {}
       // Load per-user SMS preferences (if backend exposes endpoint)
       try {
-        const prefs = await apiGet<any>('/api/users/preferences/sms')
-        if (prefs && typeof prefs === 'object') {
-          setUserSms(prefs as Record<number, UserSmsSettingsPayload>)
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (hasToken) {
+          const prefs = await apiGet<any>('/api/users/preferences/sms')
+          if (prefs && typeof prefs === 'object') {
+            setUserSms(prefs as Record<number, UserSmsSettingsPayload>)
+          }
         }
       } catch (_) {}
       try {

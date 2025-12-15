@@ -166,9 +166,13 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       }
       // load sidebar side preference for this user (if any)
       try {
-        const side = await apiGet<string>('/api/users/preferences/sidebar-side')
-        if (side === 'left' || side === 'right') {
-          setSidebarSide(side)
+        // Avoid early 401: only fetch after auth token exists
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (hasToken) {
+          const side = await apiGet<string>('/api/users/preferences/sidebar-side')
+          if (side === 'left' || side === 'right') {
+            setSidebarSide(side)
+          }
         }
       } catch (err) {
         // ignore — this endpoint may not exist or user may not have a value

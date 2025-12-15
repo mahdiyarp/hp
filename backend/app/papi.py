@@ -74,7 +74,7 @@ def send_sms(session: Session, to: str, message: str, line_number: Optional[str]
     except Exception as e:
         return False, f"PApi exception: {str(e)}"
 
-def start_otp(session: Session, mobile: str) -> Tuple[bool, str]:
+def start_otp(session: Session, mobile: str, code: Optional[str] = None) -> Tuple[bool, str]:
     # Rate limiting: max 3 requests in 5 minutes per mobile
     now = datetime.utcnow()
     window = now - timedelta(minutes=5)
@@ -89,13 +89,16 @@ def start_otp(session: Session, mobile: str) -> Tuple[bool, str]:
     hist.append(now)
     _otp_rate[mobile] = hist
 
-    code = str(now.microsecond % 1000000).zfill(6)
+    # If a code is provided (demo/testing), use it; otherwise generate
+    code = str(code or str(now.microsecond % 1000000).zfill(6))
     _otp_sessions[mobile] = {
+        'code': code,
         'code_hash': _hash_code(code),
         'expires': now + timedelta(minutes=3),  # short-lived
         'used': False,
     }
-    ok, info = send_sms(session, mobile, f"OTP: #code#", None)
+    # Send the actual code in the message for demo/testing
+    ok, info = send_sms(session, mobile, f"OTP: {code}", None)
     try:
         log_event({'provider':'papi','phase':'otp-start','status':200 if ok else 400,'payload':{'mobile':mobile},'resp':info})
     except Exception: pass
@@ -122,4 +125,9 @@ def get_otp_debug(mobile: str) -> Dict:
     rec = _otp_sessions.get(mobile)
     if not rec:
         return {'exists': False}
-    return {'exists': True, 'code': rec.get('code'), 'expires': rec.get('expires').isoformat() + 'Z'}
+    return {
+        'exists': True,
+        'code': rec.get('code'),
+        'expires': rec.get('expires').isoformat() + 'Z',
+        'used': bool(rec.get('used')),
+    }

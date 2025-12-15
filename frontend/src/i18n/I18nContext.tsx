@@ -15,40 +15,62 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<LanguageCode>('fa')
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load preference from localStorage or fetch from server
+  // Load preference from localStorage and fetch from server only after auth is ready
   useEffect(() => {
-    const loadLanguage = async () => {
-      try {
-        // First check localStorage
-        const stored = localStorage.getItem('hesabpak_language') as LanguageCode | null
-        if (stored && (stored === 'fa' || stored === 'en' || stored === 'ar' || stored === 'ku')) {
-          setLanguageState(stored)
-          setIsLoading(false)
-          return
-        }
+    let mounted = true
+    let timer: number | undefined
 
-        // Then try to fetch from server
-        try {
-          // Gate on access token to avoid early 401 during login
-          const hasToken = !!localStorage.getItem('hesabpak_access_token')
-          if (!hasToken) {
-            // Wait briefly for auth context to populate tokens
-            await new Promise(r => setTimeout(r, 300))
-          }
-          const data = await apiGet<{ language?: LanguageCode }>('/api/users/preferences')
-          const serverLang = data?.language as LanguageCode
-          if (serverLang && (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')) {
-            setLanguageState(serverLang)
-          }
-        } catch (e) {
-          console.debug('Could not fetch language preference from server')
-        }
-      } finally {
-        setIsLoading(false)
+    const loadFromLocal = () => {
+      const stored = localStorage.getItem('hesabpak_language') as LanguageCode | null
+      if (stored && (stored === 'fa' || stored === 'en' || stored === 'ar' || stored === 'ku')) {
+        setLanguageState(stored)
       }
     }
 
-    loadLanguage()
+    const fetchFromServer = async () => {
+      try {
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (!hasToken) return
+        const data = await apiGet<{ language?: LanguageCode }>('/api/users/preferences')
+        if (!mounted) return
+        const serverLang = data?.language as LanguageCode
+        if (serverLang && (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')) {
+          setLanguageState(serverLang)
+        }
+      } catch {
+        // swallow to reduce noise
+      } finally {
+        if (mounted) setIsLoading(false)
+      }
+    }
+
+    const scheduleFetch = () => {
+      if (timer) window.clearTimeout(timer)
+      // short delay to ensure tokens stored and backend ready
+      timer = window.setTimeout(fetchFromServer, 1000)
+    }
+
+    loadFromLocal()
+
+    // If already authenticated, schedule fetch immediately
+    if (localStorage.getItem('hesabpak_access_token')) {
+      scheduleFetch()
+    }
+
+    const onAuthUpdated = () => scheduleFetch()
+    window.addEventListener('auth-updated', onAuthUpdated)
+
+    // Ensure loading spinner doesn't hang indefinitely
+    if (!localStorage.getItem('hesabpak_access_token')) {
+      // stop loading after local preference applied
+      setIsLoading(false)
+    }
+
+    return () => {
+      mounted = false
+      if (timer) window.clearTimeout(timer)
+      window.removeEventListener('auth-updated', onAuthUpdated)
+    }
   }, [])
 
   const setLanguage = async (lang: LanguageCode) => {
