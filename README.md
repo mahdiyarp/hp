@@ -107,6 +107,16 @@ When Docker registry pulls are blocked or you want instant updates on port 3000 
 
 Compose auto-loads [docker-compose.override.yml](docker-compose.override.yml), which bind-mounts [frontend/dist](frontend/dist) and [frontend/nginx.conf](frontend/nginx.conf) read-only into the running container. This keeps 3000 serving the latest build/config until you can run a clean image rebuild.
 
+### Toggle override
+
+Enable or disable the live-mount override and restart the frontend service:
+
+```powershell
+./toggle-frontend-override.ps1 -Action enable   # enable override mounts
+./toggle-frontend-override.ps1 -Action disable  # disable override mounts
+./toggle-frontend-override.ps1 -Action status   # show current state
+```
+
 ### Local Backend Tests (No Proxy)
 
 برای اجرای تست‌های بک‌اند علیه سرور محلی بدون تداخل پراکسی:

@@ -17,6 +17,10 @@ function Try-Rebuild {
   try {
     Write-Host "[retry] compose build+up frontend..." -ForegroundColor Cyan
     docker compose -f "F:/hp/docker-compose.yml" up -d --build frontend | Out-Host
+    try {
+      Write-Host "[retry] build succeeded; disabling override and restarting frontend..." -ForegroundColor Cyan
+      & "F:/hp/toggle-frontend-override.ps1" -Action disable | Out-Host
+    } catch { Write-Host "[retry] override disable failed: $($_.Exception.Message)" -ForegroundColor Yellow }
     return $true
   } catch {
     Write-Host "[retry] compose build failed: $($_.Exception.Message)" -ForegroundColor Red

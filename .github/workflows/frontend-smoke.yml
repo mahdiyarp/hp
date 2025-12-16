@@ -1,0 +1,49 @@
+name: Frontend Smoke
+
+on:
+  push:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-smoke.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-smoke.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Preview (background)
+        working-directory: frontend
+        run: npx vite preview --port 5173 --strictPort &
+
+      - name: Wait for server
+        run: npx wait-on http://127.0.0.1:5173
+
+      - name: Smoke: root 200 and basic HTML
+        run: |
+          curl -sI http://127.0.0.1:5173/ | grep -i "200"
+          html=$(curl -s http://127.0.0.1:5173/)
+          echo "$html" | grep -i "<!doctype html>"
+          echo "$html" | grep -E "/assets/index-[A-Za-z0-9]+\.js"
+
+      - name: List assets
+        run: curl -s http://127.0.0.1:5173/ | sed -n '1,120p'

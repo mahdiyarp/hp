@@ -1,5 +1,9 @@
 ### Multi-stage Dockerfile: build with Node, serve with nginx
-FROM node:20-alpine AS builder
+# Allow overriding base images (e.g., using a registry mirror) via build args
+ARG NODE_IMAGE=node:20-alpine
+ARG NGINX_IMAGE=nginx:stable-alpine
+
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 
 # Install dependencies
@@ -19,7 +23,7 @@ ENV NODE_OPTIONS=--max-old-space-size=512
 RUN npm run build
 
 ### Production image
-FROM nginx:stable-alpine
+FROM ${NGINX_IMAGE}
 RUN apk add --no-cache curl
 COPY --from=builder /app/dist /usr/share/nginx/html
 
