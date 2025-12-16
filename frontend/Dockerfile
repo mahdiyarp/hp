@@ -5,11 +5,13 @@ WORKDIR /app
 # Install dependencies
 COPY package.json package.json
 COPY package-lock.json package-lock.json
-# Ensure devDependencies (like Vite) are installed in builder reproducibly
-RUN npm ci --include=dev
+# Install dependencies (allowing updates to match package.json)
+RUN npm install --include=dev
 
 # Copy source and build
 COPY . .
+# Ensure any newly added deps are installed
+RUN npm install --include=dev
 # Enable optional developer autologin in build-time env when desired
 ENV VITE_DEV_AUTOLOGIN=true
 # Mitigate potential memory issues during build

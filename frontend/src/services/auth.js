@@ -1,153 +1,173 @@
-const ACCESS_KEY = 'hesabpak_access_token'
-const REFRESH_KEY = 'hesabpak_refresh_token'
-
-let API_BASE = ''
-if (typeof window !== 'undefined' && window.location.port === '5173') {
-  API_BASE = 'http://127.0.0.1:8000'
-}
-
-export const getAccessToken = () => localStorage.getItem(ACCESS_KEY)
-export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY)
-
-export const setTokens = (access, refresh) => {
-  localStorage.setItem(ACCESS_KEY, access)
-  localStorage.setItem(REFRESH_KEY, refresh)
-}
-
-export const clearTokens = () => {
-  localStorage.removeItem(ACCESS_KEY)
-  localStorage.removeItem(REFRESH_KEY)
-}
-
-export const login = async (username, password, otp) => {
-  const params = new URLSearchParams()
-  params.append('username', username)
-  params.append('password', password)
-  if (otp) params.append('otp', otp)
-  
-  const url = API_BASE + '/api/auth/login'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params.toString(),
-  })
-  
-  if (res.status === 428) return { otpRequired: true }
-  if (!res.ok) throw new Error('Login failed')
-  
-  const data = await res.json()
-  setTokens(data.access_token, data.refresh_token)
-  return { otpRequired: false, access_token: data.access_token, refresh_token: data.refresh_token }
-}
-
-export const loginPhoneRequest = async (mobile) => {
-  const url = API_BASE + '/api/auth/login-phone'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone: mobile }),
-  })
-  if (!res.ok) {
-    throw new Error('ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¬ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯')
-  }
-  return res.json() // {session_id, message}
-}
-
-export const verifyPhoneOtp = async (sessionId, otpCode) => {
-  const url = API_BASE + '/api/auth/verify-phone-otp'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id: sessionId, otp_code: otpCode }),
-  })
-  if (!res.ok) throw new Error('ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾')
-  const data = await res.json()
-  setTokens(data.access_token, data.refresh_token)
-  return data
-}
-
-export const refreshTokens = async () => {
-  const refresh = getRefreshToken()
-  if (!refresh) throw new Error('No refresh token')
-  
-  const url = API_BASE + '/api/auth/refresh'
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refresh }),
-  })
-  
-  if (!res.ok) throw new Error('Refresh failed')
-  const data = await res.json()
-  setTokens(data.access_token, data.refresh_token)
-  return data
-}
-
-export const fetchWithAuth = async (input, init) => {
-  let url = input
-  if (!url.startsWith('http')) {
-    url = API_BASE + input
-  }
-  
-  const access = getAccessToken()
-  const headers = new Headers(init?.headers || {})
-  if (access) headers.set('Authorization', 'Bearer ' + access)
-  
-  let res = await fetch(url, { ...(init || {}), headers })
-  
-  if (res.status === 401) {
-    try {
-      await refreshTokens()
-      const access2 = getAccessToken()
-      const headers2 = new Headers(init?.headers || {})
-      if (access2) headers2.set('Authorization', 'Bearer ' + access2)
-      res = await fetch(url, { ...(init || {}), headers: headers2 })
-    } catch (e) {
-      clearTokens()
-      throw e
-    }
-  }
-  
-  return res
-}
-
-export const requestOtpSetup = async () => {
-  const res = await fetchWithAuth('/api/auth/otp/setup', { method: 'POST' })
-  if (!res.ok) throw new Error('Failed to init OTP setup')
-  return res.json()
-}
-
-export const verifyOtp = async (code) => {
-  const res = await fetchWithAuth('/api/auth/otp/verify', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  })
-  if (!res.ok) throw new Error('Failed to verify OTP')
-  return res.json()
-}
-
-export const disableOtp = async (code) => {
-  const res = await fetchWithAuth('/api/auth/otp/disable', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  })
-  if (!res.ok) throw new Error('Failed to disable OTP')
-  return res.json()
-}
-
-export default {
-  login,
-  loginPhoneRequest,
-  verifyPhoneOtp,
-  refreshTokens,
-  fetchWithAuth,
-  setTokens,
-  getAccessToken,
-  getRefreshToken,
-  clearTokens,
-  requestOtpSetup,
-  verifyOtp,
-  disableOtp,
-}
+/*
+LEGACY FILE: Do not use. See auth.ts for live implementation.
+
+// Forward all exports to TypeScript source to avoid duplication
+export * from './auth.ts'
+export { default } from './auth.ts'
+  const url = API_BASE + '/api/auth/verify-phone-otp'
+
+
+// Legacy JS shim: re-export TypeScript implementation without duplication.
+// This ensures tests that import './auth' resolve to the TS source.
+export * from './auth.ts'
+export { default } from './auth.ts'
+
+
+  }
+
+
+
+
+  
+
+
+
+// Legacy JS shim: clean re-export to the TypeScript implementation.
+// Keep this file minimal to avoid duplication and runtime issues.
+export * from './auth.ts'
+import def from './auth.ts'
+export default def
+
+
+
+    body: JSON.stringify({ code }),
+
+
+
+
+  })
+
+
+
+
+  if (!res.ok) throw new Error('Failed to verify OTP')
+
+
+
+
+  return res.json()
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+export const disableOtp = async (code) => {
+
+
+
+
+  const res = await fetchWithAuth('/api/auth/otp/disable', {
+
+
+
+
+    method: 'POST',
+
+
+
+
+    headers: { 'Content-Type': 'application/json' },
+
+
+
+
+    body: JSON.stringify({ code }),
+
+
+
+
+  })
+
+
+
+
+  if (!res.ok) throw new Error('Failed to disable OTP')
+
+
+
+
+  return res.json()
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+export default {
+
+
+
+  login,
+
+
+
+  loginPhoneRequest,
+
+
+
+  verifyPhoneOtp,
+
+
+
+  refreshTokens,
+
+
+
+  fetchWithAuth,
+
+
+
+  setTokens,
+
+
+
+  getAccessToken,
+
+
+
+  getRefreshToken,
+
+
+
+  clearTokens,
+
+
+
+
+  requestOtpSetup,
+
+
+
+
+  verifyOtp,
+
+
+
+
+  disableOtp,
+
+
+
+
+}
+
+
+
+

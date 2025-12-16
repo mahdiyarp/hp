@@ -34,9 +34,20 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
+      - name: Start API server
+        env:
+          DATABASE_URL: sqlite:///:memory:
+          DEV_FEATURES_ENABLED: 'false'
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          sleep 3
+
       - name: Run tests
         env:
           # Tests set this internally, but we keep a safe default here too
           DATABASE_URL: sqlite:///:memory:
+          API_BASE_URL: http://127.0.0.1:8000
         run: |
+          unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY || true
+          export NO_PROXY=localhost,127.0.0.1
           python -m pytest -q

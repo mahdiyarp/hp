@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost, apiDelete, apiPatch } from '../../services/api'
 import { retroPanel, retroPanelPadded, retroHeading, retroBadge, retroButton, retroMuted } from '../../components/retroTheme'
-import { getAccessToken } from '../../services/auth'
+import { getAccessToken } from '../../services/auth.ts'
 
 type ActivityLog = { id: number; created_at?: string | null; username?: string | null; path?: string | null; method?: string | null; status_code?: number | null; detail?: string | null }
 type SettingKV = { key: string; value: string; category?: string }

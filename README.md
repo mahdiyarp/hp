@@ -89,6 +89,43 @@ Notes:
 - The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
 - Organization features are derived from the user's NFT assets via `/api/org/features`.
 
+## Frontend zero-rebuild sync (Windows)
+
+When Docker registry pulls are blocked or you want instant updates on port 3000 without rebuilding the image, use the live-mount override and helper:
+
+- Sync and verify:
+
+```powershell
+./run-frontend-sync.ps1
+```
+
+- Skip rebuild if `frontend/dist` is already fresh:
+
+```powershell
+./run-frontend-sync.ps1 -NoBuild
+```
+
+Compose auto-loads [docker-compose.override.yml](docker-compose.override.yml), which bind-mounts [frontend/dist](frontend/dist) and [frontend/nginx.conf](frontend/nginx.conf) read-only into the running container. This keeps 3000 serving the latest build/config until you can run a clean image rebuild.
+
+### Local Backend Tests (No Proxy)
+
+برای اجرای تست‌های بک‌اند علیه سرور محلی بدون تداخل پراکسی:
+
+```powershell
+# 1) اجرای سرور تست محلی (VS Code Task موجود)
+# Task: Start test backend  → سرور روی http://127.0.0.1:8123 بالا می‌آید
+
+# 2) اجرای تست‌ها با پاک‌سازی پراکسی‌ها و ست‌کردن API_BASE_URL
+Remove-Item Env:HTTP_PROXY -ErrorAction Ignore
+Remove-Item Env:HTTPS_PROXY -ErrorAction Ignore
+Remove-Item Env:ALL_PROXY -ErrorAction Ignore
+Set-Item Env:NO_PROXY 'localhost,127.0.0.1'
+Set-Item Env:API_BASE_URL 'http://127.0.0.1:8123'
+python -m pytest -q backend/tests
+```
+
+می‌توانید از تسک VS Code استفاده کنید: «Run backend tests (no proxy)».
+
 #### Verify quickly (PowerShell)
 
 ```powershell

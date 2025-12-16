@@ -92,14 +92,12 @@ class TokenRefreshRequest(BaseModel):
 class OTPSetupResponse(BaseModel):
     secret: str
     uri: str
-
-
 class OTPVerifyRequest(BaseModel):
     code: str
 
-
 class OTPDisableRequest(BaseModel):
     code: Optional[str] = None
+
 
 
 # ==================== موبائل سے رجسٹریشن کے لیے Schemas ====================
@@ -281,6 +279,7 @@ class InvoiceItemBase(BaseModel):
     quantity: int = 1
     unit: Optional[str] = None
     unit_price: int
+    discount: Optional[int] = 0
     product_id: Optional[str] = None
 
 
@@ -300,8 +299,11 @@ class InvoiceCreate(BaseModel):
     mode: Optional[str] = 'manual'
     party_id: Optional[str] = None
     party_name: Optional[str] = None
-    client_time: Optional[datetime] = None
+    client_time: Optional[str] = None
     client_calendar: Optional[Literal['gregorian', 'jalali']] = None
+    tax_rate: Optional[int] = 0
+    discount_total: Optional[int] = 0
+    payment_terms_days: Optional[int] = None
     items: List[InvoiceItemCreate]
     note: Optional[str] = None
 
@@ -336,8 +338,8 @@ class PaymentBase(BaseModel):
     amount: int
     reference: Optional[str] = None
     invoice_id: Optional[int] = None
-    due_date: Optional[datetime] = None
-    client_time: Optional[datetime] = None
+    due_date: Optional[str] = None
+    client_time: Optional[str] = None
     client_calendar: Optional[Literal['gregorian', 'jalali']] = None
     note: Optional[str] = None
     tracking_code: Optional[str] = None
@@ -537,6 +539,33 @@ class AssistantResponse(BaseModel):
 class AssistantToggle(BaseModel):
     enabled: bool
 
+"""Assistant chat schemas aligned with tests expecting message/mode and reply fields."""
+class AssistantChatRequest(BaseModel):
+    message: str
+    mode: Optional[str] = None
+    session_id: Optional[int] = None
+    title: Optional[str] = None
+    context: Optional[dict] = None
+
+class AssistantChatResponse(BaseModel):
+    reply: str
+    session_id: Optional[int] = None
+    mode: Optional[str] = None
+
+class AssistantSettingsOut(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    model_name: Optional[str] = None
+    language: Optional[str] = None
+    enable_doc_understanding: Optional[bool] = None
+    enable_journal_suggestions: Optional[bool] = None
+    enable_alerts: Optional[bool] = None
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
+    enabled: bool = False
+    api_key_masked: Optional[str] = None
+
 
 class ExternalProduct(BaseModel):
     source: str
@@ -600,6 +629,10 @@ class FinancialYearOut(BaseModel):
     class Config:
         orm_mode = True
 
+# Backward-compat alias expected by tests
+class FiscalYearOut(FinancialYearOut):
+    pass
+
 
 # SMS Configuration schemas
 class UserSmsConfigCreate(BaseModel):
@@ -619,14 +652,26 @@ class UserSmsConfigUpdate(BaseModel):
 
 
 class UserSmsConfigOut(BaseModel):
-    id: int
-    user_id: int
-    provider: str
-    sender_name: Optional[str]
-    enabled: bool
-    auto_sms_enabled: bool
-    created_at: datetime
-    updated_at: datetime
+    id: Optional[int] = None
+    user_id: Optional[int] = None
+    provider: Optional[str] = None
+    sender_name: Optional[str] = None
+    enabled: Optional[bool] = None
+    auto_sms_enabled: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class SmsSettingsOut(BaseModel):
+    provider: Optional[str] = None
+    base_url: Optional[str] = None
+    default_sender: Optional[str] = None
+    enabled: bool = False
+    low_credit_threshold: Optional[int] = None
+    api_key_masked: Optional[str] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True
@@ -636,10 +681,39 @@ class SmsSendRequest(BaseModel):
     to: str  # phone number
     message: str
 
+class SmsTestRequest(BaseModel):
+    to: str
+    message: str
+
 
 class SmsTestResponse(BaseModel):
     success: bool
     message: str
+
+class SmsTemplateOut(BaseModel):
+    id: int
+    code: str
+    pattern_id: Optional[str] = None
+    text: Optional[str] = None
+    is_active: bool
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class SmsTemplateIn(BaseModel):
+    code: str
+    pattern_id: Optional[str] = None
+    text: Optional[str] = None
+    is_active: bool = True
+    description: Optional[str] = None
+
+class SmsTemplateTestRequest(BaseModel):
+    template_key: str
+    to: str
+    variables: Optional[dict] = None
 
 
 class PhoneLoginRequest(BaseModel):
@@ -662,6 +736,33 @@ class PhoneOtpVerifyResponse(BaseModel):
     access_token: Optional[str] = None
     token_type: Optional[str] = 'bearer'
     message: Optional[str] = None
+
+# Assistant document analysis result expected by tests
+class DocumentAnalysisResult(BaseModel):
+    doc_type: str
+    title: Optional[str] = None
+    party: Optional[dict] = None
+    date_issued: Optional[str] = None
+    items: list = []
+    totals: Optional[dict] = None
+    confidence_scores: Optional[dict] = None
+    suggested_journal: list = []
+
+class JournalSuggestion(BaseModel):
+    account_debit: str
+    account_credit: str
+    amount: int
+    description: Optional[str] = None
+    confidence: Optional[float] = None
+
+# Backward-compat input for SMS settings API
+class SmsSettingsIn(BaseModel):
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    default_sender: Optional[str] = None
+    provider: Optional[str] = None
+    enabled: Optional[bool] = None
+    low_credit_threshold: Optional[int] = None
 
 
 class UserPreferencesOut(BaseModel):
@@ -1011,6 +1112,8 @@ class DashboardWidgetOut(BaseModel):
     
     class Config:
         orm_mode = True
+
+    
 
 
 class DashboardWidgetCreate(BaseModel):

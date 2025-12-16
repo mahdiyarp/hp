@@ -1,4 +1,4 @@
-import { fetchWithAuth } from './auth'
+import { fetchWithAuth } from './auth.ts'
 
 export async function papiGet(path: string, params?: Record<string, any>) {
   const q = new URLSearchParams()

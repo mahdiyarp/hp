@@ -51,7 +51,7 @@ export default function LoginForm() {
 				await startOtp(phone.trim(), codeToUse)
 				const res = await verifyOtp(phone.trim(), codeToUse)
 				if (typeof (res as any)?.access_token === 'string') {
-					const { setTokens } = await import('../services/auth')
+					const { setTokens } = await import('../services/auth.ts')
 					setTokens((res as any).access_token, (res as any).refresh_token || '')
 					try { window.dispatchEvent(new Event('auth-updated')) } catch {}
 					// ناوبری صریح به داشبورد پس از تأیید موفق

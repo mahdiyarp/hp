@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 
 
@@ -575,7 +576,13 @@ def suggest_journal_from_document(doc: schemas.DocumentAnalysisResult) -> List[s
 
 
 
-    total = doc.totals.grand_total if doc.totals else 0
+    try:
+        if doc.totals:
+            total = (doc.totals.get('grand_total') if isinstance(doc.totals, dict) else getattr(doc.totals, 'grand_total', 0)) or 0
+        else:
+            total = 0
+    except Exception:
+        total = 0
 
 
 

@@ -70,7 +70,10 @@ export default function SidebarMenu({
     // also try to persist server-side (best-effort)
     ;(async () => {
       try {
-        await apiPost('/api/users/preferences/sidebar-order', { order })
+        const hasToken = !!localStorage.getItem('hesabpak_access_token')
+        if (hasToken) {
+          await apiPost('/api/users/preferences/sidebar-order', { order })
+        }
       } catch (e) {
         // ignore server-side persist errors
       }

@@ -14,6 +14,16 @@ from ..deps import get_current_user, require_permissions, require_roles
 router = APIRouter(prefix="/invoices", tags=["Finance - Invoices"])
 
 
+@router.post("", response_model=schemas.InvoiceOut)
+def create_invoice(
+    payload: schemas.InvoiceCreate,
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"]))
+):
+    """Backward-compat: ایجاد فاکتور از مسیر ریشه /api/invoices"""
+    return finance_service.create_invoice_manual(session, payload)
+
+
 @router.post("/manual", response_model=schemas.InvoiceOut)
 def create_invoice_manual(
     payload: schemas.InvoiceCreate,
@@ -99,7 +109,19 @@ def patch_invoice(
     invoice_id: int,
     payload: dict,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_permissions(["finance_edit"])),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"])),
+):
+    invoice = finance_service.update_invoice(session, invoice_id, payload)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return invoice
+
+@router.put("/{invoice_id}", response_model=schemas.InvoiceOut)
+def put_invoice(
+    invoice_id: int,
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"]))
 ):
     invoice = finance_service.update_invoice(session, invoice_id, payload)
     if not invoice:
@@ -112,7 +134,7 @@ def finalize_invoice(
     invoice_id: int,
     payload: Optional[dict] = None,
     session: Session = Depends(db.get_db),
-    current_user: models.User = Depends(require_permissions(["finance_edit"])),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"])),
 ):
     client_time = None
     if payload and isinstance(payload, dict):
@@ -129,3 +151,86 @@ def finalize_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return finance_service.get_invoice(session, invoice_id)
+
+
+@router.patch("/{invoice_id}/status", response_model=schemas.InvoiceOut)
+def set_invoice_status(
+    invoice_id: int,
+    payload: dict,
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"]))
+):
+    status = (payload or {}).get("status")
+    if status == "final":
+        try:
+            inv = finance_service.finalize_invoice(session, invoice_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return finance_service.get_invoice(session, invoice_id)
+    elif status == "draft":
+        inv = finance_service.update_invoice(session, invoice_id, {"status": "draft"})
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return inv
+    else:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
+
+@router.post("/{invoice_id}/duplicate", response_model=schemas.InvoiceOut)
+def duplicate_invoice(
+    invoice_id: int,
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"]))
+):
+    dup = finance_service.get_invoice(session, invoice_id)
+    if not dup:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    # Use CRUD helper to duplicate
+    from ... import crud
+    created = crud.duplicate_invoice(session, invoice_id)
+    if not created:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return created
+
+
+@router.get("/{invoice_id}/export")
+def export_invoice(
+    invoice_id: int,
+    format: str = "json",
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager", "Viewer"]))
+):
+    inv = finance_service.get_invoice(session, invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    from fastapi.responses import JSONResponse
+    if format == "json":
+        # Return a lightweight JSON export
+        data = {
+            "id": inv.id,
+            "invoice_number": inv.invoice_number,
+            "status": inv.status,
+            "total": inv.total,
+            "party_name": inv.party_name,
+        }
+        return JSONResponse(data)
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+
+
+@router.delete("/{invoice_id}")
+def delete_invoice(
+    invoice_id: int,
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_roles(role_names=["Admin", "Accountant", "Manager"]))
+):
+    inv = finance_service.get_invoice(session, invoice_id)
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    # Remove items then invoice
+    session.query(models.InvoiceItem).filter(models.InvoiceItem.invoice_id == invoice_id).delete()
+    session.query(models.Invoice).filter(models.Invoice.id == invoice_id).delete()
+    session.commit()
+    return {"ok": True}

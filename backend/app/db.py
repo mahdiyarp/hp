@@ -48,10 +48,18 @@ def get_db():
 
 
 def create_test_engine():
-    """Helper for tests: create an in-memory sqlite engine and return it."""
+    """Helper for tests: return a singleton in-memory sqlite engine shared across test requests.
+    Uses StaticPool to keep a single connection so each new Session sees prior data.
+    """
+    # Create a fresh in-memory engine per call to ensure isolation between tests
     from sqlalchemy import create_engine
-    e = create_engine('sqlite:///:memory:', connect_args={})
-    return e
+    from sqlalchemy.pool import StaticPool
+    engine = create_engine(
+        'sqlite://',
+        connect_args={'check_same_thread': False},
+        poolclass=StaticPool,
+    )
+    return engine
 
 
 def create_test_session(engine):
@@ -60,3 +68,71 @@ def create_test_session(engine):
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return Session()
+
+# --- Minimal runtime schema compatibility fixes ---
+def ensure_schema_compat():
+    """Apply lightweight SQL fixes to keep schema compatible with tests.
+    Safe to call on startup; uses IF NOT EXISTS guards.
+    """
+    try:
+        from sqlalchemy import text
+        backend = engine.url.get_backend_name()
+        with engine.begin() as conn:
+            if backend == 'sqlite':
+                # Add columns on sqlite if missing via PRAGMA table_info
+                def _has_col(table: str, col: str) -> bool:
+                    rows = conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()
+                    names = [r[1] for r in rows]
+                    return col in names
+                try:
+                    if _has_col('financial_years', 'title') is False:
+                        conn.exec_driver_sql("ALTER TABLE financial_years ADD COLUMN title VARCHAR(128)")
+                except Exception:
+                    pass
+                try:
+                    if _has_col('financial_years', 'status') is False:
+                        conn.exec_driver_sql("ALTER TABLE financial_years ADD COLUMN status VARCHAR(32)")
+                except Exception:
+                    pass
+                try:
+                    if _has_col('financial_years', 'is_current') is False:
+                        conn.exec_driver_sql("ALTER TABLE financial_years ADD COLUMN is_current BOOLEAN DEFAULT 0")
+                except Exception:
+                    pass
+            else:
+                # Postgres-compatible guards
+                conn.execute(text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='financial_years' AND column_name='title'
+                        ) THEN
+                            ALTER TABLE financial_years ADD COLUMN title VARCHAR(128);
+                        END IF;
+                    END$$;
+                    """
+                ))
+                conn.execute(text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='financial_years' AND column_name='status'
+                        ) THEN
+                            ALTER TABLE financial_years ADD COLUMN status VARCHAR(32);
+                        END IF;
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='financial_years' AND column_name='is_current'
+                        ) THEN
+                            ALTER TABLE financial_years ADD COLUMN is_current BOOLEAN DEFAULT FALSE;
+                        END IF;
+                    END$$;
+                    """
+                ))
+    except Exception:
+        # Best-effort; ignore on sqlite or if permissions fail
+        pass

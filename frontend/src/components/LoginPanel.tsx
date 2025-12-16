@@ -1,5 +1,5 @@
 import React from 'react'
-import { login as loginApi, getAccessToken } from '../services/auth'
+import { login as loginApi, getAccessToken } from '../services/auth.ts'
 
 type MeResponse = {
   username?: string

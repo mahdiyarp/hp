@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { apiPost } from '../services/api'
-import { setTokens } from '../services/auth'
+import { setTokens } from '../services/auth.ts'
 import { PApi } from '../services/papi'
 
 export default function PApiPanel() {

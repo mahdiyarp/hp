@@ -63,7 +63,7 @@ function AuditStatusCard() {
     </div>
   )
 }
-import { fetchWithAuth } from '../services/auth'
+import { fetchWithAuth } from '../services/auth.ts'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
 import {
@@ -1130,7 +1130,6 @@ export default function DashboardModule({
         </section>
       )}
       </div>
-      )}
     </div>
   )
 }

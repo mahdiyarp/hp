@@ -12,7 +12,7 @@ import DevConsole from './developer/DevConsole'
 import SmsPanel from './sms/SmsPanel'
 import PApiPanel from './PApiPanel'
 import AuditModule from './audit/AuditModule'
-import { getAccessToken, loginDeveloper } from '../services/auth'
+import { getAccessToken, loginDeveloper } from '../services/auth.ts'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 function base64urlDecode(input: string): string {
