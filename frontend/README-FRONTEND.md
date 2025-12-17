@@ -101,3 +101,21 @@ The frontend container includes a healthcheck that curls `/` to verify the site 
 If you want, I can also:
 - Add a small health endpoint to the backend for better readiness checks.
 - Add a tiny script to validate that required static files (index.html, fonts) exist during image startup and log helpful errors.
+
+## Developer → Assistant
+
+- مسیر: `/#dev-assistant` (فقط برای کاربر توسعه‌دهنده نمایش داده می‌شود).
+- قابلیت‌ها: فعال/غیرفعال‌سازی دستیار، ارسال دستور متنی، تاریخچهٔ محلی.
+- API‌ها: `/api/assistant/toggle` و `/api/assistant/query` (نیازمند بک‌اند در حال اجرا).
+- فایل‌ها:
+  - UI: `frontend/src/modules/developer/AssistantModule.tsx`
+  - ثبت ماژول: `frontend/src/modules/index.ts` (کلید `dev-assistant`)
+- تست E2E: `frontend/e2e/dev-assistant.spec.ts` — اگر `BACKEND_URL` تنظیم نشود، به‌صورت خودکار skip می‌شود.
+
+## فونت یکان (Yekan)
+
+- فونت پیش‌فرض به «Yekan» قفل شده و با `!important` اجازهٔ override ندارد.
+- تعریف CSS و قفل سراسری: `frontend/src/index.css`
+- همگام‌سازی خودکار فونت قبل از build/preview: `frontend/scripts/sync-fonts.cjs`
+- مسیر فونت‌ها: `frontend/public/fonts/` — فایل‌های `Yekan.woff2/woff/ttf` را اینجا قرار دهید.
+- تست E2E فونت: `frontend/e2e/font-yekan.spec.ts`
