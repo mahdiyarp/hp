@@ -158,7 +158,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   }, [sync])
   const asideElement = (
     <aside
-      className={`${'w-72'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col`}
+      className={`${'w-72 shrink-0'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col`}
     >
       <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
         <div>
@@ -198,11 +198,11 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   )
 
   return (
-    <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex">
+    <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex flex-nowrap items-stretch">
       {sidebarSide === 'right' && asideElement}
-      <div className="flex-1 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
+      <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
         <header className="border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a]">
-          <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col gap-4">
+          <div className="px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>{t('active_module')}</p>
@@ -278,7 +278,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
           </div>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+          <div className="px-6 py-8 space-y-8">
             {ActiveComponent ? (
               <ActiveComponent
                 smartDate={smartDate}
