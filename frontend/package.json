@@ -5,8 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/sync-fonts.cjs",
     "build": "vite build",
     "preview": "vite preview --port 3000",
+    "prepreview": "node scripts/sync-fonts.cjs",
     "start": "node index.js",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"{src,public}/**/*.{ts,tsx,js,json,css,html}\"",

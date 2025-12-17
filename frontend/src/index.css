@@ -17,6 +17,7 @@
 
 :root {
   color-scheme: light;
+  --hp-font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
   --retro-panel-bg: #faf4df;
@@ -45,10 +46,15 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  font-family: var(--hp-font-family);
   background-color: #e9e4d8; /* retro.surface */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* قفل فونت: همه عناصر از یکان استفاده کنند و تغییر نکنند */
+body * {
+  font-family: var(--hp-font-family) !important;
 }
 
 /* کلاس‌های سازگاری با نسخه‌های قبلی (hp-*) که به تم Retro نگاشت می‌شوند */
