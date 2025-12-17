@@ -55,6 +55,18 @@ jobs:
           grep -i "^content-security-policy:" headers.txt
           grep -i "^strict-transport-security:" headers.txt
 
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: |
+          npx playwright install --with-deps
+
+      - name: Run E2E (Playwright)
+        working-directory: frontend
+        env:
+          BASE_URL: http://localhost:8080
+        run: |
+          npm run test:e2e --silent
+
       - name: Stop container
         if: always()
         run: |
