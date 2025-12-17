@@ -7,9 +7,10 @@
 /* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
 @font-face {
   font-family: 'Yekan';
-  src: url('/fonts/Yekan.woff2') format('woff2'),
-       url('/fonts/Yekan.woff') format('woff'),
-       url('/fonts/Yekan.ttf') format('truetype');
+  src:
+    url('/fonts/Yekan.woff2') format('woff2'),
+    url('/fonts/Yekan.woff') format('woff'),
+    url('/fonts/Yekan.ttf') format('truetype');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -41,7 +42,9 @@
   --retro-muted-text: #6b5840;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 

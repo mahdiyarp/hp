@@ -84,15 +84,34 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   const [cashMethods, setCashMethods] = useState<Record<string, number>>({})
   const [stock, setStock] = useState<StockValuation[]>([])
   const [hideZeroStock, setHideZeroStock] = useState<boolean>(() => {
-    try { return localStorage.getItem('reports.stock.hideZero') !== 'false' } catch { return true }
+    try {
+      return localStorage.getItem('reports.stock.hideZero') !== 'false'
+    } catch {
+      return true
+    }
   })
   const [hideNegativeStock, setHideNegativeStock] = useState<boolean>(() => {
-    try { return localStorage.getItem('reports.stock.hideNegative') === 'true' } catch { return false }
+    try {
+      return localStorage.getItem('reports.stock.hideNegative') === 'true'
+    } catch {
+      return false
+    }
   })
   const [computedSales, setComputedSales] = useState(0)
   const [computedCOGS, setComputedCOGS] = useState(0)
   const [salesTrend, setSalesTrend] = useState<Array<{ date: string; total: number }>>([])
-  const [productLedgerOpen, setProductLedgerOpen] = useState<null | { product_id: string; name: string; entries: Array<{ date: string; type: 'purchase' | 'sale'; qty: number; unit: number; total: number; running: number }> }>(null)
+  const [productLedgerOpen, setProductLedgerOpen] = useState<null | {
+    product_id: string
+    name: string
+    entries: Array<{
+      date: string
+      type: 'purchase' | 'sale'
+      qty: number
+      unit: number
+      total: number
+      running: number
+    }>
+  }>(null)
 
   useEffect(() => {
     loadReports()
@@ -101,18 +120,18 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
   useEffect(() => {
     // Dynamically load chart libraries; ignore failures in test envs
-    (async () => {
+    ;(async () => {
       try {
         const chartLib = 'chart.js'
         const chart = await import(/* @vite-ignore */ chartLib)
-        const { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } = chart as any
+        const { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } = chart
         if (Chart && ArcElement) {
           Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
         }
         const rcLib = 'react-chartjs-2'
         const rc = await import(/* @vite-ignore */ rcLib)
-        Bar = (rc as any).Bar
-        Doughnut = (rc as any).Doughnut
+        Bar = rc.Bar
+        Doughnut = rc.Doughnut
         setChartsReady(true)
       } catch (e) {
         console.warn('Charts unavailable; rendering without charts.', e)
@@ -122,15 +141,21 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   }, [])
 
   useEffect(() => {
-    try { localStorage.setItem('reports.costMethod', costMethod) } catch {}
+    try {
+      localStorage.setItem('reports.costMethod', costMethod)
+    } catch {}
   }, [costMethod])
 
   useEffect(() => {
-    try { localStorage.setItem('reports.stock.hideZero', String(hideZeroStock)) } catch {}
+    try {
+      localStorage.setItem('reports.stock.hideZero', String(hideZeroStock))
+    } catch {}
   }, [hideZeroStock])
 
   useEffect(() => {
-    try { localStorage.setItem('reports.stock.hideNegative', String(hideNegativeStock)) } catch {}
+    try {
+      localStorage.setItem('reports.stock.hideNegative', String(hideNegativeStock))
+    } catch {}
   }, [hideNegativeStock])
 
   function resolveRange(): { startIso: string; endIso: string; days: number } {
@@ -141,7 +166,10 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
       const e = jalaliToIso(jalaliEnd)
       const startIso = s || endDate.toISOString()
       const endIso = e || endDate.toISOString()
-      const diffDays = Math.max(1, Math.ceil((new Date(endIso).getTime() - new Date(startIso).getTime()) / (24*3600*1000)))
+      const diffDays = Math.max(
+        1,
+        Math.ceil((new Date(endIso).getTime() - new Date(startIso).getTime()) / (24 * 3600 * 1000)),
+      )
       return { startIso, endIso, days: diffDays }
     }
     const startDate = new Date(endDate.getTime())
@@ -179,12 +207,12 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
       const methodEntries: Record<string, number> = {}
       await Promise.all(
-        CASH_METHODS.map(method =>
+        CASH_METHODS.map((method) =>
           apiGet<CashReport>(`/api/reports/cash?method=${method}`)
-            .then(res => {
+            .then((res) => {
               methodEntries[method] = res.balance
             })
-            .catch(err => {
+            .catch((err) => {
               console.error(err)
               newWarnings.push(`تراز روش ${method} قابل خواندن نیست.`)
             }),
@@ -207,7 +235,10 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
 
       // Load sales trends for chart
       try {
-        const trend = await apiGet<{ days: number; series: Array<{ date: string; total: number }> }>(`/api/dashboard/sales-trends?days=${days}`)
+        const trend = await apiGet<{
+          days: number
+          series: Array<{ date: string; total: number }>
+        }>(`/api/dashboard/sales-trends?days=${days}`)
         setSalesTrend(trend.series || [])
       } catch (err) {
         console.error(err)
@@ -221,7 +252,12 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     }
   }
 
-  function computePnLWithCost(invoices: Array<any>, startT: number, endT: number, method: 'FIFO'|'LIFO') {
+  function computePnLWithCost(
+    invoices: Array<any>,
+    startT: number,
+    endT: number,
+    method: 'FIFO' | 'LIFO',
+  ) {
     // Build events up to endT; compute revenue in [startT,endT] and COGS based on layers
     const byProduct: Record<string, Array<any>> = {}
     for (const inv of invoices) {
@@ -232,13 +268,20 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
       for (const it of inv.items) {
         if (!it.product_id) continue
         byProduct[it.product_id] = byProduct[it.product_id] || []
-        byProduct[it.product_id].push({ t, type, qty: Number(it.quantity||0), unit: Number(it.unit_price||0), total: Number(it.total||0), name: it.description || '' })
+        byProduct[it.product_id].push({
+          t,
+          type,
+          qty: Number(it.quantity || 0),
+          unit: Number(it.unit_price || 0),
+          total: Number(it.total || 0),
+          name: it.description || '',
+        })
       }
     }
     let totalRevenue = 0
     let totalCOGS = 0
     for (const pid of Object.keys(byProduct)) {
-      const events = byProduct[pid].sort((a,b)=> a.t - b.t)
+      const events = byProduct[pid].sort((a, b) => a.t - b.t)
       const layers: Array<{ qty: number; cost: number }> = []
       let lastCost = 0
       const takeFromLayers = (need: number) => {
@@ -285,12 +328,23 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   function openProductLedger(p: StockValuation) {
     try {
       const { startIso, endIso } = resolveRange()
-      apiGet<Array<{date:string;type:'purchase'|'sale';qty:number;unit:number;total:number;running:number}>>(`/api/ledger/product/${encodeURIComponent(p.product_id)}?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`)
-        .then(rows => {
-          const entries = (rows || []).map(r => ({ ...r, date: r.date }))
+      apiGet<
+        Array<{
+          date: string
+          type: 'purchase' | 'sale'
+          qty: number
+          unit: number
+          total: number
+          running: number
+        }>
+      >(
+        `/api/ledger/product/${encodeURIComponent(p.product_id)}?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`,
+      )
+        .then((rows) => {
+          const entries = (rows || []).map((r) => ({ ...r, date: r.date }))
           setProductLedgerOpen({ product_id: p.product_id, name: p.name, entries })
         })
-        .catch(err => {
+        .catch((err) => {
           console.error(err)
         })
     } catch (e) {
@@ -299,7 +353,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   }
 
   const stockTotals = useMemo(() => {
-    const filtered = stock.filter(it => {
+    const filtered = stock.filter((it) => {
       if (hideZeroStock && (it.inventory ?? 0) === 0) return false
       if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
       return true
@@ -310,7 +364,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   }, [stock, hideZeroStock, hideNegativeStock])
 
   const filteredStock = useMemo(() => {
-    return stock.filter(it => {
+    return stock.filter((it) => {
       if (hideZeroStock && (it.inventory ?? 0) === 0) return false
       if (hideNegativeStock && (it.inventory ?? 0) < 0) return false
       return true
@@ -322,7 +376,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
       <div className={`${retroPanel} p-10 flex items-center justify-center`}>
         <div className="space-y-3 text-center">
           <div className="mx-auto h-8 w-8 border-4 border-[var(--retro-button-bg)] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>در حال گردآوری گزارش‌ها...</p>
+          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>
+            در حال گردآوری گزارش‌ها...
+          </p>
         </div>
       </div>
     )
@@ -359,18 +415,37 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex items-center gap-2">
               <label className={`${retroHeading}`}>محاسبه سود با</label>
-              <select className={`${retroInput}`} value={costMethod} onChange={e=> setCostMethod((e.target.value as 'FIFO'|'LIFO'))}>
+              <select
+                className={`${retroInput}`}
+                value={costMethod}
+                onChange={(e) => setCostMethod(e.target.value as 'FIFO' | 'LIFO')}
+              >
                 <option value="FIFO">FIFO</option>
                 <option value="LIFO">LIFO</option>
               </select>
             </div>
             <div className="flex items-center gap-2">
               <label className={`${retroHeading}`}>بازه سفارشی (شمسی)</label>
-              <input value={jalaliStart} onChange={e=> setJalaliStart(e.target.value)} placeholder="۱۴۰۴/۰۹/۰۱" className={`${retroInput} w-28`} />
+              <input
+                value={jalaliStart}
+                onChange={(e) => setJalaliStart(e.target.value)}
+                placeholder="۱۴۰۴/۰۹/۰۱"
+                className={`${retroInput} w-28`}
+              />
               <span className="text-xs">تا</span>
-              <input value={jalaliEnd} onChange={e=> setJalaliEnd(e.target.value)} placeholder="۱۴۰۴/۰۹/۳۰" className={`${retroInput} w-28`} />
+              <input
+                value={jalaliEnd}
+                onChange={(e) => setJalaliEnd(e.target.value)}
+                placeholder="۱۴۰۴/۰۹/۳۰"
+                className={`${retroInput} w-28`}
+              />
               <label className="text-xs flex items-center gap-1">
-                <input type="checkbox" checked={useCustomRange} onChange={e=> setUseCustomRange(e.target.checked)} /> فعال
+                <input
+                  type="checkbox"
+                  checked={useCustomRange}
+                  onChange={(e) => setUseCustomRange(e.target.checked)}
+                />{' '}
+                فعال
               </label>
             </div>
             {!useCustomRange && (
@@ -378,7 +453,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
                 بازه (روز)
                 <select
                   value={rangeDays}
-                  onChange={e => setRangeDays(Number(e.target.value))}
+                  onChange={(e) => setRangeDays(Number(e.target.value))}
                   className={`${retroInput} w-28`}
                 >
                   <option value={7}>۷</option>
@@ -398,7 +473,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>فروش</p>
-              <p className="text-lg font-semibold">{formatNumberFa(computedSales || pnl.sales)} ریال</p>
+              <p className="text-lg font-semibold">
+                {formatNumberFa(computedSales || pnl.sales)} ریال
+              </p>
             </div>
             <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>بهای تمام‌شده (COGS)</p>
@@ -406,7 +483,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
             </div>
             <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
               <p className={retroHeading}>سود ناخالص</p>
-              <p className="text-lg font-semibold">{formatNumberFa((computedSales || 0) - (computedCOGS || 0))} ریال</p>
+              <p className="text-lg font-semibold">
+                {formatNumberFa((computedSales || 0) - (computedCOGS || 0))} ریال
+              </p>
             </div>
           </div>
         ) : (
@@ -424,7 +503,7 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           <div className="w-full overflow-x-auto">
             <svg width={Math.max(600, salesTrend.length * 18)} height={180} role="img">
               {(() => {
-                const max = Math.max(1, ...salesTrend.map(s=> s.total))
+                const max = Math.max(1, ...salesTrend.map((s) => s.total))
                 const barW = 12
                 const gap = 6
                 return salesTrend.map((s, idx) => {
@@ -439,7 +518,13 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
                 })
               })()}
               {/* Axis */}
-              <line x1={30} y1={160} x2={Math.max(560, salesTrend.length * 18)} y2={160} stroke="#c5bca5"/>
+              <line
+                x1={30}
+                y1={160}
+                x2={Math.max(560, salesTrend.length * 18)}
+                y2={160}
+                stroke="#c5bca5"
+              />
             </svg>
           </div>
         </section>
@@ -453,14 +538,12 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>کل منابع نقدی</p>
-            <p className="text-lg font-semibold">
-              {formatNumberFa(cashAll?.balance ?? 0)} ریال
-            </p>
+            <p className="text-lg font-semibold">{formatNumberFa(cashAll?.balance ?? 0)} ریال</p>
           </div>
           <div className="border border-[var(--retro-input-border)] bg-[var(--retro-input-bg)] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>روش‌های اصلی</p>
             <div className="flex flex-wrap gap-2 text-xs">
-              {CASH_METHODS.map(method => (
+              {CASH_METHODS.map((method) => (
                 <span key={method} className={retroBadge}>
                   {method} : {formatNumberFa(cashMethods[method] ?? 0)}
                 </span>
@@ -480,11 +563,19 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
           </p>
           <div className="flex items-center gap-4 mt-2 text-xs">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={hideZeroStock} onChange={e=> setHideZeroStock(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={hideZeroStock}
+                onChange={(e) => setHideZeroStock(e.target.checked)}
+              />
               عدم نمایش موجودی صفر
             </label>
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={hideNegativeStock} onChange={e=> setHideNegativeStock(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={hideNegativeStock}
+                onChange={(e) => setHideNegativeStock(e.target.checked)}
+              />
               عدم نمایش موجودی منفی
             </label>
           </div>
@@ -500,16 +591,18 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
               </tr>
             </thead>
             <tbody>
-              {filteredStock.slice(0, 50).map(item => (
-                <tr key={item.product_id} className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer" onClick={() => openProductLedger(item)}>
+              {filteredStock.slice(0, 50).map((item) => (
+                <tr
+                  key={item.product_id}
+                  className="border-b border-[#d9cfb6] hover:bg-[#f6f1df] cursor-pointer"
+                  onClick={() => openProductLedger(item)}
+                >
                   <td className="px-3 py-2">{item.name}</td>
                   <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
                   <td className="px-3 py-2 text-left">
                     {item.unit_price ? formatNumberFa(item.unit_price) : 'نامشخص'}
                   </td>
-                  <td className="px-3 py-2 text-left">
-                    {formatNumberFa(item.total_value)} ریال
-                  </td>
+                  <td className="px-3 py-2 text-left">{formatNumberFa(item.total_value)} ریال</td>
                 </tr>
               ))}
             </tbody>
@@ -529,11 +622,19 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
       )}
 
       {productLedgerOpen && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={()=> setProductLedgerOpen(null)}>
-          <div className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=> e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={() => setProductLedgerOpen(null)}
+        >
+          <div
+            className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-bold text-[#1f2e3b]">گردش کالا: {productLedgerOpen.name}</h4>
-              <button className={`${retroButton}`} onClick={()=> setProductLedgerOpen(null)}>بستن</button>
+              <button className={`${retroButton}`} onClick={() => setProductLedgerOpen(null)}>
+                بستن
+              </button>
             </div>
             {productLedgerOpen.entries.length ? (
               <div className="overflow-x-auto max-h-[60vh]">
@@ -549,14 +650,18 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {productLedgerOpen.entries.map((r,idx)=> (
+                    {productLedgerOpen.entries.map((r, idx) => (
                       <tr key={idx} className="border-b border-[#d9cfb6]">
                         <td className="px-3 py-2 text-xs">{isoToJalali(r.date)}</td>
-                        <td className="px-3 py-2 text-xs">{r.type === 'purchase' ? 'خرید' : 'فروش'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {r.type === 'purchase' ? 'خرید' : 'فروش'}
+                        </td>
                         <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.qty)}</td>
                         <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.unit)}</td>
                         <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.total)}</td>
-                        <td className="px-3 py-2 text-left font-mono">{formatNumberFa(r.running)}</td>
+                        <td className="px-3 py-2 text-left font-mono">
+                          {formatNumberFa(r.running)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -571,4 +676,3 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     </div>
   )
 }
-

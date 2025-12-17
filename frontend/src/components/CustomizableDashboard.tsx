@@ -52,9 +52,9 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
     try {
       const data = await apiGet<Widget[]>('/api/dashboard/widgets')
       setWidgets(data)
-      
+
       // Convert widgets to layout format
-      const layoutItems: LayoutItem[] = data.map(w => ({
+      const layoutItems: LayoutItem[] = data.map((w) => ({
         x: w.position_x,
         y: w.position_y,
         w: w.width,
@@ -74,7 +74,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
     try {
       await apiPost('/api/dashboard/widgets', {
         widget_type: widgetType,
-        title: WIDGET_TYPES.find(w => w.id === widgetType)?.label,
+        title: WIDGET_TYPES.find((w) => w.id === widgetType)?.label,
         position_x: 0,
         position_y: 0,
         width: 3,
@@ -89,7 +89,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 
   async function removeWidget(widgetId: number) {
     if (!window.confirm('آیا این widget را حذف می‌کنید؟')) return
-    
+
     try {
       await apiDelete(`/api/dashboard/widgets/${widgetId}`)
       await loadWidgets()
@@ -101,7 +101,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 
   async function saveLayout(newLayout: LayoutItem[]) {
     try {
-      const widgetsData = newLayout.map(item => ({
+      const widgetsData = newLayout.map((item) => ({
         widget_id: parseInt(item.i.replace('widget-', '')),
         position_x: item.x,
         position_y: item.y,
@@ -154,7 +154,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
 
         {isEditMode && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-            {WIDGET_TYPES.map(wt => (
+            {WIDGET_TYPES.map((wt) => (
               <button
                 key={wt.id}
                 onClick={() => addWidget(wt.id)}
@@ -181,7 +181,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
           containerPadding={[10, 10]}
           margin={[10, 10]}
         >
-          {widgets.map(widget => (
+          {widgets.map((widget) => (
             <div
               key={`widget-${widget.id}`}
               className="border-2 border-[#c5bca5] bg-[#faf4de] p-4 rounded"
@@ -197,7 +197,7 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
                   </button>
                 )}
               </div>
-              
+
               {/* Widget Content */}
               <div className="h-full flex items-center justify-center text-[#7a6b4f] text-sm">
                 <WidgetContent type={widget.widget_type} />
@@ -230,16 +230,22 @@ export function FinanceQuickActions() {
       window.dispatchEvent(
         new CustomEvent('finance-prefill', {
           detail: { direction, party_name: '', amount: '', reference: '', note: '' },
-        })
+        }),
       )
     }, 150)
   }
   return (
     <div className="flex flex-wrap gap-2">
-      <button className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]" onClick={() => openNew('in')}>
+      <button
+        className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]"
+        onClick={() => openNew('in')}
+      >
         ثبت دریافت
       </button>
-      <button className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]" onClick={() => openNew('out')}>
+      <button
+        className="bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] px-3 py-2 text-xs shadow-[3px_3px_0_var(--retro-button-border)]"
+        onClick={() => openNew('out')}
+      >
         ثبت پرداخت
       </button>
     </div>

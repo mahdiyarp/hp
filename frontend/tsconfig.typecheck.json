@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "ESNext"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "typeRoots": ["src/types", "node_modules/@types"]
+  },
+  "files": [
+    "src/components/layout/AppShell.tsx",
+    "src/i18n/I18nContext.tsx",
+    "src/i18n/translations.clean.ts",
+    "src/modules/DeveloperModule.tsx",
+    "src/modules/settings/AccessControlModule.tsx",
+    "src/modules/FinanceModule.tsx",
+    "src/modules/sms/SmsPanel.tsx",
+    "src/services/api.ts",
+    "src/services/auth.ts",
+    "src/utils/date.ts",
+    "src/utils/num.ts"
+  ]
+  ,
+  "include": [],
+  "exclude": []
+}

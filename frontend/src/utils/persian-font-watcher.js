@@ -1,5 +1,5 @@
 // Runtime watcher for detecting corrupted characters and auto-applying fallback fixes
-(function () {
+;(function () {
   function containsCorruption(text) {
     if (!text) return false
     // Use explicit Unicode escape for U+FFFD (replacement character) to avoid encoding issues
@@ -44,7 +44,7 @@
   function startAdaptiveWatcher() {
     scanDOM()
     scans++
-    if (scans < (120000 / fastInterval)) {
+    if (scans < 120000 / fastInterval) {
       window.__persian_font_watcher_timer = setTimeout(startAdaptiveWatcher, fastInterval)
     } else {
       window.__persian_font_watcher_interval = setInterval(scanDOM, slowInterval)

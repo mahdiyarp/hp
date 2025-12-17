@@ -8,13 +8,17 @@
 }
 
 * {
-  font-family: "Vazirmatn", "IRANSansX", "Yekan", "IranYekan", sans-serif !important;
+  font-family: 'Vazirmatn', 'IRANSansX', 'Yekan', 'IranYekan', sans-serif !important;
   direction: rtl;
   unicode-bidi: plaintext;
 }
 
-html, body {
-  font-feature-settings: "liga" 1, "clig" 1, "kern" 1;
+html,
+body {
+  font-feature-settings:
+    'liga' 1,
+    'clig' 1,
+    'kern' 1;
   text-rendering: optimizeLegibility;
 }
 
@@ -24,16 +28,32 @@ html, body {
 }
 
 /* Soft overrides for UI libraries and charts */
-.ant-typography, .ant-btn, .ant-input, .ant-table, .ant-menu, .ant-select, .ant-tag,
-.MuiTypography-root, .MuiButton-root, .MuiInputBase-root, .MuiTable-root,
-.chart-label, .recharts-text {
+.ant-typography,
+.ant-btn,
+.ant-input,
+.ant-table,
+.ant-menu,
+.ant-select,
+.ant-tag,
+.MuiTypography-root,
+.MuiButton-root,
+.MuiInputBase-root,
+.MuiTable-root,
+.chart-label,
+.recharts-text {
   font-family: inherit !important;
 }
 
 /* Ensure placeholders inherit font */
-::placeholder { font-family: inherit !important; }
+::placeholder {
+  font-family: inherit !important;
+}
 
 /* Additional soft override selectors for components that force fonts */
-.force-font, .widget *, .chart-label *, .MuiTypography-root, .ant-typography {
+.force-font,
+.widget *,
+.chart-label *,
+.MuiTypography-root,
+.ant-typography {
   font-family: 'Vazirmatn', inherit !important;
 }

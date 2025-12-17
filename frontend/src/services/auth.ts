@@ -27,12 +27,24 @@ type LoginResult =
       refresh_token: string
     }
 
-export async function login(username: string, password: string, otp?: string): Promise<LoginResult> {
+function apiBase() {
+  try {
+    const base = (import.meta as any)?.env?.VITE_BACKEND_URL
+    if (typeof base === 'string' && base.length > 0) return base
+  } catch {}
+  return ''
+}
+
+export async function login(
+  username: string,
+  password: string,
+  otp?: string,
+): Promise<LoginResult> {
   const params = new URLSearchParams()
   params.append('username', username)
   params.append('password', password)
   if (otp) params.append('otp', otp)
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch(apiBase() + '/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
@@ -52,13 +64,17 @@ export async function login(username: string, password: string, otp?: string): P
   }
   const data = await res.json()
   setTokens(data.access_token, data.refresh_token)
-  return { otpRequired: !!data.otp_required, access_token: data.access_token, refresh_token: data.refresh_token }
+  return {
+    otpRequired: !!data.otp_required,
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+  }
 }
 
 export async function refreshTokens() {
   const refresh = getRefreshToken()
   if (!refresh) throw new Error('No refresh token')
-  const res = await fetch('/api/auth/refresh', {
+  const res = await fetch(apiBase() + '/api/auth/refresh', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refresh }),
@@ -75,64 +91,83 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
   const headers = new Headers(init?.headers || {})
   if (access) headers.set('Authorization', 'Bearer ' + access)
   try {
-    try { window.dispatchEvent(new CustomEvent('api-start')) } catch {}
-    const res = await fetch(input, { ...init, headers })
-  if (res.status === 401) {
-    // Only attempt refresh if we actually have a refresh token
-    if (!refresh) {
-      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
-      return res
+    try {
+      window.dispatchEvent(new CustomEvent('api-start'))
+    } catch {}
+    const resolved =
+      typeof input === 'string' && input.startsWith('/api') ? apiBase() + input : input
+    const res = await fetch(resolved, { ...init, headers })
+    if (res.status === 401) {
+      // Only attempt refresh if we actually have a refresh token
+      if (!refresh) {
+        try {
+          window.dispatchEvent(new CustomEvent('api-end'))
+        } catch {}
+        return res
+      }
+      try {
+        await refreshTokens()
+        const access2 = getAccessToken()
+        const headers2 = new Headers(init?.headers || {})
+        if (access2) headers2.set('Authorization', 'Bearer ' + access2)
+        const res2 = await fetch(resolved, { ...init, headers: headers2 })
+        try {
+          window.dispatchEvent(new CustomEvent('api-end'))
+        } catch {}
+        return res2
+      } catch (e) {
+        clearTokens()
+        try {
+          window.dispatchEvent(new CustomEvent('api-end'))
+        } catch {}
+        throw e
+      }
     }
     try {
-      await refreshTokens()
-      const access2 = getAccessToken()
-      const headers2 = new Headers(init?.headers || {})
-      if (access2) headers2.set('Authorization', 'Bearer ' + access2)
-      const res2 = await fetch(input, { ...init, headers: headers2 })
-      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
-      return res2
-    } catch (e) {
-      clearTokens()
-      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
-      throw e
-    }
-  }
-    try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
+      window.dispatchEvent(new CustomEvent('api-end'))
+    } catch {}
     return res
   } catch (e) {
-    try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
+    try {
+      window.dispatchEvent(new CustomEvent('api-end'))
+    } catch {}
     throw e
   }
 }
 
 // ===== Mobile Login (SMS OTP) =====
-export async function loginByPhoneRequest(phone: string): Promise<{ success: boolean; session_id: string; message?: string }> {
-  const res = await fetch('/api/auth/login-phone', {
+export async function loginByPhoneRequest(
+  phone: string,
+): Promise<{ success: boolean; session_id: string; message?: string }> {
+  const res = await fetch(apiBase() + '/api/auth/login-phone', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const msg = (data && data.detail) ? data.detail : 'درخواست ورود ناموفق'
+    const msg = data && data.detail ? data.detail : 'درخواست ورود ناموفق'
     throw new Error(msg)
   }
   return data as { success: boolean; session_id: string; message?: string }
 }
 
-export async function verifyPhoneOtp(session_id: string, otp_code: string): Promise<{ success: boolean; access_token: string; token_type: string }> {
-  const res = await fetch('/api/auth/verify-phone-otp', {
+export async function verifyPhoneOtp(
+  session_id: string,
+  otp_code: string,
+): Promise<{ success: boolean; access_token: string; token_type: string }> {
+  const res = await fetch(apiBase() + '/api/auth/verify-phone-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id, otp_code }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const msg = (data && data.detail) ? data.detail : 'تایید کد ناموفق'
+    const msg = data && data.detail ? data.detail : 'تایید کد ناموفق'
     throw new Error(msg)
   }
-  const access = (data as any).access_token
-  const refresh = (data as any).refresh_token || ''
+  const access = data.access_token
+  const refresh = data.refresh_token || ''
   if (access) setTokens(access, refresh)
   return data as { success: boolean; access_token: string; token_type: string }
 }
@@ -180,11 +215,11 @@ export default {
 
 export async function loginDeveloper() {
   try {
-    const res = await fetch('/api/auth/login-dev', { method: 'POST' })
+    const res = await fetch(apiBase() + '/api/auth/login-dev', { method: 'POST' })
     if (!res.ok) return
     const data = await res.json()
-    const access = (data as any).access_token
-    const refresh = (data as any).refresh_token || ''
+    const access = data.access_token
+    const refresh = data.refresh_token || ''
     if (access) setTokens(access, refresh)
   } catch {
     // ignore

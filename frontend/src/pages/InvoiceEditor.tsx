@@ -8,7 +8,12 @@ interface EditorProps {
 const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
   const [id, setId] = React.useState<number | null>(null)
   const [payments, setPayments] = React.useState<any[]>([])
-  const [summary, setSummary] = React.useState<{paid:number, remaining:number, total:number, count:number} | null>(null)
+  const [summary, setSummary] = React.useState<{
+    paid: number
+    remaining: number
+    total: number
+    count: number
+  } | null>(null)
   const [data, setData] = React.useState<any>({
     status: 'draft',
     customer_id: null,
@@ -27,7 +32,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [payError, setPayError] = React.useState<string | null>(null)
-  const [actionBusy, setActionBusy] = React.useState<{[id:number]: boolean}>({})
+  const [actionBusy, setActionBusy] = React.useState<{ [id: number]: boolean }>({})
 
   // Parse hash for edit id: #invoice-edit:123
   React.useEffect(() => {
@@ -43,9 +48,14 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
   const reloadPayments = React.useCallback(async (invoiceId: number) => {
     try {
       const ps = await apiGet(`/api/payments?invoice_id=${invoiceId}`)
-      setPayments(ps||[])
+      setPayments(ps || [])
       const s = await apiGet(`/api/invoices/${invoiceId}/payments/summary`)
-      setSummary({ paid: Number(s.paid||0), remaining: Number(s.remaining||0), total: Number(s.total||0), count: Number(s.count||0) })
+      setSummary({
+        paid: Number(s.paid || 0),
+        remaining: Number(s.remaining || 0),
+        total: Number(s.total || 0),
+        count: Number(s.count || 0),
+      })
     } catch {}
   }, [])
 
@@ -66,7 +76,7 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
 
   React.useEffect(() => {
     const onHash = () => {
-      const raw = (window.location.hash || '')
+      const raw = window.location.hash || ''
       if (!raw.startsWith('#payment') && id) {
         reloadPayments(id)
       }
@@ -125,17 +135,44 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
         {/* Customer */}
         <section className="hp-card p-3" draggable>
           <h3 className="font-semibold mb-2">مشتری</h3>
-          <input className="hp-input w-full" placeholder="نام مشتری" value={data.customer_name || ''} onChange={(e)=>setField('customer_name', e.target.value)} />
+          <input
+            className="hp-input w-full"
+            placeholder="نام مشتری"
+            value={data.customer_name || ''}
+            onChange={(e) => setField('customer_name', e.target.value)}
+          />
         </section>
 
         {/* Metadata */}
         <section className="hp-card p-3" draggable>
           <h3 className="font-semibold mb-2">شناسه و تاریخ‌ها</h3>
           <div className="grid grid-cols-2 gap-2">
-            <input className="hp-input" placeholder="کد" value={data.code || ''} onChange={(e)=>setField('code', e.target.value)} />
-            <input type="date" className="hp-input" placeholder="تاریخ صدور" value={data.issue_date || ''} onChange={(e)=>setField('issue_date', e.target.value)} />
-            <input type="date" className="hp-input" placeholder="سررسید" value={data.due_date || ''} onChange={(e)=>setField('due_date', e.target.value)} />
-            <input className="hp-input" placeholder="ارجاع" value={data.reference || ''} onChange={(e)=>setField('reference', e.target.value)} />
+            <input
+              className="hp-input"
+              placeholder="کد"
+              value={data.code || ''}
+              onChange={(e) => setField('code', e.target.value)}
+            />
+            <input
+              type="date"
+              className="hp-input"
+              placeholder="تاریخ صدور"
+              value={data.issue_date || ''}
+              onChange={(e) => setField('issue_date', e.target.value)}
+            />
+            <input
+              type="date"
+              className="hp-input"
+              placeholder="سررسید"
+              value={data.due_date || ''}
+              onChange={(e) => setField('due_date', e.target.value)}
+            />
+            <input
+              className="hp-input"
+              placeholder="ارجاع"
+              value={data.reference || ''}
+              onChange={(e) => setField('reference', e.target.value)}
+            />
           </div>
         </section>
 
@@ -156,27 +193,98 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
             <tbody>
               {(data.items || []).map((it: any, idx: number) => (
                 <tr key={idx} className="border-t">
-                  <td className="px-2 py-1"><input className="hp-input w-full" value={it.description || ''} onChange={(e)=>{
-                    const v = e.target.value; const next = [...data.items]; next[idx] = { ...next[idx], description: v }; setField('items', next)
-                  }} /></td>
-                  <td className="px-2 py-1"><input type="number" className="hp-input w-24" value={it.qty || 0} onChange={(e)=>{
-                    const v = Number(e.target.value)||0; const next = [...data.items]; next[idx] = { ...next[idx], qty: v }; setField('items', next)
-                  }} /></td>
-                  <td className="px-2 py-1"><input type="number" className="hp-input w-24" value={it.unit_price || 0} onChange={(e)=>{
-                    const v = Number(e.target.value)||0; const next = [...data.items]; next[idx] = { ...next[idx], unit_price: v }; setField('items', next)
-                  }} /></td>
-                  <td className="px-2 py-1"><input type="number" className="hp-input w-20" value={it.discount_rate || 0} onChange={(e)=>{
-                    const v = Number(e.target.value)||0; const next = [...data.items]; next[idx] = { ...next[idx], discount_rate: v }; setField('items', next)
-                  }} /></td>
-                  <td className="px-2 py-1"><input type="number" className="hp-input w-20" value={it.tax_rate || 0} onChange={(e)=>{
-                    const v = Number(e.target.value)||0; const next = [...data.items]; next[idx] = { ...next[idx], tax_rate: v }; setField('items', next)
-                  }} /></td>
-                  <td className="px-2 py-1">{new Intl.NumberFormat('fa-IR').format(((it.qty||0)*(it.unit_price||0)) - (((it.qty||0)*(it.unit_price||0))*(Number(it.discount_rate||0)/100)) + ((((it.qty||0)*(it.unit_price||0)) - (((it.qty||0)*(it.unit_price||0))*(Number(it.discount_rate||0)/100))) * (Number(it.tax_rate||0)/100)))}</td>
+                  <td className="px-2 py-1">
+                    <input
+                      className="hp-input w-full"
+                      value={it.description || ''}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        const next = [...data.items]
+                        next[idx] = { ...next[idx], description: v }
+                        setField('items', next)
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="number"
+                      className="hp-input w-24"
+                      value={it.qty || 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) || 0
+                        const next = [...data.items]
+                        next[idx] = { ...next[idx], qty: v }
+                        setField('items', next)
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="number"
+                      className="hp-input w-24"
+                      value={it.unit_price || 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) || 0
+                        const next = [...data.items]
+                        next[idx] = { ...next[idx], unit_price: v }
+                        setField('items', next)
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="number"
+                      className="hp-input w-20"
+                      value={it.discount_rate || 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) || 0
+                        const next = [...data.items]
+                        next[idx] = { ...next[idx], discount_rate: v }
+                        setField('items', next)
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input
+                      type="number"
+                      className="hp-input w-20"
+                      value={it.tax_rate || 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value) || 0
+                        const next = [...data.items]
+                        next[idx] = { ...next[idx], tax_rate: v }
+                        setField('items', next)
+                      }}
+                    />
+                  </td>
+                  <td className="px-2 py-1">
+                    {new Intl.NumberFormat('fa-IR').format(
+                      (it.qty || 0) * (it.unit_price || 0) -
+                        (it.qty || 0) *
+                          (it.unit_price || 0) *
+                          (Number(it.discount_rate || 0) / 100) +
+                        ((it.qty || 0) * (it.unit_price || 0) -
+                          (it.qty || 0) *
+                            (it.unit_price || 0) *
+                            (Number(it.discount_rate || 0) / 100)) *
+                          (Number(it.tax_rate || 0) / 100),
+                    )}
+                  </td>
                 </tr>
               ))}
               <tr>
                 <td colSpan={6} className="px-2 py-2">
-                  <button className="hp-button" onClick={()=> setField('items', [...(data.items||[]), { description: '', qty: 1, unit_price: 0, discount_rate: 0, tax_rate: 0 }])}>+ افزودن آیتم</button>
+                  <button
+                    className="hp-button"
+                    onClick={() =>
+                      setField('items', [
+                        ...(data.items || []),
+                        { description: '', qty: 1, unit_price: 0, discount_rate: 0, tax_rate: 0 },
+                      ])
+                    }
+                  >
+                    + افزودن آیتم
+                  </button>
                 </td>
               </tr>
             </tbody>
@@ -187,8 +295,24 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
         <section className="hp-card p-3" draggable>
           <h3 className="font-semibold mb-2">مالیات و تخفیف</h3>
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs">مالیات کل%<input type="number" className="hp-input" value={data.tax_rate || 0} onChange={(e)=>setField('tax_rate', Number(e.target.value)||0)} /></label>
-            <label className="text-xs">تخفیف کل%<input type="number" className="hp-input" value={data.discount_rate || 0} onChange={(e)=>setField('discount_rate', Number(e.target.value)||0)} /></label>
+            <label className="text-xs">
+              مالیات کل%
+              <input
+                type="number"
+                className="hp-input"
+                value={data.tax_rate || 0}
+                onChange={(e) => setField('tax_rate', Number(e.target.value) || 0)}
+              />
+            </label>
+            <label className="text-xs">
+              تخفیف کل%
+              <input
+                type="number"
+                className="hp-input"
+                value={data.discount_rate || 0}
+                onChange={(e) => setField('discount_rate', Number(e.target.value) || 0)}
+              />
+            </label>
           </div>
         </section>
 
@@ -207,51 +331,171 @@ const InvoiceEditor: React.FC<EditorProps> = ({ mode }) => {
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p:any)=>(
+                {payments.map((p: any) => (
                   <tr key={p.id} className="border-t">
                     <td className="px-2 py-1">{p.id}</td>
-                    <td className="px-2 py-1">{p.method||'-'}</td>
-                    <td className="px-2 py-1">{new Intl.NumberFormat('fa-IR').format(Number(p.amount||0))}</td>
+                    <td className="px-2 py-1">{p.method || '-'}</td>
+                    <td className="px-2 py-1">
+                      {new Intl.NumberFormat('fa-IR').format(Number(p.amount || 0))}
+                    </td>
                     <td className="px-2 py-1">{p.status}</td>
                     <td className="px-2 py-1 space-x-1 rtl:space-x-reverse">
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/posted`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>ثبت</button>
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/reconciled`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>تسویه</button>
-                      <button disabled={!!actionBusy[p.id]} className="hp-button ghost disabled:opacity-50" onClick={async()=>{ setPayError(null); setActionBusy(s=>({...s,[p.id]:true})); const r = await fetch(`/api/payments/${p.id}/status/void`, { method: 'POST' }); if(!r.ok){ try{ const j = await r.json(); setPayError(j?.detail||'خطا در تغییر وضعیت'); }catch{ setPayError('خطا در تغییر وضعیت') } } if(id) await reloadPayments(id); setActionBusy(s=>({...s,[p.id]:false})) }}>باطل</button>
+                      <button
+                        disabled={!!actionBusy[p.id]}
+                        className="hp-button ghost disabled:opacity-50"
+                        onClick={async () => {
+                          setPayError(null)
+                          setActionBusy((s) => ({ ...s, [p.id]: true }))
+                          const r = await fetch(`/api/payments/${p.id}/status/posted`, {
+                            method: 'POST',
+                          })
+                          if (!r.ok) {
+                            try {
+                              const j = await r.json()
+                              setPayError(j?.detail || 'خطا در تغییر وضعیت')
+                            } catch {
+                              setPayError('خطا در تغییر وضعیت')
+                            }
+                          }
+                          if (id) await reloadPayments(id)
+                          setActionBusy((s) => ({ ...s, [p.id]: false }))
+                        }}
+                      >
+                        ثبت
+                      </button>
+                      <button
+                        disabled={!!actionBusy[p.id]}
+                        className="hp-button ghost disabled:opacity-50"
+                        onClick={async () => {
+                          setPayError(null)
+                          setActionBusy((s) => ({ ...s, [p.id]: true }))
+                          const r = await fetch(`/api/payments/${p.id}/status/reconciled`, {
+                            method: 'POST',
+                          })
+                          if (!r.ok) {
+                            try {
+                              const j = await r.json()
+                              setPayError(j?.detail || 'خطا در تغییر وضعیت')
+                            } catch {
+                              setPayError('خطا در تغییر وضعیت')
+                            }
+                          }
+                          if (id) await reloadPayments(id)
+                          setActionBusy((s) => ({ ...s, [p.id]: false }))
+                        }}
+                      >
+                        تسویه
+                      </button>
+                      <button
+                        disabled={!!actionBusy[p.id]}
+                        className="hp-button ghost disabled:opacity-50"
+                        onClick={async () => {
+                          setPayError(null)
+                          setActionBusy((s) => ({ ...s, [p.id]: true }))
+                          const r = await fetch(`/api/payments/${p.id}/status/void`, {
+                            method: 'POST',
+                          })
+                          if (!r.ok) {
+                            try {
+                              const j = await r.json()
+                              setPayError(j?.detail || 'خطا در تغییر وضعیت')
+                            } catch {
+                              setPayError('خطا در تغییر وضعیت')
+                            }
+                          }
+                          if (id) await reloadPayments(id)
+                          setActionBusy((s) => ({ ...s, [p.id]: false }))
+                        }}
+                      >
+                        باطل
+                      </button>
                     </td>
                   </tr>
                 ))}
-                {payments.length===0 && (
-                  <tr><td className="px-2 py-2 text-[var(--primary)]/60" colSpan={4}>پرداختی ثبت نشده</td></tr>
+                {payments.length === 0 && (
+                  <tr>
+                    <td className="px-2 py-2 text-[var(--primary)]/60" colSpan={4}>
+                      پرداختی ثبت نشده
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
-          {payError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-2 rounded mb-2">{payError}</div>}
+          {payError && (
+            <div className="text-sm text-red-600 bg-red-50 border border-red-200 p-2 rounded mb-2">
+              {payError}
+            </div>
+          )}
           <div className="flex items-center justify-between text-sm mb-2">
-            <span>مجموع پرداخت: {new Intl.NumberFormat('fa-IR').format(summary?.paid ?? payments.reduce((s:number,x:any)=>s+Number(x.amount||0),0))}</span>
-            <span>باقیمانده: {new Intl.NumberFormat('fa-IR').format(summary?.remaining ?? Math.max(0, Number(data.total||0) - payments.reduce((s:number,x:any)=>s+Number(x.amount||0),0)))}</span>
+            <span>
+              مجموع پرداخت:{' '}
+              {new Intl.NumberFormat('fa-IR').format(
+                summary?.paid ??
+                  payments.reduce((s: number, x: any) => s + Number(x.amount || 0), 0),
+              )}
+            </span>
+            <span>
+              باقیمانده:{' '}
+              {new Intl.NumberFormat('fa-IR').format(
+                summary?.remaining ??
+                  Math.max(
+                    0,
+                    Number(data.total || 0) -
+                      payments.reduce((s: number, x: any) => s + Number(x.amount || 0), 0),
+                  ),
+              )}
+            </span>
           </div>
           <button
             className="hp-button disabled:opacity-50"
             disabled={(summary?.remaining ?? 0) <= 0}
             onClick={() => {
               // Prefill payment with this invoice id and amount suggestion
-              const remaining = (summary?.remaining != null ? summary.remaining : Math.max(0, Number(data.total||0) - payments.reduce((s:number,x:any)=>s+Number(x.amount||0),0)))
-              const prefill = { invoice_id: id || undefined, direction: 'in', method: 'cash', amount: remaining };
-              try { localStorage.setItem('hp.prefill.payment', JSON.stringify(prefill)); } catch {}
+              const remaining =
+                summary?.remaining != null
+                  ? summary.remaining
+                  : Math.max(
+                      0,
+                      Number(data.total || 0) -
+                        payments.reduce((s: number, x: any) => s + Number(x.amount || 0), 0),
+                    )
+              const prefill = {
+                invoice_id: id || undefined,
+                direction: 'in',
+                method: 'cash',
+                amount: remaining,
+              }
+              try {
+                localStorage.setItem('hp.prefill.payment', JSON.stringify(prefill))
+              } catch {}
               window.location.hash = '#payment/new'
             }}
           >
             + ثبت پرداخت
           </button>
-          {(summary?.remaining ?? 0) <= 0 && <div className="text-xs text-green-700 mt-2">این فاکتور تسویه شده است.</div>}
+          {(summary?.remaining ?? 0) <= 0 && (
+            <div className="text-xs text-green-700 mt-2">این فاکتور تسویه شده است.</div>
+          )}
         </section>
 
         {/* Notes & Terms */}
         <section className="hp-card p-3 col-span-1 lg:col-span-2" draggable>
           <h3 className="font-semibold mb-2">یادداشت‌ها و شرایط</h3>
-          <textarea className="hp-input w-full" rows={3} placeholder="یادداشت" value={data.notes || ''} onChange={(e)=>setField('notes', e.target.value)} />
-          <textarea className="hp-input w-full mt-2" rows={3} placeholder="شرایط" value={data.terms || ''} onChange={(e)=>setField('terms', e.target.value)} />
+          <textarea
+            className="hp-input w-full"
+            rows={3}
+            placeholder="یادداشت"
+            value={data.notes || ''}
+            onChange={(e) => setField('notes', e.target.value)}
+          />
+          <textarea
+            className="hp-input w-full mt-2"
+            rows={3}
+            placeholder="شرایط"
+            value={data.terms || ''}
+            onChange={(e) => setField('terms', e.target.value)}
+          />
         </section>
       </div>
     </div>

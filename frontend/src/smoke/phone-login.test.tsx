@@ -5,22 +5,25 @@ import LoginForm from '../components/LoginForm'
 
 // minimal AuthContext shim
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ login: vi.fn().mockResolvedValue({ otpRequired: false }) })
+  useAuth: () => ({ login: vi.fn().mockResolvedValue({ otpRequired: false }) }),
 }))
 
 // mock services/auth
 vi.mock('../services/auth', () => ({
   loginByPhoneRequest: vi.fn(async () => ({ success: true, session_id: 'SID123' })),
   verifyPhoneOtp: vi.fn(async () => ({ success: true, access_token: 'tok', token_type: 'bearer' })),
-  setTokens: vi.fn(() => {})
+  setTokens: vi.fn(() => {}),
 }))
 
 // i18n-free render
-function Wrapper() { return <LoginForm /> }
+function Wrapper() {
+  return <LoginForm />
+}
 
 describe('phone login flow (UI)', () => {
   beforeEach(() => {
-    vi.spyOn(window, 'dispatchEvent').mockImplementation(() => true)})
+    vi.spyOn(window, 'dispatchEvent').mockImplementation(() => true)
+  })
 
   it('sends code then verifies without HTML pattern blocking', async () => {
     render(<Wrapper />)
@@ -38,4 +41,3 @@ describe('phone login flow (UI)', () => {
     expect(true).toBe(true)
   })
 })
-

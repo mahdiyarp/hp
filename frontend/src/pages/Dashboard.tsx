@@ -12,9 +12,12 @@ const Dashboard: React.FC = () => {
   const [stock, setStock] = React.useState<StockSummary | null>(null)
   const [pnl, setPnl] = React.useState<PnlSummary | null>(null)
   const [loading, setLoading] = React.useState(false)
-  const [layout, setLayout] = React.useState<string[]>(()=>{
-    try { const raw = localStorage.getItem('hp.dashboard.layout'); if (raw) return JSON.parse(raw) } catch {}
-    return ['sales','cash','stock','pnl','payments']
+  const [layout, setLayout] = React.useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('hp.dashboard.layout')
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return ['sales', 'cash', 'stock', 'pnl', 'payments']
   })
   const [paymentsSum, setPaymentsSum] = React.useState<number>(0)
   const [activity, setActivity] = React.useState<any>({ items: [], total: 0, page: 1, limit: 10 })
@@ -24,8 +27,10 @@ const Dashboard: React.FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const todayStart = new Date(); todayStart.setHours(0,0,0,0)
-      const todayEnd = new Date(); todayEnd.setHours(23,59,59,999)
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
       const startIso = todayStart.toISOString()
       const endIso = todayEnd.toISOString()
       const [s, c, st, p, act, pay] = await Promise.all([
@@ -34,14 +39,18 @@ const Dashboard: React.FC = () => {
         apiGet<StockSummary>('/api/reports/stock'),
         apiGet<PnlSummary>('/api/reports/pnl'),
         apiGet('/api/activity/recent?page=1&limit=10'),
-        apiGet(`/api/reports/payments?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&direction=in`)
+        apiGet(
+          `/api/reports/payments?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}&direction=in`,
+        ),
       ])
       setSales(s)
       setCash(c)
       setStock(st)
       setPnl(p)
-      setActivity(act||{ items: [], total: 0, page: 1, limit: 10 })
-      try { setPaymentsSum(Number(pay?.total||0)) } catch {}
+      setActivity(act || { items: [], total: 0, page: 1, limit: 10 })
+      try {
+        setPaymentsSum(Number(pay?.total || 0))
+      } catch {}
     } catch (e: any) {
       setError(e?.message || 'خطا در بارگذاری گزارش‌ها')
     } finally {
@@ -61,7 +70,9 @@ const Dashboard: React.FC = () => {
   const onDragStart = (e: React.DragEvent<HTMLDivElement>, key: string) => {
     e.dataTransfer.setData('text/plain', key)
   }
-  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => { e.preventDefault() }
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+  }
   const onDrop = (e: React.DragEvent<HTMLDivElement>, targetKey: string) => {
     e.preventDefault()
     const srcKey = e.dataTransfer.getData('text/plain')
@@ -73,34 +84,72 @@ const Dashboard: React.FC = () => {
     order.splice(si, 1)
     order.splice(ti, 0, srcKey)
     setLayout(order)
-    try { localStorage.setItem('hp.dashboard.layout', JSON.stringify(order)) } catch {}
+    try {
+      localStorage.setItem('hp.dashboard.layout', JSON.stringify(order))
+    } catch {}
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بروزرسانی'}</button>
+        <button className="hp-button" onClick={load} disabled={loading}>
+          {loading ? '...' : 'بروزرسانی'}
+        </button>
         {error && <span className="hp-badge error">{error}</span>}
       </div>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="hp-card p-4" draggable onDragStart={(e)=>onDragStart(e,'sales')} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,'sales')}>
+        <div
+          className="hp-card p-4"
+          draggable
+          onDragStart={(e) => onDragStart(e, 'sales')}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, 'sales')}
+        >
           <div className="text-xs text-[var(--primary)]/70">فروش امروز</div>
-          <div className="text-2xl font-bold mt-1">{fmt(sales?.today || sales?.total || 0)} تومان</div>
+          <div className="text-2xl font-bold mt-1">
+            {fmt(sales?.today || sales?.total || 0)} تومان
+          </div>
         </div>
-        <div className="hp-card p-4" draggable onDragStart={(e)=>onDragStart(e,'cash')} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,'cash')}>
+        <div
+          className="hp-card p-4"
+          draggable
+          onDragStart={(e) => onDragStart(e, 'cash')}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, 'cash')}
+        >
           <div className="text-xs text-[var(--primary)]/70">نقدینگی</div>
-          <div className="text-2xl font-bold mt-1">{fmt(cash?.balance || cash?.total || 0)} تومان</div>
+          <div className="text-2xl font-bold mt-1">
+            {fmt(cash?.balance || cash?.total || 0)} تومان
+          </div>
         </div>
-        <div className="hp-card p-4" draggable onDragStart={(e)=>onDragStart(e,'stock')} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,'stock')}>
+        <div
+          className="hp-card p-4"
+          draggable
+          onDragStart={(e) => onDragStart(e, 'stock')}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, 'stock')}
+        >
           <div className="text-xs text-[var(--primary)]/70">موجودی انبار</div>
           <div className="text-2xl font-bold mt-1">{fmt(stock?.value || stock?.total || 0)}</div>
         </div>
-        <div className="hp-card p-4" draggable onDragStart={(e)=>onDragStart(e,'pnl')} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,'pnl')}>
+        <div
+          className="hp-card p-4"
+          draggable
+          onDragStart={(e) => onDragStart(e, 'pnl')}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, 'pnl')}
+        >
           <div className="text-xs text-[var(--primary)]/70">سود و زیان</div>
           <div className="text-2xl font-bold mt-1">{fmt(pnl?.net || pnl?.profit || 0)} تومان</div>
         </div>
-        <div className="hp-card p-4" draggable onDragStart={(e)=>onDragStart(e,'payments')} onDragOver={onDragOver} onDrop={(e)=>onDrop(e,'payments')}>
+        <div
+          className="hp-card p-4"
+          draggable
+          onDragStart={(e) => onDragStart(e, 'payments')}
+          onDragOver={onDragOver}
+          onDrop={(e) => onDrop(e, 'payments')}
+        >
           <div className="text-xs text-[var(--primary)]/70">جمع پرداخت‌های اخیر</div>
           <div className="text-2xl font-bold mt-1">{fmt(paymentsSum)} تومان</div>
         </div>
@@ -123,18 +172,22 @@ const Dashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {(activity.items||[]).map((a:any, idx:number)=>(
+              {(activity.items || []).map((a: any, idx: number) => (
                 <tr key={idx} className="border-t">
                   <td className="px-3 py-2">{a.created_at || '-'}</td>
                   <td className="px-3 py-2">{a.actor || '-'}</td>
                   <td className="px-3 py-2">{a.action || '-'}</td>
-                  <td className="px-3 py-2">{a.entity_type}#{a.entity_id}</td>
+                  <td className="px-3 py-2">
+                    {a.entity_type}#{a.entity_id}
+                  </td>
                   <td className="px-3 py-2">{a.detail || '-'}</td>
                 </tr>
               ))}
-              {(activity.items||[]).length===0 && (
+              {(activity.items || []).length === 0 && (
                 <tr>
-                  <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={5}>{loading?'در حال بارگذاری...':'فعالیتی ثبت نشده'}</td>
+                  <td className="px-3 py-6 text-center text-[var(--primary)]/70" colSpan={5}>
+                    {loading ? 'در حال بارگذاری...' : 'فعالیتی ثبت نشده'}
+                  </td>
                 </tr>
               )}
             </tbody>

@@ -18,14 +18,23 @@ vi.mock('../../../services/api', async () => {
     }),
     apiPost: vi.fn(async (path: string, body?: any) => {
       if (path === '/api/users') {
-        return { id: 10, username: body.username, email: body.email ?? null, full_name: body.full_name ?? null, role_id: body.role_id ?? null, is_active: true }
+        return {
+          id: 10,
+          username: body.username,
+          email: body.email ?? null,
+          full_name: body.full_name ?? null,
+          role_id: body.role_id ?? null,
+          is_active: true,
+        }
       }
       return {}
     }),
   }
 })
 
-function Wrapper({ children }: { children: React.ReactNode }) { return <div dir="rtl">{children}</div> }
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return <div dir="rtl">{children}</div>
+}
 
 describe('UsersModule', () => {
   beforeEach(() => {
@@ -44,12 +53,17 @@ describe('UsersModule', () => {
 
     render(<UsersModule />, { wrapper: Wrapper as any })
 
-    const username = screen.getByPlaceholderText('نام کاربری') as HTMLInputElement
+    const username = screen.getByPlaceholderText('نام کاربری')
     fireEvent.change(username, { target: { value: 'testuser' } })
 
     const createBtn = screen.getByText('ایجاد کاربر')
     fireEvent.click(createBtn)
 
-    await waitFor(() => expect(apiPost).toHaveBeenCalledWith('/api/users', expect.objectContaining({ username: 'testuser' })))
+    await waitFor(() =>
+      expect(apiPost).toHaveBeenCalledWith(
+        '/api/users',
+        expect.objectContaining({ username: 'testuser' }),
+      ),
+    )
   })
 })

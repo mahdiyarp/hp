@@ -8,7 +8,7 @@ export function exportToCsv<T extends Record<string, unknown>>(rows: T[], filena
   }
   const csv = [
     headers.join(','),
-    ...rows.map(row => headers.map(header => escape(row[header])).join(',')),
+    ...rows.map((row) => headers.map((header) => escape(row[header])).join(',')),
   ].join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -18,4 +18,3 @@ export function exportToCsv<T extends Record<string, unknown>>(rows: T[], filena
   link.click()
   URL.revokeObjectURL(url)
 }
-

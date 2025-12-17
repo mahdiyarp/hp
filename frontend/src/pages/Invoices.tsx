@@ -67,8 +67,8 @@ const Invoices: React.FC = () => {
     }
     if (sortKey) {
       res.sort((a, b) => {
-        const va = (a[sortKey!] ?? '') as any
-        const vb = (b[sortKey!] ?? '') as any
+        const va = a[sortKey] ?? ''
+        const vb = b[sortKey] ?? ''
         const ca = typeof va === 'number' ? va : String(va)
         const cb = typeof vb === 'number' ? vb : String(vb)
         if (ca < cb) return sortDir === 'asc' ? -1 : 1
@@ -95,8 +95,17 @@ const Invoices: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">فاکتورها</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
-          <button className="hp-button" onClick={()=>{window.location.hash='invoice-new'}}>ثبت فاکتور جدید</button>
+          <button className="hp-button" onClick={load} disabled={loading}>
+            {loading ? '...' : 'بارگذاری'}
+          </button>
+          <button
+            className="hp-button"
+            onClick={() => {
+              window.location.hash = 'invoice-new'
+            }}
+          >
+            ثبت فاکتور جدید
+          </button>
         </div>
       </div>
 
@@ -104,14 +113,45 @@ const Invoices: React.FC = () => {
 
       <div className="mt-3">
         <div className="flex items-center gap-2 mb-2">
-          <input className="hp-input w-56" placeholder="جستجو" value={query} onChange={(e)=>{setQuery(e.target.value); setPage(1)}} />
-          <select className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
+          <input
+            className="hp-input w-56"
+            placeholder="جستجو"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+          />
+          <select
+            className="hp-input w-24"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(1)
+            }}
+          >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
           </select>
-          <input type="date" className="hp-input" value={dateFrom} onChange={(e)=>{setDateFrom(e.target.value); setPage(1)}} />
-          <input type="date" className="hp-input" value={dateTo} onChange={(e)=>{setDateTo(e.target.value); setPage(1)}} />
+          <input
+            type="date"
+            className="hp-input"
+            value={dateFrom}
+            onChange={(e) => {
+              setDateFrom(e.target.value)
+              setPage(1)
+            }}
+          />
+          <input
+            type="date"
+            className="hp-input"
+            value={dateTo}
+            onChange={(e) => {
+              setDateTo(e.target.value)
+              setPage(1)
+            }}
+          />
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -120,8 +160,12 @@ const Invoices: React.FC = () => {
             <tr className="text-left">
               <th className="px-3 py-2">شماره</th>
               <th className="px-3 py-2">مشتری</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('amount')}>مبلغ کل</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('date')}>تاریخ</th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('amount')}>
+                مبلغ کل
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('date')}>
+                تاریخ
+              </th>
               <th className="px-3 py-2">وضعیت</th>
               <th className="px-3 py-2">پرداخت</th>
               <th className="px-3 py-2">عملیات</th>
@@ -133,17 +177,23 @@ const Invoices: React.FC = () => {
                 <tr key={idx} className="border-t">
                   <td className="px-3 py-2">{row.code || row.number || row.id || '-'}</td>
                   <td className="px-3 py-2">{row.customer_name || row.customer || '-'}</td>
-                  <td className="px-3 py-2">{new Intl.NumberFormat('fa-IR').format((row.total ?? row.amount ?? row.price ?? 0) as number)}</td>
-                  <td className="px-3 py-2">{row.jalali_date || row.date || row.created_at || '-'}</td>
                   <td className="px-3 py-2">
-                    <span className={`hp-badge ${statusClass(row.status)}`}>{statusLabel(row.status)}</span>
+                    {new Intl.NumberFormat('fa-IR').format(
+                      (row.total ?? row.amount ?? row.price ?? 0) as number,
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {row.jalali_date || row.date || row.created_at || '-'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`hp-badge ${statusClass(row.status)}`}>
+                      {statusLabel(row.status)}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
                     {renderPaidPercent(row.paid_amount, row.total ?? row.amount)}
                   </td>
-                  <td className="px-3 py-2">
-                    {actionMenu(row)}
-                  </td>
+                  <td className="px-3 py-2">{actionMenu(row)}</td>
                 </tr>
               ))
             ) : (
@@ -156,9 +206,21 @@ const Invoices: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+          >
+            قبلی
+          </button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(page + 1)}
+            disabled={(items || []).length <= page * pageSize}
+          >
+            بعدی
+          </button>
         </div>
       </div>
     </div>
@@ -169,14 +231,21 @@ export default Invoices
 
 function statusClass(status: string | undefined) {
   switch ((status || '').toLowerCase()) {
-    case 'draft': return 'neutral'
+    case 'draft':
+      return 'neutral'
     case 'issued':
-    case 'sent': return 'info'
-    case 'viewed': return 'warning'
-    case 'paid': return 'success'
-    case 'overdue': return 'error'
-    case 'cancelled': return 'dark'
-    default: return 'neutral'
+    case 'sent':
+      return 'info'
+    case 'viewed':
+      return 'warning'
+    case 'paid':
+      return 'success'
+    case 'overdue':
+      return 'error'
+    case 'cancelled':
+      return 'dark'
+    default:
+      return 'neutral'
   }
 }
 
@@ -208,14 +277,30 @@ function actionMenu(row: any) {
     <details className="relative">
       <summary className="hp-button">اقدامات</summary>
       <div className="absolute z-10 mt-1 bg-white border rounded shadow min-w-[10rem]">
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50" onClick={()=>{const id = row.id || row.code || row.number; if(id) window.location.hash = `invoice-edit:${id}`}}>🖊 ویرایش</button>
+        <button
+          className="block w-full text-right px-3 py-2 hover:bg-gray-50"
+          onClick={() => {
+            const id = row.id || row.code || row.number
+            if (id) window.location.hash = `invoice-edit:${id}`
+          }}
+        >
+          🖊 ویرایش
+        </button>
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">📄 مشاهده</button>
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">📥 تکثیر</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">💰 ثبت پرداخت</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">🔁 تغییر وضعیت</button>
+        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">
+          💰 ثبت پرداخت
+        </button>
+        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">
+          🔁 تغییر وضعیت
+        </button>
         <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">🧾 چاپ/PDF</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">📤 اشتراک لینک</button>
-        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50 text-red-600">🗑 حذف</button>
+        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50">
+          📤 اشتراک لینک
+        </button>
+        <button className="block w-full text-right px-3 py-2 hover:bg-gray-50 text-red-600">
+          🗑 حذف
+        </button>
       </div>
     </details>
   )

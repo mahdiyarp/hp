@@ -3,7 +3,10 @@ import { retroPanel, retroHeading, retroButton, retroMuted } from './retroTheme'
 
 type ErrorBoundaryState = { hasError: boolean; error?: any }
 
-export default class ErrorBoundary extends React.Component<React.PropsWithChildren<{}>, ErrorBoundaryState> {
+export default class ErrorBoundary extends React.Component<
+  React.PropsWithChildren<{}>,
+  ErrorBoundaryState
+> {
   constructor(props: {}) {
     super(props)
     this.state = { hasError: false }
@@ -26,7 +29,9 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
         <div className={`${retroPanel} p-6 space-y-2`}>
           <p className={`${retroHeading} text-[#7a6b4f]`}>بروز خطا در رابط کاربری</p>
           <p className={`${retroMuted}`}>لطفاً صفحه را رفرش کنید یا به ماژول دیگری بروید.</p>
-          <button className={`${retroButton}`} onClick={() => window.location.reload()}>بارگذاری مجدد</button>
+          <button className={`${retroButton}`} onClick={() => window.location.reload()}>
+            بارگذاری مجدد
+          </button>
         </div>
       )
     }

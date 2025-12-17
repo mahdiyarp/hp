@@ -1,4 +1,4 @@
-import authService from './auth.ts'
+import authService from './auth'
 
 function appendFyParam(path: string): string {
   try {
@@ -53,7 +53,9 @@ async function parseResponse<T>(res: Response): Promise<T> {
     }
     // Broadcast a global error event for UI toast handling
     try {
-      const evt = new CustomEvent('api-error', { detail: { status: res.status, message: detail, payload } })
+      const evt = new CustomEvent('api-error', {
+        detail: { status: res.status, message: detail, payload },
+      })
       window.dispatchEvent(evt)
     } catch {}
     throw new Error(detail)
@@ -68,12 +70,24 @@ async function parseResponse<T>(res: Response): Promise<T> {
   }
 }
 
+function resolveApiPath(path: string): string {
+  if (path.startsWith('/api')) {
+    try {
+      const base = (import.meta as any)?.env?.VITE_BACKEND_URL
+      if (typeof base === 'string' && base.length > 0) {
+        return base + path
+      }
+    } catch {}
+  }
+  return path
+}
+
 export async function apiRequest<T>(
   path: string,
   method: HttpMethod = 'GET',
   init?: RequestInit,
 ): Promise<T> {
-  const response = await authService.fetchWithAuth(appendFyParam(path), {
+  const response = await authService.fetchWithAuth(resolveApiPath(appendFyParam(path)), {
     ...(init || {}),
     method,
     // Default to Jalali date format in responses
@@ -130,4 +144,3 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
 }
-

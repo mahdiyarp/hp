@@ -54,9 +54,9 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, done: 0, percent: 0 }
-    const checklist = data.sections.flatMap(section => section.checklists || [])
+    const checklist = data.sections.flatMap((section) => section.checklists || [])
     if (checklist.length === 0) return { total: 0, done: 0, percent: 0 }
-    const done = checklist.filter(item => item.done).length
+    const done = checklist.filter((item) => item.done).length
     return { total: checklist.length, done, percent: Math.round((done / checklist.length) * 100) }
   }, [data])
 
@@ -166,7 +166,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
       </section>
 
       <section className="space-y-4">
-        {data.sections.map(section => (
+        {data.sections.map((section) => (
           <article key={section.title} className={retroPanelPadded}>
             <header className="mb-2 flex items-center justify-between gap-3">
               <div>
@@ -181,7 +181,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
                 <span className="text-[11px] px-2 py-1 rounded border border-[#bfb69f] bg-[#f6f1df]">
                   {formatNumberFa(
                     Math.round(
-                      (section.checklists.filter(item => item.done).length /
+                      (section.checklists.filter((item) => item.done).length /
                         section.checklists.length) *
                         100,
                     ),
@@ -223,4 +223,3 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     </div>
   )
 }
-

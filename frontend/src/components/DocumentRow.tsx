@@ -58,16 +58,7 @@ export function DocumentTableHeader({ type }: { type: 'invoice' | 'saleOrder' })
 }
 
 export default function DocumentRow(props: DocumentRowProps) {
-  const {
-    id,
-    number,
-    party_name,
-    total,
-    status,
-    server_time,
-    client_time,
-    tracking_code,
-  } = props
+  const { id, number, party_name, total, status, server_time, client_time, tracking_code } = props
 
   if (props.kind === 'invoice') {
     const { invoice_type, mode, titleMap, onView } = props
@@ -77,7 +68,9 @@ export default function DocumentRow(props: DocumentRowProps) {
           {toPersianDigits(number || `#${id}`)}
           <span className="block text-[10px] text-[#7a6b4f] mt-1">حالت: {mode}</span>
           {tracking_code && (
-            <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">📍 {tracking_code}</span>
+            <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">
+              📍 {tracking_code}
+            </span>
           )}
         </td>
         <td className="px-3 py-2">
@@ -86,8 +79,8 @@ export default function DocumentRow(props: DocumentRowProps) {
               invoice_type === 'sale'
                 ? 'text-green-700 font-semibold'
                 : invoice_type === 'purchase'
-                ? 'text-blue-700 font-semibold'
-                : 'text-gray-600 italic'
+                  ? 'text-blue-700 font-semibold'
+                  : 'text-gray-600 italic'
             }
           >
             {titleMap[invoice_type] || invoice_type}
@@ -95,14 +88,17 @@ export default function DocumentRow(props: DocumentRowProps) {
         </td>
         <td className="px-3 py-2">{party_name ?? 'نامشخص'}</td>
         <td className="px-3 py-2 text-left">
-          {formatCurrencyFa(total || 0, 'ریال', false).numeric} <span className="text-xs">ریال</span>
+          {formatCurrencyFa(total || 0, 'ریال', false).numeric}{' '}
+          <span className="text-xs">ریال</span>
         </td>
         <td className="px-3 py-2">
           <span className={retroBadge}>{status}</span>
         </td>
         <td className="px-3 py-2 text-left space-y-1">
           <p>سرور: {server_time ? isoToJalali(server_time) : '-'}</p>
-          <p className="text-[11px] text-[#7a6b4f]">کلاینت: {client_time ? isoToJalali(client_time) : '---'}</p>
+          <p className="text-[11px] text-[#7a6b4f]">
+            کلاینت: {client_time ? isoToJalali(client_time) : '---'}
+          </p>
         </td>
         <td className="px-3 py-2 text-left">
           <button className={`${retroButton} text-[11px]`} onClick={() => onView(id)}>
@@ -119,7 +115,9 @@ export default function DocumentRow(props: DocumentRowProps) {
       <td className="px-3 py-2">
         {toPersianDigits(number || `#${id}`)}
         {tracking_code && (
-          <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">📍 {tracking_code}</span>
+          <span className="block text-[9px] bg-yellow-100 text-yellow-800 px-1.5 py-0.5 mt-1 rounded w-fit">
+            📍 {tracking_code}
+          </span>
         )}
       </td>
       <td className="px-3 py-2">{party_name || 'نامشخص'}</td>
@@ -131,7 +129,9 @@ export default function DocumentRow(props: DocumentRowProps) {
       </td>
       <td className="px-3 py-2 text-left space-y-1">
         <p>سرور: {server_time ? isoToJalali(server_time) : '-'}</p>
-        <p className="text-[11px] text-[#7a6b4f]">کلاینت: {client_time ? isoToJalali(client_time) : '---'}</p>
+        <p className="text-[11px] text-[#7a6b4f]">
+          کلاینت: {client_time ? isoToJalali(client_time) : '---'}
+        </p>
       </td>
       <td className="px-3 py-2 text-left space-y-1">
         {status === 'draft' && onFinalize && (
@@ -140,19 +140,31 @@ export default function DocumentRow(props: DocumentRowProps) {
           </button>
         )}
         {invoice_id && onViewInvoice && (
-          <button className={`${retroButton} text-[11px] w-full`} onClick={() => onViewInvoice(invoice_id)}>
+          <button
+            className={`${retroButton} text-[11px] w-full`}
+            onClick={() => onViewInvoice(invoice_id)}
+          >
             مشاهده فاکتور
           </button>
         )}
         {onExport && (
           <div className="flex flex-col gap-1">
-            <button className={`${retroButton} text-[11px] w-full`} onClick={() => onExport(id, 'csv')}>
+            <button
+              className={`${retroButton} text-[11px] w-full`}
+              onClick={() => onExport(id, 'csv')}
+            >
               خروجی CSV
             </button>
-            <button className={`${retroButton} text-[11px] w-full`} onClick={() => onExport(id, 'pdf')}>
+            <button
+              className={`${retroButton} text-[11px] w-full`}
+              onClick={() => onExport(id, 'pdf')}
+            >
               خروجی PDF
             </button>
-            <button className={`${retroButton} text-[11px] w-full`} onClick={() => onExport(id, 'xlsx')}>
+            <button
+              className={`${retroButton} text-[11px] w-full`}
+              onClick={() => onExport(id, 'xlsx')}
+            >
               خروجی Excel
             </button>
           </div>

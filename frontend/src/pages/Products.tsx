@@ -29,7 +29,7 @@ const Products: React.FC = () => {
       params.set('limit', String(pageSize))
       if (debounced) params.set('q', debounced)
       const res = await apiGet(`/api/products?${params.toString()}`)
-      const arr = Array.isArray(res) ? res : (res?.items || [])
+      const arr = Array.isArray(res) ? res : res?.items || []
       setItems(arr)
     } catch (e: any) {
       setError(e?.message || 'خطا در دریافت کالاها')
@@ -52,16 +52,12 @@ const Products: React.FC = () => {
     const q = debounced
     const list = items || []
     const res = q
-      ? list.filter((p) =>
-          [p.name, p.sku]
-            .filter(Boolean)
-            .some((v) => String(v).includes(q)),
-        )
+      ? list.filter((p) => [p.name, p.sku].filter(Boolean).some((v) => String(v).includes(q)))
       : list
     if (sortKey) {
       res.sort((a, b) => {
-        const va = (a[sortKey!] ?? '') as any
-        const vb = (b[sortKey!] ?? '') as any
+        const va = (a[sortKey] ?? '') as any
+        const vb = (b[sortKey] ?? '') as any
         const ca = typeof va === 'number' ? va : String(va)
         const cb = typeof vb === 'number' ? vb : String(vb)
         if (ca < cb) return sortDir === 'asc' ? -1 : 1
@@ -87,8 +83,17 @@ const Products: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">کالاها</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
-          <button className="hp-button" onClick={()=>{ window.location.hash = 'product-new' }}>افزودن کالا</button>
+          <button className="hp-button" onClick={load} disabled={loading}>
+            {loading ? '...' : 'بارگذاری'}
+          </button>
+          <button
+            className="hp-button"
+            onClick={() => {
+              window.location.hash = 'product-new'
+            }}
+          >
+            افزودن کالا
+          </button>
         </div>
       </div>
 
@@ -96,8 +101,23 @@ const Products: React.FC = () => {
 
       <div className="mt-3">
         <div className="flex items-center gap-2 mb-2">
-          <input className="hp-input w-56" placeholder="جستجو" value={query} onChange={(e)=>{setQuery(e.target.value); setPage(1)}} />
-          <select className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
+          <input
+            className="hp-input w-56"
+            placeholder="جستجو"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+          />
+          <select
+            className="hp-input w-24"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(1)
+            }}
+          >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
@@ -108,10 +128,18 @@ const Products: React.FC = () => {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left">
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('name')}>نام</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('sku')}>کد</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('price')}>قیمت</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('stock')}>موجودی</th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('name')}>
+                نام
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('sku')}>
+                کد
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('price')}>
+                قیمت
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('stock')}>
+                موجودی
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -121,7 +149,17 @@ const Products: React.FC = () => {
                   <td className="px-3 py-2">{p.name || '-'}</td>
                   <td className="px-3 py-2">{p.sku || '-'}</td>
                   <td className="px-3 py-2">{p.price ?? 0}</td>
-                  <td className="px-3 py-2">{p.stock ?? 0} <button className="hp-button secondary ml-2" onClick={()=>{ window.location.hash = `product-edit:${p.id}` }}>ویرایش</button></td>
+                  <td className="px-3 py-2">
+                    {p.stock ?? 0}{' '}
+                    <button
+                      className="hp-button secondary ml-2"
+                      onClick={() => {
+                        window.location.hash = `product-edit:${p.id}`
+                      }}
+                    >
+                      ویرایش
+                    </button>
+                  </td>
                 </tr>
               ))
             ) : (
@@ -134,9 +172,21 @@ const Products: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+          >
+            قبلی
+          </button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(page + 1)}
+            disabled={(items || []).length <= page * pageSize}
+          >
+            بعدی
+          </button>
         </div>
       </div>
     </div>

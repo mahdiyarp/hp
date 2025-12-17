@@ -11,14 +11,14 @@
     <script>
       async function load() {
         try {
-          const res = await fetch('/api/hello-proxy');
-          const json = await res.json();
-          document.getElementById('msg').textContent = JSON.stringify(json);
+          const res = await fetch('/api/hello-proxy')
+          const json = await res.json()
+          document.getElementById('msg').textContent = JSON.stringify(json)
         } catch (e) {
-          document.getElementById('msg').textContent = 'Error: ' + e;
+          document.getElementById('msg').textContent = 'Error: ' + e
         }
       }
-      load();
+      load()
     </script>
   </body>
 </html>
