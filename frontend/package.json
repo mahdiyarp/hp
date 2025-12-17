@@ -13,8 +13,10 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "format": "prettier --write \"{src,public}/**/*.{ts,tsx,js,json,css,html}\"",
     "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/test-setup.cjs",
     "test": "vitest run",
     "test:smoke": "vitest run src/smoke/navigation.test.tsx",
+    "pretest:e2e": "node scripts/test-setup.cjs",
     "test:e2e": "playwright test",
     "prepare": "husky install"
   },
