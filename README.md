@@ -89,6 +89,33 @@ Notes:
 - The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
 - Organization features are derived from the user's NFT assets via `/api/org/features`.
 
+### Frontend E2E (Playwright)
+
+برای اجرای تست‌های E2E فرانت‌اند (Playwright):
+
+PowerShell (Windows):
+
+```powershell
+$env:BASE_URL = "http://localhost:3000";
+$env:BACKEND_URL = "http://localhost:8000";
+$env:DEMO_ALLOW_OTP_NO_SMS = "true";
+npm --prefix "frontend" run -s test:e2e
+```
+
+Bash:
+
+```bash
+BASE_URL=http://localhost:3000 \
+BACKEND_URL=http://localhost:8000 \
+DEMO_ALLOW_OTP_NO_SMS=true \
+npm --prefix frontend run -s test:e2e
+```
+
+نکات:
+- اسکریپت آماده‌سازی تست‌ها به‌صورت خودکار قبل از اجرا انجام می‌شود: همگام‌سازی فونت Yekan و نصب مرورگرهای Playwright (`frontend/scripts/test-setup.cjs`).
+- تست OTP به حالت دمو نیاز دارد: `DEMO_ALLOW_OTP_NO_SMS=true`.
+- جزئیات بیشتر و فهرست تست‌ها در [frontend/README-FRONTEND.md](frontend/README-FRONTEND.md) آمده است.
+
 ## Frontend zero-rebuild sync (Windows)
 
 When Docker registry pulls are blocked or you want instant updates on port 3000 without rebuilding the image, use the live-mount override and helper:
