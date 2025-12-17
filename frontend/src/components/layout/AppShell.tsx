@@ -198,7 +198,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   )
 
   return (
-    <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex flex-row-reverse flex-nowrap items-stretch">
+    <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex flex-nowrap items-stretch">
       {sidebarSide === 'right' && asideElement}
       <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
         <header className="border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a]">
