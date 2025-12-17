@@ -148,5 +148,6 @@ npm --prefix frontend run -s test:e2e
   - دستیار توسعه‌دهنده: `frontend/e2e/dev-assistant.spec.ts` (با `BACKEND_URL` در غیر این‌صورت skip)
   - چیدمان RTL و سایدبار راست: `frontend/e2e/layout-rtl.spec.ts`
   - نقش‌ها/مجوزها (Users): `frontend/e2e/users-permissions.spec.ts`
+  - گزارش فعالیت و خروجی CSV: `frontend/e2e/users-activity.spec.ts`
   - قفل فونت Yekan: `frontend/e2e/font-yekan.spec.ts`
   - ورود OTP (بای‌پس دمو): `frontend/e2e/otp-login.spec.ts` (نیازمند `DEMO_ALLOW_OTP_NO_SMS=true`)
