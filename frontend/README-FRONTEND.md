@@ -2,6 +2,31 @@
 
 This file documents how the frontend image is built and served in this repository.
 
+## Settings → Users
+
+- مسیر دسترسی: از منو یا میان‌بر در هدر به `#settings-users`.
+- تم کلاسیک و RTL حفظ شده است؛ هیچ تغییری در سبک کلی اعمال نشده.
+- ماژول واحد: مسیر `frontend/src/modules/settings/UsersModule.tsx`.
+- سرویس‌های مرتبط: `frontend/src/services/auth.ts`, `frontend/src/services/api`.
+- تست‌ها: فایل `frontend/tests/users.module.test.tsx` شامل رندر اولیه و بارگذاری داده.
+
+## Smoke tests
+
+- اسموک ناوبری به «کاربران» (#settings-users) در تست `frontend/src/smoke/navigation.test.tsx` پوشش داده شده است.
+- اجرای فقط تست‌های اسموک:
+
+```bash
+cd frontend
+npm run test:smoke --silent
+```
+
+- اجرای کل تست‌ها:
+
+```bash
+cd frontend
+npm test --silent
+```
+
 ## Build and run (Docker Compose)
 
 From the repository root:
