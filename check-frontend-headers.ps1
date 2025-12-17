@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 try {
   $r = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 8
   $headers = $r.Headers
-  $required = @('ETag','X-Content-Type-Options','Referrer-Policy','X-Frame-Options')
+  $required = @('ETag','X-Content-Type-Options','Referrer-Policy','X-Frame-Options','Content-Security-Policy','Strict-Transport-Security')
   $missing = @()
   foreach ($h in $required) { if (-not $headers[$h]) { $missing += $h } }
   if ($missing.Count -gt 0) {

@@ -269,9 +269,9 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
                 </button>
                 <button
                   className={`${retroButton} !bg-[#2d3b45] !border-[#1f2e3b] !tracking-[0.3em]`}
-                  onClick={() => navigate('settings')}
+                  onClick={() => navigate('settings-users')}
                 >
-                  پنل تنظیمات
+                  کاربران (Settings)
                 </button>
               </div>
             </div>

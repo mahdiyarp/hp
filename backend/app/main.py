@@ -767,7 +767,33 @@ def login_dev(session: Session = Depends(db.get_db)):
         ensure_dev_enabled()
         user = session.query(models.User).filter(models.User.mobile == '09123506545').first()
         if not user:
-            raise HTTPException(status_code=404, detail='Developer user not found')
+            # Auto-create a developer user in dev mode for convenience
+            try:
+                username = 'developer'
+                # Ensure unique username if it already exists
+                existing = session.query(models.User).filter(models.User.username == username).first()
+                if existing:
+                    username = f"developer_{existing.id or '1'}"
+                hashed = security.get_password_hash('dev')
+                user = models.User(
+                    username=username,
+                    email=None,
+                    full_name='Developer',
+                    mobile='09123506545',
+                    hashed_password=hashed,
+                    role='Admin',
+                    role_id=None,
+                    is_active=True,
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+            except Exception as _e:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                raise HTTPException(status_code=500, detail=f'Failed to create developer user: {_e}')
         access = security.create_access_token(user.username, timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
         refresh = security.create_refresh_token(user.username, timedelta(days=security.REFRESH_TOKEN_EXPIRE_DAYS))
         crud.set_refresh_token(session, user, refresh)
@@ -2025,17 +2051,23 @@ def login_phone(payload: schemas.PhoneLoginRequest, session: Session = Depends(d
     OTP را از طریق SMS ارسال می‌کند.
     """
     from .sms import create_otp_session, send_sms as send_sms_func
+    from .phone_utils import normalize_iran_mobile, iran_mobile_variants
     
-    phone = payload.phone.strip()
+    # Normalize incoming phone to canonical format (e.g., 0912...)
+    phone_norm = normalize_iran_mobile(payload.phone.strip())
     
     # بررسی شماره تلفن
-    if not phone or len(phone) < 10:
+    if not phone_norm:
         raise HTTPException(status_code=400, detail='شماره تلفن نامعتبر است')
     
     # جستجو برای کاربر با این شماره تلفن
-    user: Optional[models.User] = session.query(models.User).filter(
-        models.User.mobile == phone
-    ).first()
+    # Match against common variants to tolerate DB format differences (+98/09/9)
+    candidates = iran_mobile_variants(phone_norm)
+    user: Optional[models.User] = (
+        session.query(models.User)
+        .filter(models.User.mobile.in_(candidates))
+        .first()
+    )
     
     if not user:
         raise HTTPException(status_code=404, detail='کاربر با این شماره تلفن یافت نشد')
@@ -2044,11 +2076,12 @@ def login_phone(payload: schemas.PhoneLoginRequest, session: Session = Depends(d
         raise HTTPException(status_code=403, detail='حساب کاربری غیر فعال است')
     
     # ایجاد جلسه OTP
-    session_id, otp_code = create_otp_session(phone)
+    session_id, otp_code = create_otp_session(phone_norm)
     
     # ارسال OTP
     message = f'کد ورود شما: {otp_code}\nاین کد 5 دقیقه معتبر است.'
-    success, msg = send_sms_func(session, phone, message)
+    # Prefer sending to normalized; provider may try alt formats internally
+    success, msg = send_sms_func(session, phone_norm, message)
 
     if not success:
         # Demo fallback: allow OTP without SMS when enabled via env
@@ -2075,6 +2108,7 @@ def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = 
     تأیید کد OTP و دریافت access token.
     """
     from .sms import verify_otp_session, peek_session_phone
+    from .phone_utils import normalize_iran_mobile, iran_mobile_variants
     
     is_valid, phone = verify_otp_session(payload.session_id, payload.otp_code)
     
@@ -2087,9 +2121,13 @@ def verify_phone_otp(payload: schemas.PhoneOtpVerifyRequest, session: Session = 
             raise HTTPException(status_code=400, detail='کد OTP نامعتبر یا منقضی است')
     
     # جستجو برای کاربر
-    user: Optional[models.User] = session.query(models.User).filter(
-        models.User.mobile == phone
-    ).first()
+    phone_norm = normalize_iran_mobile(phone)
+    candidates = iran_mobile_variants(phone_norm) if phone_norm else [phone]
+    user: Optional[models.User] = (
+        session.query(models.User)
+        .filter(models.User.mobile.in_(candidates))
+        .first()
+    )
     
     if not user:
         raise HTTPException(status_code=404, detail='کاربر یافت نشد')
