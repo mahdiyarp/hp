@@ -221,6 +221,16 @@ A lightweight background scheduler can emit automation events (e.g., overdue che
 - Headless smoke test workflow under `.github/workflows/headless-smoke.yml`.
 - Optional 2FA (TOTP) for sign-in flows is available via `/api/auth/otp/*` endpoints.
 
+### Frontend Environment & Fonts
+
+- `VITE_BACKEND_URL`: When serving the frontend from a different origin (e.g., port 3000 behind Nginx), set this to the backend base (e.g., `http://localhost:8000`). The client will prefix all `/api/*` calls with this value. Without it, same-origin proxy is used.
+- Fonts: The UI is locked to Yekan to avoid OTS decode errors. A cleanup script removes obviously corrupt WOFF2 placeholders and ensures a valid Yekan is present:
+
+```powershell
+npm --prefix frontend run clean-fonts
+```
+
+This runs during CI and before preview/build via the existing scripts. If you provide licensed IranYekan/Vazirmatn, keep them >10KB and valid; otherwise the fallback mapping to `Yekan` remains active.
 ### Developer Setup
 
 ```bash
