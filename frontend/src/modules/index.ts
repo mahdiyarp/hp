@@ -9,6 +9,7 @@ import SystemModule from './SystemModule'
 import UsersModule from './settings/UsersModule'
 import BanksModule from './settings/BanksModule'
 import DevConsole from './developer/DevConsole'
+import AssistantModule from './developer/AssistantModule'
 import SmsPanel from './sms/SmsPanel'
 import PApiPanel from './PApiPanel'
 import AuditModule from './audit/AuditModule'
@@ -147,6 +148,15 @@ export const modules: ModuleDefinition[] = [
     description: 'پنل کامل دیباگ، تنظیمات، لاگ‌ها و تست‌ها',
     component: DevConsole,
     badge: 'DEV',
+    hidden: !isDeveloperMobileUser(),
+    feature: 'settings',
+  },
+  {
+    id: 'dev-assistant',
+    label: 'دستیار (Developer)',
+    description: 'دستیار متنی برای دستورات سریع توسعه/حسابداری',
+    component: AssistantModule,
+    badge: 'ASSIST',
     hidden: !isDeveloperMobileUser(),
     feature: 'settings',
   },
