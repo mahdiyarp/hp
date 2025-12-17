@@ -6,6 +6,7 @@ export default function StatusBar() {
   const [version, setVersion] = useState<string>('—')
   const [ok, setOk] = useState<boolean>(true)
   const [latency, setLatency] = useState<number | null>(null)
+  const [busy, setBusy] = useState<number>(0)
 
   async function poll() {
     const start = performance.now()
@@ -26,6 +27,10 @@ export default function StatusBar() {
   useEffect(() => {
     poll()
     const id = setInterval(poll, 5000)
+    const onStart = () => setBusy(b => b + 1)
+    const onEnd = () => setBusy(b => Math.max(0, b - 1))
+    window.addEventListener('api-start', onStart as any)
+    window.addEventListener('api-end', onEnd as any)
     return () => clearInterval(id)
   }, [])
 
@@ -37,6 +42,9 @@ export default function StatusBar() {
       <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>v{version}</span>
       {latency !== null && (
         <span className={`${retroBadge} bg-[#2d3b45] border-[#4b5f6f]`}>{latency}ms</span>
+      )}
+      {busy > 0 && (
+        <span className={`${retroBadge} bg-[#4b5f6f] border-[#2d3b45]`}>NET {busy}</span>
       )}
     </div>
   )

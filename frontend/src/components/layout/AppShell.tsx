@@ -7,6 +7,7 @@ import type { SyncRecord } from '../../App'
 import GlobalSearch from '../GlobalSearch'
 import { formatNumberFa, toPersianDigits } from '../../utils/num'
 import { useFY } from '../../context/FYContext'
+import ErrorBoundary from '../ErrorBoundary'
 
 export interface SmartDateState {
   isoDate: string | null
@@ -279,22 +280,24 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="px-6 py-8 space-y-8">
-            {ActiveComponent ? (
-              <ActiveComponent
-                smartDate={smartDate}
-                onSmartDateChange={handleSmartDateChange}
-                sync={sync}
-                user={user}
-                onNavigate={navigate}
-              />
-            ) : (
+            <ErrorBoundary>
+              {ActiveComponent ? (
+                <ActiveComponent
+                  smartDate={smartDate}
+                  onSmartDateChange={handleSmartDateChange}
+                  sync={sync}
+                  user={user}
+                  onNavigate={navigate}
+                />
+              ) : (
               <div className={`${retroPanel} p-6`}>
                 <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found')}</p>
                 <p className="mt-2 text-sm">
                   ماژول انتخاب‌شده یافت نشد. از منوی کناری گزینه دیگری را انتخاب کنید.
                 </p>
               </div>
-            )}
+              )}
+            </ErrorBoundary>
           </div>
         </main>
       </div>

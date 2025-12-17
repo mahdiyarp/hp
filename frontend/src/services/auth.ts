@@ -74,10 +74,13 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
   const refresh = getRefreshToken()
   const headers = new Headers(init?.headers || {})
   if (access) headers.set('Authorization', 'Bearer ' + access)
-  const res = await fetch(input, { ...init, headers })
+  try {
+    try { window.dispatchEvent(new CustomEvent('api-start')) } catch {}
+    const res = await fetch(input, { ...init, headers })
   if (res.status === 401) {
     // Only attempt refresh if we actually have a refresh token
     if (!refresh) {
+      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
       return res
     }
     try {
@@ -85,13 +88,21 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
       const access2 = getAccessToken()
       const headers2 = new Headers(init?.headers || {})
       if (access2) headers2.set('Authorization', 'Bearer ' + access2)
-      return await fetch(input, { ...init, headers: headers2 })
+      const res2 = await fetch(input, { ...init, headers: headers2 })
+      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
+      return res2
     } catch (e) {
       clearTokens()
+      try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
       throw e
     }
   }
-  return res
+    try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
+    return res
+  } catch (e) {
+    try { window.dispatchEvent(new CustomEvent('api-end')) } catch {}
+    throw e
+  }
 }
 
 // ===== Mobile Login (SMS OTP) =====

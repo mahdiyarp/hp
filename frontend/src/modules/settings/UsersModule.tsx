@@ -9,6 +9,7 @@ import {
 	retroTableHeader,
 	retroMuted,
 } from '../../components/retroTheme'
+import { SkeletonText, SkeletonBlock } from '../../components/Skeleton'
 
 interface User {
 	id: number
@@ -346,7 +347,12 @@ export default function UsersModule(): JSX.Element {
 				<p className={`${retroHeading} text-[#1f2e3b]`}>کاربران و دسترسی‌ها</p>
 				<p className={`${retroMuted}`}>مدیریت کاربران، نقش‌ها، مجوزها و اعلان‌های پیامکی</p>
 				{error ? <div className={`${retroBadge} mt-2`}>خطا: {error}</div> : null}
-				{loading && <div className={`${retroMuted} mt-2`}>در حال بارگذاری…</div>}
+				{loading && (
+					<div className="mt-2 space-y-3">
+						<SkeletonText lines={2} />
+						<SkeletonBlock height={80} />
+					</div>
+				)}
 
 			</div>
 
