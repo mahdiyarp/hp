@@ -1,5 +1,14 @@
 module.exports = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  safelist: [
+    // اطمینان از باقی ماندن کلاس‌های مبتنی بر متغیرهای CSS در بیلد پروداکشن
+    { pattern: /bg-\[var\(--retro-[^)]+\)\]/ },
+    { pattern: /text-\[var\(--retro-[^)]+\)\]/ },
+    { pattern: /border-\[var\(--retro-[^)]+\)\]/ },
+    { pattern: /focus:ring-\[var\(--retro-[^)]+\)\]/ },
+    { pattern: /shadow-\[[^\]]+\]/ },
+    { pattern: /tracking-\[[^\]]+\]/ },
+  ],
   theme: {
     extend: {
       colors: {

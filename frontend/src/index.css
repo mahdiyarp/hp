@@ -2,17 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --hp-bg: #0b0f19;
-  --hp-card: #121826;
-  --hp-text: #e5e7eb;
-  --hp-accent: #22c55e;
-}
-
-html, body, #root { height: 100%; background: var(--hp-bg); color: var(--hp-text); }
-.hp-card { background: var(--hp-card); border-radius: 12px; border: 1px solid #1f2937; }
-.hp-btn { background: var(--hp-accent); color: #0b0f19; border-radius: 10px; padding: 0.5rem 0.9rem; font-weight: 600; }
-.hp-input { background: #0f172a; color: var(--hp-text); border: 1px solid #1f2937; border-radius: 10px; }
+/* حذف متغیرها و کلاس‌های تم تیره قدیمی برای جلوگیری از تداخل با تم Retro */
 
 /* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
 @font-face {
@@ -59,6 +49,48 @@ body {
   background-color: #e9e4d8; /* retro.surface */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* کلاس‌های سازگاری با نسخه‌های قبلی (hp-*) که به تم Retro نگاشت می‌شوند */
+.hp-card {
+  background: var(--retro-panel-bg);
+  border: 2px solid var(--retro-border);
+  box-shadow: 4px 4px 0 var(--retro-shadow);
+  border-radius: 3px;
+  padding: 1.25rem; /* p-5 */
+}
+
+.hp-btn {
+  background: var(--retro-button-bg);
+  color: var(--retro-button-text);
+  border: 2px solid var(--retro-button-border);
+  box-shadow: 3px 3px 0 var(--retro-button-border);
+  text-transform: uppercase;
+  letter-spacing: 0.35em; /* tracking-widest35 */
+  font-size: 12px; /* text-xs */
+  padding: 0.75rem 1rem; /* py-3 px-4 */
+}
+
+.hp-btn:hover {
+  background: var(--retro-button-bg-hover);
+}
+
+.hp-input {
+  background: var(--retro-input-bg);
+  color: var(--retro-input-text);
+  border: 1px solid var(--retro-input-border);
+  border-radius: 3px; /* rounded-sm */
+  padding: 0.5rem 0.75rem; /* py-2 px-3 */
+}
+
+.hp-input::placeholder {
+  color: var(--retro-input-placeholder);
+}
+
+.hp-input:focus {
+  outline: none;
+  border-color: var(--retro-input-focus);
+  box-shadow: 0 0 0 2px var(--retro-input-focus);
 }
 
 /* Ensure direction is RTL throughout */
