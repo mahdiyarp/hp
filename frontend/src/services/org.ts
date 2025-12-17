@@ -1,4 +1,4 @@
-import { fetchWithAuth } from './auth'
+import { fetchWithAuth } from './auth.ts'
 
 export async function getOrgFeatures(): Promise<{ features: string[] }> {
   try {

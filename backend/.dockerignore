@@ -1,3 +1,36 @@
+# Virtual environments and caches
+.venv
+venv
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# OS/editor junk
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Logs and local data
+logs
+*.log
+*.sqlite
+*.db
+backups
+exports
+
+# Build artifacts
+dist
+build
+
+# Docker and compose outputs
+*.pid
 __pycache__
 *.pyc
 venv

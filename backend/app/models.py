@@ -216,6 +216,9 @@ class Invoice(Base):
     total = Column(Integer, nullable=True)
     tracking_code = Column(String(64), nullable=True, index=True)
     note = Column(Text, nullable=True)
+    # Relationship to items for cascading persistence and convenient access
+    from sqlalchemy.orm import relationship
+    items = relationship('InvoiceItem', backref='invoice', cascade='all, delete-orphan')
 
 
 class InvoiceItem(Base):
@@ -348,13 +351,53 @@ class Backup(Base):
 class FinancialYear(Base):
     __tablename__ = 'financial_years'
     id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(128), nullable=True)
     name = Column(String(128), nullable=False, unique=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=True)
+    # Optional runtime fields expected by tests
+    status = Column(String(32), nullable=True)
+    is_current = Column(Boolean, nullable=False, default=False)
     is_closed = Column(Boolean, nullable=False, default=False)
     closed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    def is_locked(self) -> bool:
+        try:
+            return (self.status or '').lower() == 'locked'
+        except Exception:
+            return False
     opening_balances = Column(Text, nullable=True)  # JSON: account -> amount
+
+# Ensure unique FY name at insert time by appending numeric suffix if needed
+from sqlalchemy import event, text
+
+@event.listens_for(FinancialYear, 'before_insert')
+def _ensure_unique_financial_year_name(mapper, connection, target):
+    try:
+        base = (getattr(target, 'name', None) or '').strip()
+        if not base:
+            # derive a default name from title or start_date year
+            try:
+                year = target.start_date.year if getattr(target, 'start_date', None) else None
+            except Exception:
+                year = None
+            base = (getattr(target, 'title', None) or (f"FY-{year}" if year else "FY")).strip()
+            target.name = base
+        name = base
+        i = 1
+        while True:
+            row = connection.execute(text("SELECT 1 FROM financial_years WHERE name = :n LIMIT 1"), { 'n': name }).first()
+            if not row:
+                # no conflict, use this name
+                target.name = name
+                break
+            i += 1
+            name = f"{base}-{i}"
+    except Exception:
+        # best-effort safeguard; fall back to original name
+        if not getattr(target, 'name', None):
+            target.name = getattr(target, 'title', None) or "FY"
 
 
 class UserSmsConfig(Base):

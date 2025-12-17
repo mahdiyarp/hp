@@ -13,7 +13,11 @@ try { require('./styles/persian-auto-fix.css'); } catch (e) { /* file may not ex
 import { AuthProvider } from './context/AuthContext'
 import { I18nProvider } from './i18n/I18nContext'
 import { ThemeProvider } from './context/theme'
-import { getAccessToken, loginDeveloper } from './services/auth'
+import { getAccessToken, loginDeveloper } from './services/auth.ts'
+// Backward-compat global shims to avoid legacy bundle errors
+import * as authMod from './services/auth.ts'
+;(window as any).login = authMod.login
+;(window as any).auth = authMod
 
 // Ensure HTML lang/dir reflect Persian + RTL
 document.documentElement.lang = 'fa'

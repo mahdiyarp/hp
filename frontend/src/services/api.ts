@@ -1,4 +1,4 @@
-import authService from './auth'
+import authService from './auth.ts'
 
 function appendFyParam(path: string): string {
   try {
@@ -129,16 +129,5 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
 
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
-}
-
-export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit) {
-  return apiRequest<T>(path, 'PUT', {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    ...init,
-  })
 }
 

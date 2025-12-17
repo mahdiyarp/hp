@@ -2,6 +2,31 @@
 
 This file documents how the frontend image is built and served in this repository.
 
+## Settings → Users
+
+- مسیر دسترسی: از منو یا میان‌بر در هدر به `#settings-users`.
+- تم کلاسیک و RTL حفظ شده است؛ هیچ تغییری در سبک کلی اعمال نشده.
+- ماژول واحد: مسیر `frontend/src/modules/settings/UsersModule.tsx`.
+- سرویس‌های مرتبط: `frontend/src/services/auth.ts`, `frontend/src/services/api`.
+- تست‌ها: فایل `frontend/tests/users.module.test.tsx` شامل رندر اولیه و بارگذاری داده.
+
+## Smoke tests
+
+- اسموک ناوبری به «کاربران» (#settings-users) در تست `frontend/src/smoke/navigation.test.tsx` پوشش داده شده است.
+- اجرای فقط تست‌های اسموک:
+
+```bash
+cd frontend
+npm run test:smoke --silent
+```
+
+- اجرای کل تست‌ها:
+
+```bash
+cd frontend
+npm test --silent
+```
+
 ## Build and run (Docker Compose)
 
 From the repository root:
@@ -15,11 +40,30 @@ This will:
 - Copy the build artifacts into an `nginx:stable-alpine` image and serve them on port `3000`.
 - Nginx config at `frontend/nginx.conf` is already adjusted to correctly serve fonts and index.html for an SPA.
 
+## Live mount override (no rebuild)
+
+If Docker registry access is temporarily blocked or you want to iterate on static assets without rebuilding the image, use the compose override that bind-mounts the built `dist` and `nginx.conf` into the running container:
+
+```powershell
+# from repo root
+docker compose up -d frontend
+
+# or use the helper (builds dist, applies override, verifies HTTP)
+./run-frontend-sync.ps1
+```
+
+The override file: `docker-compose.override.yml`
+
+- `./frontend/dist` → `/usr/share/nginx/html` (read-only)
+- `./frontend/nginx.conf` → `/etc/nginx/conf.d/default.conf` (read-only)
+
+With the override present in the root, `docker compose up -d frontend` will automatically apply it (Compose auto-loads `docker-compose.override.yml`).
+
 ## Common issues and how to debug
 
 - If the browser starts downloading the HTML file instead of rendering it:
   - Ensure `nginx.conf` is present in the image (container) at `/etc/nginx/conf.d/default.conf` and that `index.html` is in `/usr/share/nginx/html`.
-  - Check Content-Type via network panel � HTML should be `text/html` not `application/octet-stream`.
+  - Check Content-Type via network panel � HTML should be `text/html` not `application/octet-stream`.
   - Ensure `try_files $uri $uri/ /index.html;` is in the `location / {}` block.
 
 - Font problems ("Failed to decode downloaded font" / OTS parsing errors):

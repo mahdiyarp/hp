@@ -60,16 +60,6 @@ interface PaymentFormState {
   invoice_id?: number
 }
 
-interface PaymentMethod {
-  id: number
-  key: string
-  name: string
-  parent_id?: number | null
-  enabled: boolean
-  order: number
-  account?: string | null
-  is_cheque: boolean
-}
 
 export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [payments, setPayments] = useState<Payment[]>([])
@@ -93,7 +83,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const [peopleLoading, setPeopleLoading] = useState(false)
   const [openInvoices, setOpenInvoices] = useState<any[]>([])
   const [invoicesLoading, setInvoicesLoading] = useState(false)
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
+  
   const emptyForm: PaymentFormState = {
     direction: 'in',
     method: 'cash',
@@ -227,16 +217,7 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     return () => window.removeEventListener('finance-prefill', handlePrefill)
   }, [])
 
-  async function loadPaymentMethods() {
-    try {
-      const data = await apiGet<PaymentMethod[]>('/api/payment-methods').catch(() => [])
-      // show only enabled, ordered
-      const list = (data ?? []).filter(m => m.enabled).sort((a, b) => (a.order || 0) - (b.order || 0))
-      setPaymentMethods(list)
-    } catch (e) {
-      console.warn('Failed to load payment methods', e)
-    }
-  }
+  
 
   const openPartyLedger = (party: string) => {
     const related = payments.filter(p => p.party_name === party)

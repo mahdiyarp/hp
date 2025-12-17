@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { setTokens } from '../services/auth'
+import { setTokens } from '../services/auth.ts'
 import { PApi } from '../services/papi'
 
 export default function LoginOtp() {

@@ -65,6 +65,17 @@ def list_payments(
     return finance_service.list_payments(session, q)
 
 
+@router.get("/count")
+def payments_count(
+    session: Session = Depends(db.get_db),
+    current_user: models.User = Depends(require_permissions(["finance_view"]))
+):
+    try:
+        return {"count": session.query(models.Payment).count()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/{payment_id}", response_model=schemas.PaymentOut)
 def get_payment(
     payment_id: int,

@@ -6,7 +6,7 @@ import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
 import { apiGet, apiPost } from './services/api'
 import { getOrgFeatures } from './services/org'
-import { getAccessToken } from './services/auth'
+import { getAccessToken } from './services/auth.ts'
 import { parseJalaliInput } from './utils/date'
 import ThemeToggle from './components/ThemeToggle'
 

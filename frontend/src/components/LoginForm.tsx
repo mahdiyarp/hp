@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { loginByPhoneRequest, verifyPhoneOtp, setTokens } from '../services/auth'
+import { normalizeIranMobile } from '../utils/phone'
 import RegisterForm from './RegisterForm'
 import {
 	retroButton,
@@ -19,9 +21,11 @@ export default function LoginForm() {
 	const [otp, setOtp] = useState('')
 	const [otpRequired, setOtpRequired] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-    const [mode, setMode] = useState<'password'|'mobile'>('password')
-    const [phone, setPhone] = useState('')
-    const [processing, setProcessing] = useState(false)
+	const [mode, setMode] = useState<'password'|'mobile'>('password')
+	const [phone, setPhone] = useState('')
+	const [processing, setProcessing] = useState(false)
+	const [awaitingOtp, setAwaitingOtp] = useState(false)
+	const [sessionId, setSessionId] = useState<string | null>(null)
 
 	async function onSubmit(e: React.FormEvent) {
 		e.preventDefault()
@@ -46,18 +50,24 @@ export default function LoginForm() {
 		} else {
 			try {
 				setProcessing(true)
-				const { startOtp, verifyOtp } = await import('../services/papi')
-				const codeToUse = (otp && /^\d{6}$/.test(otp.trim())) ? otp.trim() : String(Math.floor(100000 + Math.random()*900000))
-				await startOtp(phone.trim(), codeToUse)
-				const res = await verifyOtp(phone.trim(), codeToUse)
-				if (typeof (res as any)?.access_token === 'string') {
-					const { setTokens } = await import('../services/auth')
-					setTokens((res as any).access_token, (res as any).refresh_token || '')
-					try { window.dispatchEvent(new Event('auth-updated')) } catch {}
-					// ناوبری صریح به داشبورد پس از تأیید موفق
-					try { window.location.href = '/' } catch {}
+				const normalized = normalizeIranMobile(phone)
+				if (!normalized) {
+					throw new Error('شماره موبایل نامعتبر است')
+				}
+				if (!awaitingOtp || !sessionId) {
+					const r = await loginByPhoneRequest(normalized)
+					setSessionId(r.session_id)
+					setAwaitingOtp(true)
+					setError('کد تایید ارسال شد؛ لطفاً وارد کنید')
 				} else {
-					throw new Error('تایید کد ناموفق')
+					const v = await verifyPhoneOtp(sessionId, (otp || '').trim() || '000000')
+					if (v && (v as any).access_token) {
+						setTokens((v as any).access_token, (v as any).refresh_token || '')
+						try { window.dispatchEvent(new Event('auth-updated')) } catch {}
+						try { window.location.href = '/' } catch {}
+					} else {
+						throw new Error('تایید کد ناموفق')
+					}
 				}
 			} catch (err:any) {
 				setError(err?.message || 'ورود با موبایل ناموفق')
@@ -84,7 +94,7 @@ export default function LoginForm() {
 				</>
 			) : (
 				<>
-					<form onSubmit={onSubmit} className={`${retroPanelPadded} space-y-5`}>
+					<form noValidate onSubmit={onSubmit} className={`${retroPanelPadded} space-y-5`}>
 						<header className="space-y-2 text-right">
 							<p className={retroHeading}>hesabpak access terminal</p>
 							<h2 className="text-2xl font-semibold text-[#1f2e3b]">ورود به سامانه</h2>
@@ -108,7 +118,7 @@ export default function LoginForm() {
 								) : (
 									<>
 										<label className={retroLabel}>شماره موبایل</label>
-										<input value={phone} onChange={e => setPhone(e.target.value)} className={`${retroInput} w-full`} placeholder="0912xxxxxxx" inputMode="tel" />
+										<input value={phone} onChange={e => setPhone(e.target.value)} className={`${retroInput} w-full`} placeholder="0912xxxxxxx" inputMode="tel" dir="ltr" />
 									</>
 								)}
 							</div>
@@ -121,7 +131,7 @@ export default function LoginForm() {
 								) : (
 									<>
 										<label className={retroLabel}>کد تایید</label>
-										<input value={otp} onChange={e => setOtp(e.target.value)} className={`${retroInput} w-full tracking-[0.6em] text-center`} placeholder="123456" inputMode="numeric" pattern="\\d{6}" autoComplete="one-time-code" />
+										<input value={otp} onChange={e => setOtp(e.target.value)} className={`${retroInput} w-full tracking-[0.6em] text-center`} placeholder="123456" inputMode="numeric" autoComplete="one-time-code" disabled={!awaitingOtp} />
 									</>
 								)}
 							</div>
@@ -134,7 +144,6 @@ export default function LoginForm() {
 										className={`${retroInput} w-full tracking-[0.6em] text-center`}
 										placeholder="123456"
 										inputMode="numeric"
-										pattern="\\d{6}"
 										autoComplete="one-time-code"
 									/>
 									<p className={`mt-2 text-[11px] ${retroMuted}`}>
@@ -154,7 +163,7 @@ export default function LoginForm() {
 							{mode==='password' ? (
 								<button data-testid="login-password-submit" className={`${retroButton} w-full`} type="submit">ورود به سیستم</button>
 							) : (
-								<button data-testid="login-mobile-submit" className={`${retroButton} w-full`} type="submit" disabled={processing || !phone}>ورود با موبایل</button>
+								<button data-testid="login-mobile-submit" className={`${retroButton} w-full`} type="submit" disabled={processing || !phone}>{awaitingOtp ? 'تایید و ورود' : 'ارسال کد'}</button>
 							)}
 						</div>
 					</form>

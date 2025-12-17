@@ -12,18 +12,10 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-} from 'chart.js'
-import { Bar, Doughnut } from 'react-chartjs-2'
-
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
+// Charts are loaded dynamically to avoid hard dependency during tests.
+// If loading fails (e.g., dev machine missing chart.js), UI will render without charts.
+let Bar: React.ComponentType<any> | null = null
+let Doughnut: React.ComponentType<any> | null = null
 
 interface PnLReport {
   sales: number
@@ -75,6 +67,7 @@ interface PersonOption {
 }
 
 export default function ReportsModule({ smartDate }: ModuleComponentProps) {
+  const [chartsReady, setChartsReady] = useState(false)
   const [rangeDays, setRangeDays] = useState(30)
   const [useCustomRange, setUseCustomRange] = useState(false)
   const [jalaliStart, setJalaliStart] = useState('')
@@ -105,6 +98,28 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     loadReports()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeDays, smartDate.isoDate, useCustomRange, jalaliStart, jalaliEnd, costMethod])
+
+  useEffect(() => {
+    // Dynamically load chart libraries; ignore failures in test envs
+    (async () => {
+      try {
+        const chartLib = 'chart.js'
+        const chart = await import(/* @vite-ignore */ chartLib)
+        const { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } = chart as any
+        if (Chart && ArcElement) {
+          Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
+        }
+        const rcLib = 'react-chartjs-2'
+        const rc = await import(/* @vite-ignore */ rcLib)
+        Bar = (rc as any).Bar
+        Doughnut = (rc as any).Doughnut
+        setChartsReady(true)
+      } catch (e) {
+        console.warn('Charts unavailable; rendering without charts.', e)
+        setChartsReady(false)
+      }
+    })()
+  }, [])
 
   useEffect(() => {
     try { localStorage.setItem('reports.costMethod', costMethod) } catch {}

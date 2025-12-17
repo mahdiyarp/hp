@@ -519,7 +519,16 @@ export default function UsersModule(): JSX.Element {
 							const page = Math.min(userPage, pages)
 							const start = (page - 1) * userPageSize
 							const view = sorted.slice(start, start + userPageSize)
-							return view.map(u => (
+														if (view.length === 0) {
+															return (
+																<tr>
+																	<td colSpan={10} className="text-center py-6 text-[#7a6b4f]">
+																		کاربری یافت نشد.
+																	</td>
+																</tr>
+															)
+														}
+														return view.map(u => (
 							<tr key={u.id}>
 								<td>{u.id}</td>
 								<td>{u.username}</td>

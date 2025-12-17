@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import authService, { clearTokens, getAccessToken, getRefreshToken } from '../services/auth'
+import authService, { clearTokens, getAccessToken, getRefreshToken } from '../services/auth.ts'
 
 type User = { id: number; username: string; role: string; otp_enabled: boolean }
 
