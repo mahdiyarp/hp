@@ -161,7 +161,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   }, [sync])
   const asideElement = (
     <aside
-      className={`${'shrink-0'} ${sidebarSide === 'right' ? 'border-r-2' : 'border-l-2'} border-[#d7caa4] bg-[#111821] flex flex-col sticky top-0 h-screen z-20`}
+      className={`${'shrink-0'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col sticky top-0 h-screen z-20`}
       style={{ width: 'var(--hp-sidebar-width)' }}
     >
       <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
@@ -215,7 +215,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
       {sidebarSide === 'right' && asideElement}
       <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
         <header className="border-b-2 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6]">
-          <div className="hp-container py-3 flex flex-col gap-3">
+          <div className="hp-container py-5 flex flex-col gap-3">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>

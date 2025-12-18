@@ -1269,9 +1269,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       {/* Ledger Modal */}
       {selectedPerson && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div
-            className={`${retroPanelPadded} max-w-6xl w-full max-h-[90vh] overflow-y-auto space-y-4`}
-          >
+          <div className={`${retroPanelPadded} w-full max-h-[90vh] overflow-y-auto space-y-4`}>
             <header className="flex items-center justify-between gap-3 sticky top-0 bg-[#fdf7e6] pb-3 border-b border-[#c5bca5]">
               <div>
                 <p className={retroHeading}>گردش حساب</p>

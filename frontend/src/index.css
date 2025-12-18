@@ -17,9 +17,9 @@
   color-scheme: light;
   --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   /* Layout variables (tunable to match reference build) */
-  --hp-container-max: 1200px;
-  --hp-container-px: 20px; /* px-5 */
-  --hp-container-py: 20px; /* py-5 */
+  --hp-container-max: 72rem; /* Tailwind max-w-6xl (1152px) */
+  --hp-container-px: 1.5rem; /* px-6 (24px) */
+  --hp-container-py: 1.25rem; /* py-5 (20px) */
   --hp-sidebar-width: 288px; /* w-72 */
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
