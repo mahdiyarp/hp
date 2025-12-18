@@ -119,3 +119,35 @@ If you want, I can also:
 - همگام‌سازی خودکار فونت قبل از build/preview: `frontend/scripts/sync-fonts.cjs`
 - مسیر فونت‌ها: `frontend/public/fonts/` — فایل‌های `Yekan.woff2/woff/ttf` را اینجا قرار دهید.
 - تست E2E فونت: `frontend/e2e/font-yekan.spec.ts`
+
+## E2E (Playwright) و OTP (دمو)
+
+- پیش‌نیاز: بک‌اند روی `http://localhost:8000` در حال اجرا باشد. فرانت‌اند می‌تواند از طریق nginx روی `http://localhost:3000` سرو شود (اسکریپت `./run-frontend-sync.ps1`).
+- اسکریپت آماده‌سازی تست‌ها (`frontend/scripts/test-setup.cjs`) به‌صورت خودکار قبل از اجرای تست‌ها انجام می‌شود (نصب مرورگرهای Playwright و همگام‌سازی فونت Yekan).
+
+اجرای E2E با PowerShell (Windows):
+
+```powershell
+$env:BASE_URL = "http://localhost:3000";
+$env:BACKEND_URL = "http://localhost:8000";
+$env:DEMO_ALLOW_OTP_NO_SMS = "true";
+npm --prefix "frontend" run -s test:e2e
+```
+
+اجرای E2E با Bash:
+
+```bash
+BASE_URL=http://localhost:3000 \
+BACKEND_URL=http://localhost:8000 \
+DEMO_ALLOW_OTP_NO_SMS=true \
+npm --prefix frontend run -s test:e2e
+```
+
+- تست‌ها:
+  - ناوبری: `frontend/e2e/navigation.spec.ts`
+  - دستیار توسعه‌دهنده: `frontend/e2e/dev-assistant.spec.ts` (با `BACKEND_URL` در غیر این‌صورت skip)
+  - چیدمان RTL و سایدبار راست: `frontend/e2e/layout-rtl.spec.ts`
+  - نقش‌ها/مجوزها (Users): `frontend/e2e/users-permissions.spec.ts`
+  - گزارش فعالیت و خروجی CSV: `frontend/e2e/users-activity.spec.ts`
+  - قفل فونت Yekan: `frontend/e2e/font-yekan.spec.ts`
+  - ورود OTP (بای‌پس دمو): `frontend/e2e/otp-login.spec.ts` (نیازمند `DEMO_ALLOW_OTP_NO_SMS=true`)

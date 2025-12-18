@@ -1,11 +1,12 @@
-export { }
+import React from 'react'
+export {}
 import DashboardModule from './DashboardModule'
-import SalesModule from './SalesModule'
+const SalesModule = React.lazy(() => import('./SalesModule'))
 import FinanceModule from './FinanceModule'
 import InventoryModule from './InventoryModule'
-import PeopleModule from './PeopleModule'
+const PeopleModule = React.lazy(() => import('./PeopleModule'))
 import ReportsModule from './ReportsModule'
-import SystemModule from './SystemModule'
+const SystemModule = React.lazy(() => import('./SystemModule'))
 import UsersModule from './settings/UsersModule'
 import BanksModule from './settings/BanksModule'
 import DevConsole from './developer/DevConsole'
@@ -13,7 +14,7 @@ import AssistantModule from './developer/AssistantModule'
 import SmsPanel from './sms/SmsPanel'
 import PApiPanel from './PApiPanel'
 import AuditModule from './audit/AuditModule'
-import { getAccessToken, loginDeveloper } from '../services/auth.ts'
+import { getAccessToken, loginDeveloper } from '../services/auth'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 function base64urlDecode(input: string): string {

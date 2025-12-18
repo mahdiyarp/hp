@@ -217,7 +217,7 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
             className={`${retroInput} w-full pr-9`}
             placeholder="جستجوی سریع..."
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.target.value)}
             onFocus={() => {
               if (results) setVisible(true)
             }}
@@ -244,11 +244,14 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
           )}
           {!error && results && totalHits > 0 && (
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {DEFAULT_INDEXES.map(idx => {
+              {DEFAULT_INDEXES.map((idx) => {
                 const hits = results[idx]?.hits ?? []
                 if (hits.length === 0) return null
                 return (
-                  <div key={idx} className="border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] px-3 py-2 space-y-2">
+                  <div
+                    key={idx}
+                    className="border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] px-3 py-2 space-y-2"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span className={retroHeading}>{INDEX_LABELS[idx]}</span>
                       <span className={`${retroBadge} text-[10px]`}>
@@ -287,11 +290,7 @@ export default function GlobalSearch({ onNavigate }: GlobalSearchProps) {
             </div>
           )}
           <div className="flex flex-wrap justify-between items-center gap-2 text-[11px]">
-            <button
-              type="button"
-              className={`${retroButton}`}
-              onClick={handleNavigateSearch}
-            >
+            <button type="button" className={`${retroButton}`} onClick={handleNavigateSearch}>
               مشاهده نمای کامل
             </button>
             <button

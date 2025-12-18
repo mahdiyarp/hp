@@ -1,13 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { parseJalaliInput } from '../utils/date'
 import { apiGet } from '../services/api'
-import {
-  retroBadge,
-  retroButton,
-  retroHeading,
-  retroPanelPadded,
-  retroMuted,
-} from './retroTheme'
+import { retroBadge, retroButton, retroHeading, retroPanelPadded, retroMuted } from './retroTheme'
 
 interface FinancialContext {
   current_financial_year: {
@@ -41,7 +35,10 @@ interface SmartDatePickerProps {
   disabled?: boolean
 }
 
-export default function SmartDatePicker({ onDateSelected, disabled = false }: SmartDatePickerProps) {
+export default function SmartDatePicker({
+  onDateSelected,
+  disabled = false,
+}: SmartDatePickerProps) {
   const [context, setContext] = useState<FinancialContext | null>(null)
   const [suggestions, setSuggestions] = useState<DateSuggestions | null>(null)
   const [loading, setLoading] = useState(true)
@@ -56,7 +53,7 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
       const data = await apiGet<any>('/api/financial/auto-context')
       setContext(data.context)
       setSuggestions(data.date_suggestions)
-      
+
       // Auto-select today by default
       const todaySuggestion = data.date_suggestions?.today
       if (todaySuggestion) {
@@ -68,7 +65,6 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
           setSelectedDate(todaySuggestion)
         }
       }
-      
     } catch (error) {
       console.error('Error fetching financial context:', error)
     } finally {
@@ -99,14 +95,17 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
   const suggestionActive =
     'bg-[var(--retro-button-bg)] border-[var(--retro-button-border)] text-[var(--retro-button-text)] shadow-[3px_3px_0_var(--retro-button-border)]'
   const suggestionDisabled = 'opacity-40 cursor-not-allowed'
-  const suggestionInteractive = 'hover:-translate-y-0.5 hover:shadow-[4px_4px_0_var(--retro-button-border)] hover:border-[var(--retro-button-border)]'
+  const suggestionInteractive =
+    'hover:-translate-y-0.5 hover:shadow-[4px_4px_0_var(--retro-button-border)] hover:border-[var(--retro-button-border)]'
 
   if (loading) {
     return (
       <div className={`${retroPanelPadded} flex items-center justify-center`} dir="rtl">
         <div className="space-y-2 text-center">
           <div className="mx-auto h-8 w-8 border-2 border-dashed border-[var(--retro-button-bg)] rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>در حال آماده‌سازی تاریخ هوشمند</p>
+          <p className={`${retroHeading} text-[var(--retro-button-bg)]`}>
+            در حال آماده‌سازی تاریخ هوشمند
+          </p>
         </div>
       </div>
     )
@@ -135,7 +134,7 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
     )
   }
 
-  const activeIso = selectedDate ? parseJalaliInput(selectedDate)?.iso ?? '' : ''
+  const activeIso = selectedDate ? (parseJalaliInput(selectedDate)?.iso ?? '') : ''
 
   return (
     <div className={`${retroPanelPadded} space-y-5`} dir="rtl">
@@ -165,10 +164,7 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
         <div className="space-y-4">
           <p className={retroHeading}>انتخاب سریع تاریخ</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {renderSuggestion(
-              suggestions.today,
-              `امروز: ${suggestions.today ?? '-'}`,
-            )}
+            {renderSuggestion(suggestions.today, `امروز: ${suggestions.today ?? '-'}`)}
             {renderSuggestion(
               suggestions.month_start,
               `اول ماه: ${suggestions.month_start ?? '-'}`,
@@ -178,15 +174,9 @@ export default function SmartDatePicker({ onDateSelected, disabled = false }: Sm
               `شروع فصل: ${suggestions.quarter_start ?? '-'}`,
             )}
             {suggestions.year_start &&
-              renderSuggestion(
-                suggestions.year_start,
-                `آغاز سال مالی: ${suggestions.year_start}`,
-              )}
+              renderSuggestion(suggestions.year_start, `آغاز سال مالی: ${suggestions.year_start}`)}
             {suggestions.year_end &&
-              renderSuggestion(
-                suggestions.year_end,
-                `پایان سال مالی: ${suggestions.year_end}`,
-              )}
+              renderSuggestion(suggestions.year_end, `پایان سال مالی: ${suggestions.year_end}`)}
           </div>
           <div className={`text-[11px] ${retroMuted}`}>
             تاریخ‌های پیشنهادی بر اساس تقویم جلالی و سال مالی فعال محاسبه شده‌اند.

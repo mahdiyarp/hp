@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { retroBadge, retroButton, retroHeading, retroInput, retroPanelPadded } from '../components/retroTheme'
+import {
+  retroBadge,
+  retroButton,
+  retroHeading,
+  retroInput,
+  retroPanelPadded,
+} from '../components/retroTheme'
 import { apiGet, apiPatch, apiPut } from '../services/api'
 import FiscalYearPanel from '../components/settings/FiscalYearPanel'
 import SmsSettingsPanel from '../components/settings/SmsSettingsPanel'
@@ -48,7 +54,10 @@ const debounce = (fn: () => void, delay: number) => {
 export default function SettingsModule({ smartDate }: ModuleComponentProps) {
   const [activeTab, setActiveTab] = useState('general')
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'error' | null }>({ text: '', tone: null })
+  const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'error' | null }>({
+    text: '',
+    tone: null,
+  })
   const [settings, setSettings] = useState<SettingsPayload>({
     theme: 'system',
     rtl: true,
@@ -77,10 +86,10 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
     setBusy(true)
     try {
       const data = await apiGet<SettingsPayload>('/api/settings')
-      if (data) setSettings(prev => ({ ...prev, ...data }))
+      if (data) setSettings((prev) => ({ ...prev, ...data }))
       try {
         const fy = await apiGet<any[]>('/api/fiscal-years')
-        if (fy) setFiscalYears(fy.map(f => ({ id: f.id, title: f.title })))
+        if (fy) setFiscalYears(fy.map((f) => ({ id: f.id, title: f.title })))
       } catch {
         // ignore fiscal list errors
       }
@@ -117,7 +126,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
   }
 
   const handleChange = (field: keyof SettingsPayload, value: any, instant = true) => {
-    setSettings(prev => ({ ...prev, [field]: value }))
+    setSettings((prev) => ({ ...prev, [field]: value }))
     if (instant) debouncedSave()
   }
 
@@ -127,7 +136,9 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
   }
 
   const tabCard = (children: React.ReactNode) => (
-    <section className={`${retroPanelPadded} space-y-4 bg-[var(--background)] border border-[var(--border)]`}>
+    <section
+      className={`${retroPanelPadded} space-y-4 bg-[var(--background)] border border-[var(--border)]`}
+    >
       {children}
     </section>
   )
@@ -137,7 +148,9 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className={retroHeading}>Settings</p>
-          <p className="text-sm text-[var(--primary)] opacity-70">System, appearance, finance, invoice defaults, SMS, and assistant.</p>
+          <p className="text-sm text-[var(--primary)] opacity-70">
+            System, appearance, finance, invoice defaults, SMS, and assistant.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <span className={retroBadge}>Active date: {smartDate.jalali || '---'}</span>
@@ -150,7 +163,9 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
       {toast.text && (
         <div
           className={`px-4 py-3 rounded-md border ${
-            toast.tone === 'ok' ? 'bg-[#e6f9ef] border-[#9ac8a5] text-[#0f5132]' : 'bg-[#ffe6e6] border-[#f2b1b1] text-[#8b1d1d]'
+            toast.tone === 'ok'
+              ? 'bg-[#e6f9ef] border-[#9ac8a5] text-[#0f5132]'
+              : 'bg-[#ffe6e6] border-[#f2b1b1] text-[#8b1d1d]'
           }`}
         >
           {toast.text}
@@ -163,7 +178,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
       )}
 
       <div className="flex gap-2 flex-wrap">
-        {tabs.map(t => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             className={`${retroButton} ${activeTab === t.id ? '!bg-[var(--primary)] text-white' : '!bg-[var(--background)] !text-[var(--primary)]'}`}
@@ -179,14 +194,22 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid gap-3 md:grid-cols-3">
             <label className="text-sm text-[var(--primary)] space-y-1">
               Language
-              <select className={retroInput} value={settings.language} onChange={e => handleChange('language', e.target.value)}>
+              <select
+                className={retroInput}
+                value={settings.language}
+                onChange={(e) => handleChange('language', e.target.value)}
+              >
                 <option value="fa">Farsi</option>
                 <option value="en">English</option>
               </select>
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Currency
-              <select className={retroInput} value={settings.currency} onChange={e => handleChange('currency', e.target.value)}>
+              <select
+                className={retroInput}
+                value={settings.currency}
+                onChange={(e) => handleChange('currency', e.target.value)}
+              >
                 <option value="irr">Rial</option>
                 <option value="toman">Toman</option>
                 <option value="usd">USD</option>
@@ -194,13 +217,21 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Direction
-              <select className={retroInput} value={settings.rtl ? 'rtl' : 'ltr'} onChange={e => handleChange('rtl', e.target.value === 'rtl')}>
+              <select
+                className={retroInput}
+                value={settings.rtl ? 'rtl' : 'ltr'}
+                onChange={(e) => handleChange('rtl', e.target.value === 'rtl')}
+              >
                 <option value="rtl">RTL</option>
                 <option value="ltr">LTR</option>
               </select>
             </label>
             <div className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={settings.sidebar_collapsed} onChange={e => handleChange('sidebar_collapsed', e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={settings.sidebar_collapsed}
+                onChange={(e) => handleChange('sidebar_collapsed', e.target.checked)}
+              />
               Collapse sidebar
             </div>
           </div>,
@@ -211,7 +242,11 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid gap-3 md:grid-cols-3">
             <label className="text-sm text-[var(--primary)] space-y-1">
               Theme
-              <select className={retroInput} value={settings.theme} onChange={e => handleChange('theme', e.target.value)}>
+              <select
+                className={retroInput}
+                value={settings.theme}
+                onChange={(e) => handleChange('theme', e.target.value)}
+              >
                 <option value="system">System</option>
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
@@ -220,9 +255,13 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
             <div className="text-sm text-[var(--primary)] space-y-1">
               Notifications
               <div className="flex gap-3 flex-wrap text-[13px]">
-                {['email', 'sms', 'desktop'].map(key => (
+                {['email', 'sms', 'desktop'].map((key) => (
                   <label key={key} className="flex items-center gap-2">
-                    <input type="checkbox" checked={(settings.notifications as any)[key]} onChange={() => toggleNotification(key as any)} />
+                    <input
+                      type="checkbox"
+                      checked={(settings.notifications as any)[key]}
+                      onChange={() => toggleNotification(key as any)}
+                    />
                     {key}
                   </label>
                 ))}
@@ -239,10 +278,15 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
               <select
                 className={retroInput}
                 value={settings.default_fiscal_year_id ?? ''}
-                onChange={e => handleChange('default_fiscal_year_id', e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) =>
+                  handleChange(
+                    'default_fiscal_year_id',
+                    e.target.value ? Number(e.target.value) : null,
+                  )
+                }
               >
                 <option value="">---</option>
-                {fiscalYears.map(f => (
+                {fiscalYears.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.title}
                   </option>
@@ -251,7 +295,14 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
             </label>
             <div className="text-sm text-[var(--primary)] space-y-1">
               Sidebar order
-              <button className={retroButton} onClick={() => apiPatch('/api/users/preferences/sidebar-order', { order: settings.sidebar_order })}>
+              <button
+                className={retroButton}
+                onClick={() =>
+                  apiPatch('/api/users/preferences/sidebar-order', {
+                    order: settings.sidebar_order,
+                  })
+                }
+              >
                 Save sidebar order
               </button>
             </div>
@@ -263,25 +314,51 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm text-[var(--primary)] space-y-1">
               Default tax rate (%)
-              <input className={retroInput} type="number" value={settings.invoice_default_tax_rate} onChange={e => handleChange('invoice_default_tax_rate', Number(e.target.value))} />
+              <input
+                className={retroInput}
+                type="number"
+                value={settings.invoice_default_tax_rate}
+                onChange={(e) => handleChange('invoice_default_tax_rate', Number(e.target.value))}
+              />
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Prefix template
-              <input className={retroInput} value={settings.invoice_prefix_template} onChange={e => handleChange('invoice_prefix_template', e.target.value)} />
+              <input
+                className={retroInput}
+                value={settings.invoice_prefix_template}
+                onChange={(e) => handleChange('invoice_prefix_template', e.target.value)}
+              />
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Numbering mode
-              <select className={retroInput} value={settings.invoice_numbering_mode} onChange={e => handleChange('invoice_numbering_mode', e.target.value as 'auto' | 'manual')}>
+              <select
+                className={retroInput}
+                value={settings.invoice_numbering_mode}
+                onChange={(e) =>
+                  handleChange('invoice_numbering_mode', e.target.value as 'auto' | 'manual')
+                }
+              >
                 <option value="auto">Auto</option>
                 <option value="manual">Manual</option>
               </select>
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Payment terms (days)
-              <input className={retroInput} type="number" value={settings.invoice_default_payment_terms} onChange={e => handleChange('invoice_default_payment_terms', Number(e.target.value))} />
+              <input
+                className={retroInput}
+                type="number"
+                value={settings.invoice_default_payment_terms}
+                onChange={(e) =>
+                  handleChange('invoice_default_payment_terms', Number(e.target.value))
+                }
+              />
             </label>
             <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={settings.invoice_auto_sms} onChange={e => handleChange('invoice_auto_sms', e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={settings.invoice_auto_sms}
+                onChange={(e) => handleChange('invoice_auto_sms', e.target.checked)}
+              />
               Auto-send SMS after finalize
             </label>
           </div>,
@@ -298,17 +375,31 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm text-[var(--primary)] space-y-1">
               Backup path
-              <input className={retroInput} value={settings.backup.path} onChange={e => handleChange('backup', { ...settings.backup, path: e.target.value })} />
+              <input
+                className={retroInput}
+                value={settings.backup.path}
+                onChange={(e) =>
+                  handleChange('backup', { ...settings.backup, path: e.target.value })
+                }
+              />
             </label>
             <label className="text-sm text-[var(--primary)] space-y-1">
               Cron
-              <input className={retroInput} value={settings.backup.cron} onChange={e => handleChange('backup', { ...settings.backup, cron: e.target.value })} />
+              <input
+                className={retroInput}
+                value={settings.backup.cron}
+                onChange={(e) =>
+                  handleChange('backup', { ...settings.backup, cron: e.target.value })
+                }
+              />
             </label>
             <label className="text-sm flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={settings.backup.auto}
-                onChange={e => handleChange('backup', { ...settings.backup, auto: e.target.checked }, false)}
+                onChange={(e) =>
+                  handleChange('backup', { ...settings.backup, auto: e.target.checked }, false)
+                }
               />
               Auto backup
             </label>

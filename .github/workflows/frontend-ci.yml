@@ -73,6 +73,7 @@ jobs:
           DEV_FEATURES_ENABLED: 'true'
           ENVIRONMENT: 'test'
           DATABASE_URL: 'sqlite:///./ci_e2e.db'
+          DEMO_ALLOW_OTP_NO_SMS: 'true'
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt || true; fi
@@ -97,6 +98,7 @@ jobs:
         env:
           BASE_URL: http://127.0.0.1:3000
           BACKEND_URL: http://127.0.0.1:8000
+          DEMO_ALLOW_OTP_NO_SMS: 'true'
         run: npm run -s test:e2e
 
   headers:

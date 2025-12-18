@@ -7,6 +7,7 @@ import type { SyncRecord } from '../../App'
 import GlobalSearch from '../GlobalSearch'
 import { formatNumberFa, toPersianDigits } from '../../utils/num'
 import { useFY } from '../../context/FYContext'
+import ErrorBoundary from '../ErrorBoundary'
 
 export interface SmartDateState {
   isoDate: string | null
@@ -52,7 +53,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   const { t } = useI18n()
   const visibleModules = useMemo(() => {
     const allowAll = !!(user && (user.role === 'Admin' || /Developer/i.test(user.role)))
-    return modules.filter(m => {
+    return modules.filter((m) => {
       if (m.hidden) return false
       if (allowAll) return true
       return !m.feature || (orgFeatures || []).includes(m.feature)
@@ -60,7 +61,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   }, [modules, orgFeatures, user])
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
-    visibleModules.forEach(m => map.set(m.id, m))
+    visibleModules.forEach((m) => map.set(m.id, m))
     return map
   }, [visibleModules])
 
@@ -99,7 +100,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
       }
     }
     window.addEventListener('hashchange', handler)
-    
+
     // Listen for custom module switch events
     const handleModuleSwitch = (e: Event) => {
       const customEvent = e as CustomEvent
@@ -109,7 +110,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
       }
     }
     window.addEventListener('switch-module', handleModuleSwitch)
-    
+
     return () => {
       window.removeEventListener('hashchange', handler)
       window.removeEventListener('switch-module', handleModuleSwitch)
@@ -121,7 +122,9 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
 
   // سمت منو را همیشه راست ثبت می‌کنیم
   useEffect(() => {
-    try { localStorage.setItem('hesabpak_sidebar_side_v1', 'right') } catch (e) {}
+    try {
+      localStorage.setItem('hesabpak_sidebar_side_v1', 'right')
+    } catch (e) {}
   }, [])
 
   const handleSmartDateChange = useCallback((next: SmartDateState) => {
@@ -175,7 +178,12 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
       </div>
 
       <SidebarMenu
-        modules={visibleModules.map(m => ({ id: m.id, label: m.label, description: m.description, badge: m.badge }))}
+        modules={visibleModules.map((m) => ({
+          id: m.id,
+          label: m.label,
+          description: m.description,
+          badge: m.badge,
+        }))}
         activeModuleId={activeModuleId}
         onNavigate={navigate}
       />
@@ -189,8 +197,12 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
         {sync && (
           <div>
             <p className={`${retroHeading} text-[#d7caa4]`}>SYNC</p>
-            <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}</p>
-            <p className="text-[#aeb4b9] text-[11px] leading-5">اختلاف: {sync.serverOffsetSeconds}s</p>
+            <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">
+              UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}
+            </p>
+            <p className="text-[#aeb4b9] text-[11px] leading-5">
+              اختلاف: {sync.serverOffsetSeconds}s
+            </p>
           </div>
         )}
       </div>
@@ -205,13 +217,11 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
           <div className="px-6 py-5 flex flex-col gap-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
-                <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>{t('active_module')}</p>
-                <h2 className="text-3xl font-semibold mt-2">
-                  {activeModule?.label ?? '—'}
-                </h2>
-                <p className="text-sm text-[#c3bca5] mt-1 leading-6">
-                  {activeModule?.description}
+                <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>
+                  {t('active_module')}
                 </p>
+                <h2 className="text-3xl font-semibold mt-2">{activeModule?.label ?? '—'}</h2>
+                <p className="text-sm text-[#c3bca5] mt-1 leading-6">{activeModule?.description}</p>
               </div>
               <div className="flex flex-col items-start lg:items-end text-sm gap-1">
                 <span>کاربر: {user?.username ?? '---'}</span>
@@ -226,43 +236,42 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
                   </span>
                   {/* Active FY badge */}
                   <span className={`${retroBadge} bg-[#3a4a57] border-[#4b5f6f]`}>
-                    {activeFy
-                      ? `سال مالی: ${activeFy.name ?? activeFy.label ?? activeFy.id}`
-                      : 'سال مالی: نامشخص'}
+                    {activeFy ? `سال مالی: ${activeFy.name ?? activeFy.id}` : 'سال مالی: نامشخص'}
                   </span>
-                    <StatusBar />
+                  <StatusBar />
                 </div>
+              </div>
             </div>
-          </div>
-          <div className="mt-2">
-            <GlobalSearch onNavigate={navigate} />
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="mt-2">
+              <GlobalSearch onNavigate={navigate} />
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className={`${retroPanel} px-4 py-3 text-xs space-y-1`}>
-              <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
-              <p>
-                {sync?.serverUtc
-                  ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
-                  : 'در انتظار همگام‌سازی'}
-              </p>
-              {sync?.serverLocal && (
-                <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
-              )}
-              {sync?.jalali && <p>JALALI: {sync.jalali}</p>}
-              <p className={`text-[#7a6b4f]`}>
-                اختلاف منطقه: {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
-              </p>
-              {clockDriftMs !== null && (
-                <p className={`text-[#7a6b4f]`}>
-                  اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
+                <p className={`${retroHeading} text-[#7a6b4f]`}>SERVER TIME SNAPSHOT</p>
+                <p>
+                  {sync?.serverUtc
+                    ? `UTC: ${toPersianDigits(sync.serverUtc.slice(0, 19).replace('T', ' '))}`
+                    : 'در انتظار همگام‌سازی'}
                 </p>
-              )}
-              {sync?.latencyMs !== null && (
+                {sync?.serverLocal && (
+                  <p>LOC: {toPersianDigits(sync.serverLocal.slice(0, 19).replace('T', ' '))}</p>
+                )}
+                {sync?.jalali && <p>JALALI: {sync.jalali}</p>}
                 <p className={`text-[#7a6b4f]`}>
-                  تاخیر شبکه: {formatNumberFa(sync.latencyMs)} میلی‌ثانیه
+                  اختلاف منطقه:{' '}
+                  {toPersianDigits(sync?.serverOffset ?? `${sync?.serverOffsetSeconds ?? 0}s`)}
                 </p>
-              )}
-            </div>
+                {clockDriftMs !== null && (
+                  <p className={`text-[#7a6b4f]`}>
+                    اختلاف ساعت با کلاینت: {formatNumberFa(clockDriftMs)} میلی‌ثانیه
+                  </p>
+                )}
+                {sync?.latencyMs != null && (
+                  <p className={`text-[#7a6b4f]`}>
+                    تاخیر شبکه: {formatNumberFa(sync?.latencyMs ?? 0)} میلی‌ثانیه
+                  </p>
+                )}
+              </div>
               <div className="flex sm:flex-row flex-col gap-2 text-xs">
                 <button className={`${retroButton} !tracking-[0.3em]`} onClick={onLogout}>
                   خروج از سیستم
@@ -279,22 +288,32 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
         </header>
         <main className="flex-1 overflow-y-auto">
           <div className="px-6 py-8 space-y-8">
-            {ActiveComponent ? (
-              <ActiveComponent
-                smartDate={smartDate}
-                onSmartDateChange={handleSmartDateChange}
-                sync={sync}
-                user={user}
-                onNavigate={navigate}
-              />
-            ) : (
-              <div className={`${retroPanel} p-6`}>
-                <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found')}</p>
-                <p className="mt-2 text-sm">
-                  ماژول انتخاب‌شده یافت نشد. از منوی کناری گزینه دیگری را انتخاب کنید.
-                </p>
-              </div>
-            )}
+            <ErrorBoundary>
+              <React.Suspense
+                fallback={
+                  <div className={`${retroPanel} p-6`}>
+                    <p className={`${retroHeading} text-[#7a6b4f]`}>در حال بارگذاری ماژول…</p>
+                  </div>
+                }
+              >
+                {ActiveComponent ? (
+                  <ActiveComponent
+                    smartDate={smartDate}
+                    onSmartDateChange={handleSmartDateChange}
+                    sync={sync}
+                    user={user}
+                    onNavigate={navigate}
+                  />
+                ) : (
+                  <div className={`${retroPanel} p-6`}>
+                    <p className={`${retroHeading} text-[#7a6b4f]`}>{t('module_not_found')}</p>
+                    <p className="mt-2 text-sm">
+                      ماژول انتخاب‌شده یافت نشد. از منوی کناری گزینه دیگری را انتخاب کنید.
+                    </p>
+                  </div>
+                )}
+              </React.Suspense>
+            </ErrorBoundary>
           </div>
         </main>
       </div>

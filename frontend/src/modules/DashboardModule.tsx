@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { apiGet } from '../services/api'
+import { apiGet, apiPost, apiPatch } from '../services/api'
 function AuditStatusCard() {
-  const [latest, setLatest] = useState<{ ts:string; merkle_root:string; count:number } | null>(null)
+  const [latest, setLatest] = useState<{ ts: string; merkle_root: string; count: number } | null>(
+    null,
+  )
   const [chainOk, setChainOk] = useState<boolean | null>(null)
   const [busy, setBusy] = useState<boolean>(false)
   async function refreshStatus() {
@@ -11,9 +13,13 @@ function AuditStatusCard() {
       const entryIds: number[] = Array.isArray(batch.entry_ids) ? batch.entry_ids : []
       if (entryIds.length > 0) {
         try {
-          const proof = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`)
+          const proof = await apiGet<any>(
+            `/api/audit/otp/proof?entity_id=${encodeURIComponent('09123506545')}&entry_id=${entryIds[0]}`,
+          )
           setChainOk(Boolean(proof?.chain_is_valid))
-        } catch { setChainOk(null) }
+        } catch {
+          setChainOk(null)
+        }
       } else {
         setChainOk(null)
       }
@@ -40,7 +46,13 @@ function AuditStatusCard() {
     <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold">وضعیت ممیزی زنجیره</div>
-        <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={refreshStatus} disabled={busy}>بروزرسانی</button>
+        <button
+          className="border border-[#111827] bg-white px-2 py-1 text-[11px]"
+          onClick={refreshStatus}
+          disabled={busy}
+        >
+          بروزرسانی
+        </button>
       </div>
       {latest ? (
         <div className="mt-2 text-xs space-y-1">
@@ -49,13 +61,21 @@ function AuditStatusCard() {
           <div className="break-all">مرکل‌روت: {latest.merkle_root}</div>
           <div className="flex items-center gap-2">
             <span>اعتبار زنجیره:</span>
-            <span className={`${chainOk === null ? 'bg-[#f3f4f6] text-[#374151]' : (chainOk ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fee2e2] text-[#7f1d1d]')} px-2 py-0.5 rounded-sm border`}>{chainOk === null ? 'نامشخص' : (chainOk ? 'معتبر ✅' : 'نامعتبر ❌')}</span>
+            <span
+              className={`${chainOk === null ? 'bg-[#f3f4f6] text-[#374151]' : chainOk ? 'bg-[#d1fae5] text-[#065f46]' : 'bg-[#fee2e2] text-[#7f1d1d]'} px-2 py-0.5 rounded-sm border`}
+            >
+              {chainOk === null ? 'نامشخص' : chainOk ? 'معتبر ✅' : 'نامعتبر ❌'}
+            </span>
           </div>
         </div>
       ) : (
         <div className="mt-2 text-xs flex items-center gap-3">
           <span>Batch موجود نیست</span>
-          <button className="border border-[#111827] bg-white px-2 py-1 text-[11px] disabled:opacity-50" onClick={buildBatch} disabled={busy}>
+          <button
+            className="border border-[#111827] bg-white px-2 py-1 text-[11px] disabled:opacity-50"
+            onClick={buildBatch}
+            disabled={busy}
+          >
             {busy ? 'در حال ساخت…' : 'ساخت Batch'}
           </button>
         </div>
@@ -63,7 +83,7 @@ function AuditStatusCard() {
     </div>
   )
 }
-import { fetchWithAuth } from '../services/auth.ts'
+import { fetchWithAuth } from '../services/auth'
 import { formatNumberFa, isoToJalali } from '../utils/num'
 import { parseJalaliInput } from '../utils/date'
 import {
@@ -142,7 +162,10 @@ interface Product {
   inventory: number | null
 }
 
-interface TrendPoint { label: string; value: number }
+interface TrendPoint {
+  label: string
+  value: number
+}
 
 interface OldStockItem {
   product_id: string
@@ -206,7 +229,9 @@ export default function DashboardModule({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
-  const [persons, setPersons] = useState<Array<{ id: string; name: string; mobile: string | null }>>([])
+  const [persons, setPersons] = useState<
+    Array<{ id: string; name: string; mobile: string | null }>
+  >([])
   const [roadmapSummary, setRoadmapSummary] = useState<RoadmapResponse | null>(null)
   type DashboardWidget = {
     id: number
@@ -221,7 +246,10 @@ export default function DashboardModule({
   }
   const [widgets, setWidgets] = useState<DashboardWidget[]>([])
   const [widgetsLoading, setWidgetsLoading] = useState(false)
-  const [newWidget, setNewWidget] = useState<{ type: string; title: string }>({ type: 'payments', title: '' })
+  const [newWidget, setNewWidget] = useState<{ type: string; title: string }>({
+    type: 'payments',
+    title: '',
+  })
 
   useEffect(() => {
     loadDashboardData()
@@ -244,16 +272,21 @@ export default function DashboardModule({
     }
     if (!fromIso) fromIso = start.toISOString()
     if (!toIso) toIso = end.toISOString()
-    const res = await fetchWithAuth(`/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange === 'today' ? 'hour' : 'day'}`)
+    const res = await fetchWithAuth(
+      `/api/reports/sales-trend?from_iso=${encodeURIComponent(fromIso)}&to_iso=${encodeURIComponent(toIso)}&bucket=${trendRange === 'today' ? 'hour' : 'day'}`,
+    )
     const data = await res.json().catch(() => ({}))
     setTrend(Array.isArray(data.points) ? data.points : [])
   }
 
   useEffect(() => {
     if (!autoRefresh) return
-    const id = setInterval(() => {
-      loadTrend().catch(() => {})
-    }, Math.max(10000, refreshMs))
+    const id = setInterval(
+      () => {
+        loadTrend().catch(() => {})
+      },
+      Math.max(10000, refreshMs),
+    )
     return () => clearInterval(id)
   }, [autoRefresh, refreshMs, trendRange, customFrom, customTo])
 
@@ -276,7 +309,19 @@ export default function DashboardModule({
         apiGet<RoadmapResponse>('/api/roadmap'),
       ])
 
-      const [financialRes, summaryRes, invoicesRes, productsRes, _trendRes, oldStockRes, checksRes, pricesRes] = results
+      const [
+        financialRes,
+        summaryRes,
+        invoicesRes,
+        productsRes,
+        _trendRes,
+        oldStockRes,
+        checksRes,
+        pricesRes,
+        personsRes,
+        widgetsRes,
+        roadmapRes,
+      ] = results
 
       if (financialRes.status === 'fulfilled') {
         setFinancialData(financialRes.value)
@@ -383,9 +428,11 @@ export default function DashboardModule({
 
   const quickAddPayment = (direction: 'in' | 'out') => {
     // Prefill a minimal payment form in Finance and navigate there
-    window.dispatchEvent(new CustomEvent('finance-prefill', {
-      detail: { direction, party_name: '', amount: '', reference: '', note: '' },
-    }))
+    window.dispatchEvent(
+      new CustomEvent('finance-prefill', {
+        detail: { direction, party_name: '', amount: '', reference: '', note: '' },
+      }),
+    )
     window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
   }
 
@@ -395,16 +442,16 @@ export default function DashboardModule({
 
   const roadmapStats = useMemo(() => {
     if (!roadmapSummary) return { done: 0, total: 0, percent: 0 }
-    const checklist = roadmapSummary.sections.flatMap(section => section.checklists || [])
+    const checklist = roadmapSummary.sections.flatMap((section) => section.checklists || [])
     if (checklist.length === 0) return { done: 0, total: 0, percent: 0 }
-    const done = checklist.filter(item => item.done).length
+    const done = checklist.filter((item) => item.done).length
     return { done, total: checklist.length, percent: Math.round((done / checklist.length) * 100) }
   }, [roadmapSummary])
 
   const roadmapHighlights = useMemo(() => {
     if (!roadmapSummary) return []
     return roadmapSummary.sections
-      .filter(section => section.title && section.title !== '---')
+      .filter((section) => section.title && section.title !== '---')
       .slice(0, 3)
   }, [roadmapSummary])
 
@@ -419,7 +466,7 @@ export default function DashboardModule({
 
   const findMobileByName = (name: string | null) => {
     if (!name) return null
-    const p = persons.find(pr => pr.name === name)
+    const p = persons.find((pr) => pr.name === name)
     return p?.mobile || null
   }
 
@@ -499,7 +546,7 @@ export default function DashboardModule({
   }
 
   const moveWidget = async (w: DashboardWidget, dir: 'up' | 'down') => {
-    const idx = widgets.findIndex(x => x.id === w.id)
+    const idx = widgets.findIndex((x) => x.id === w.id)
     const swapWith = dir === 'up' ? idx - 1 : idx + 1
     if (idx < 0 || swapWith < 0 || swapWith >= widgets.length) return
     const a = widgets[idx]
@@ -507,8 +554,20 @@ export default function DashboardModule({
     // swap position_y as a simple order
     const payload = {
       widgets: [
-        { widget_id: a.id, position_x: a.position_x, position_y: b.position_y, width: a.width, height: a.height },
-        { widget_id: b.id, position_x: b.position_x, position_y: a.position_y, width: b.width, height: b.height },
+        {
+          widget_id: a.id,
+          position_x: a.position_x,
+          position_y: b.position_y,
+          width: a.width,
+          height: a.height,
+        },
+        {
+          widget_id: b.id,
+          position_x: b.position_x,
+          position_y: a.position_y,
+          width: b.width,
+          height: b.height,
+        },
       ],
     }
     try {
@@ -536,602 +595,699 @@ export default function DashboardModule({
   return (
     <div className="space-y-4">
       <div className="space-y-8">
-      <AuditStatusCard />
-      {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className={`${retroPanel} p-4 space-y-2`}>
-          <p className={`${retroHeading} text-[#7a6b4f]`}>هشدارهای بارگذاری</p>
-          <ul className="list-disc list-inside text-xs text-[#7a6b4f] space-y-1">
-            {warnings.map((msg, idx) => (
-              <li key={idx}>{msg}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {financialData && (
-        <section className={`${retroPanelPadded} space-y-6`}>
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-[#c5bca5] pb-4">
-            <div>
-              <p className={`${retroHeading} tracking-[0.6em]`}>Smart Fiscal Context</p>
-              <h2 className="text-2xl font-semibold mt-2">
-                {financialData.context.current_financial_year.name}
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className={`${retroBadge} bg-[#f4edd9] border-[#9a8b6a]`}>
-                تاریخ امروز: {financialData.context.current_jalali.formatted}
-              </span>
-              {financialData.context.auto_created && (
-                <span className={`${retroBadge} border-[#4f704f] bg-[#e7f4e7] text-[#295329]`}>
-                  سال مالی به‌صورت خودکار ایجاد شد
-                </span>
-              )}
-            </div>
+        <AuditStatusCard />
+        {error && (
+          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
+            {error}
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-              <p className={`${retroHeading}`}>سال مالی</p>
-              <p className="text-lg font-semibold">
-                {financialData.context.current_financial_year.name}
-              </p>
-              <p className={`text-xs ${retroMuted}`}>
-                وضعیت: {financialData.context.current_financial_year.is_closed ? 'بسته' : 'باز'}
-              </p>
-            </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-              <p className={retroHeading}>شروع سال</p>
-              <p className="text-lg font-semibold">{jalaliStart.start}</p>
-            </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-              <p className={retroHeading}>پایان سال</p>
-              <p className="text-lg font-semibold">{jalaliStart.end}</p>
-            </div>
-            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-              <p className={retroHeading}>پیشنهاد تاریخ</p>
-              <div className="space-y-1 text-xs">
-                <button
-                  onClick={() => handleSuggestion(financialData.date_suggestions.today)}
-                  className="underline text-[#154b5f]"
-                  type="button"
-                >
-                  امروز: {financialData.date_suggestions.today}
-                </button>
-                <button
-                  onClick={() => handleSuggestion(financialData.date_suggestions.month_start)}
-                  className="underline text-[#154b5f]"
-                  type="button"
-                >
-                  اول ماه: {financialData.date_suggestions.month_start}
-                </button>
-                <button
-                  onClick={() => handleSuggestion(financialData.date_suggestions.quarter_start)}
-                  className="underline text-[#154b5f]"
-                  type="button"
-                >
-                  شروع فصل: {financialData.date_suggestions.quarter_start}
-                </button>
-                {financialData.date_suggestions.year_start && (
-                  <button
-                    onClick={() => handleSuggestion(financialData.date_suggestions.year_start)}
-                    className="underline text-[#154b5f]"
-                    type="button"
-                  >
-                    آغاز سال مالی: {financialData.date_suggestions.year_start}
-                  </button>
-                )}
-                {financialData.date_suggestions.year_end && (
-                  <button
-                    onClick={() => handleSuggestion(financialData.date_suggestions.year_end)}
-                    className="underline text-[#154b5f]"
-                    type="button"
-                  >
-                    پایان سال مالی: {financialData.date_suggestions.year_end}
-                  </button>
+        {warnings.length > 0 && (
+          <div className={`${retroPanel} p-4 space-y-2`}>
+            <p className={`${retroHeading} text-[#7a6b4f]`}>هشدارهای بارگذاری</p>
+            <ul className="list-disc list-inside text-xs text-[#7a6b4f] space-y-1">
+              {warnings.map((msg, idx) => (
+                <li key={idx}>{msg}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {financialData && (
+          <section className={`${retroPanelPadded} space-y-6`}>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-[#c5bca5] pb-4">
+              <div>
+                <p className={`${retroHeading} tracking-[0.6em]`}>Smart Fiscal Context</p>
+                <h2 className="text-2xl font-semibold mt-2">
+                  {financialData.context.current_financial_year.name}
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className={`${retroBadge} bg-[#f4edd9] border-[#9a8b6a]`}>
+                  تاریخ امروز: {financialData.context.current_jalali.formatted}
+                </span>
+                {financialData.context.auto_created && (
+                  <span className={`${retroBadge} border-[#4f704f] bg-[#e7f4e7] text-[#295329]`}>
+                    سال مالی به‌صورت خودکار ایجاد شد
+                  </span>
                 )}
               </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                <p className={`${retroHeading}`}>سال مالی</p>
+                <p className="text-lg font-semibold">
+                  {financialData.context.current_financial_year.name}
+                </p>
+                <p className={`text-xs ${retroMuted}`}>
+                  وضعیت: {financialData.context.current_financial_year.is_closed ? 'بسته' : 'باز'}
+                </p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>شروع سال</p>
+                <p className="text-lg font-semibold">{jalaliStart.start}</p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>پایان سال</p>
+                <p className="text-lg font-semibold">{jalaliStart.end}</p>
+              </div>
+              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+                <p className={retroHeading}>پیشنهاد تاریخ</p>
+                <div className="space-y-1 text-xs">
+                  <button
+                    onClick={() => handleSuggestion(financialData.date_suggestions.today)}
+                    className="underline text-[#154b5f]"
+                    type="button"
+                  >
+                    امروز: {financialData.date_suggestions.today}
+                  </button>
+                  <button
+                    onClick={() => handleSuggestion(financialData.date_suggestions.month_start)}
+                    className="underline text-[#154b5f]"
+                    type="button"
+                  >
+                    اول ماه: {financialData.date_suggestions.month_start}
+                  </button>
+                  <button
+                    onClick={() => handleSuggestion(financialData.date_suggestions.quarter_start)}
+                    className="underline text-[#154b5f]"
+                    type="button"
+                  >
+                    شروع فصل: {financialData.date_suggestions.quarter_start}
+                  </button>
+                  {financialData.date_suggestions.year_start && (
+                    <button
+                      onClick={() => handleSuggestion(financialData.date_suggestions.year_start)}
+                      className="underline text-[#154b5f]"
+                      type="button"
+                    >
+                      آغاز سال مالی: {financialData.date_suggestions.year_start}
+                    </button>
+                  )}
+                  {financialData.date_suggestions.year_end && (
+                    <button
+                      onClick={() => handleSuggestion(financialData.date_suggestions.year_end)}
+                      className="underline text-[#154b5f]"
+                      type="button"
+                    >
+                      پایان سال مالی: {financialData.date_suggestions.year_end}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        <section className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-6">
+          <div className={retroPanelPadded}>
+            <header className="mb-3">
+              <p className={retroHeading}>{t('activity_counter')}</p>
+              <h3 className="text-lg font-semibold mt-2">خلاصه عملیات</h3>
+            </header>
+            {summary ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr>
+                    <th className={retroTableHeader}>شاخص</th>
+                    <th className={retroTableHeader}>مقدار</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2">فاکتورهای امروز</td>
+                    <td className="px-3 py-2 text-left">
+                      {formatNumberFa(summary.invoices.today)}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2">فاکتورهای ۷ روز اخیر</td>
+                    <td className="px-3 py-2 text-left">
+                      {formatNumberFa(summary.invoices['7days'])}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2">فاکتورهای ماه جاری</td>
+                    <td className="px-3 py-2 text-left">
+                      {formatNumberFa(summary.invoices.month)}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2">دریافتی‌های امروز</td>
+                    <td className="px-3 py-2 text-left">
+                      {formatNumberFa(summary.receipts_today)} ریال
+                    </td>
+                  </tr>
+                  <tr className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2">پرداخت‌های امروز</td>
+                    <td className="px-3 py-2 text-left">
+                      {formatNumberFa(summary.payments_today)} ریال
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-[#1f2e3b]">خالص جریان نقدی</td>
+                    <td className="px-3 py-2 text-left font-semibold">
+                      {formatNumberFa(summary.net_today)} ریال
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">اطلاعات خلاصه در دسترس نیست.</p>
+            )}
+            {summary && (
+              <div className="mt-4 text-xs">
+                <p className={`${retroHeading} mb-1`}>Cash Balances</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {Object.entries(summary.cash_balances).map(([method, value]) => (
+                    <div
+                      key={method}
+                      className="border border-[#bfb69f] bg-[#f6f1df] px-3 py-2 shadow-inner"
+                    >
+                      <p className={`${retroHeading} text-[10px] leading-relaxed`}>{method}</p>
+                      <p className="text-sm font-semibold">{formatNumberFa(value)} ریال</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className={retroPanelPadded}>
+            <header className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className={retroHeading}>{t('sales_trend')}</p>
+                <h3 className="text-lg font-semibold mt-2">روند فروش ۳۰ روز اخیر</h3>
+              </div>
+              <button className={`${retroButton} text-[11px]`} onClick={loadDashboardData}>
+                به‌روزرسانی
+              </button>
+            </header>
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+              <button
+                className={`${retroButton} text-[11px]`}
+                onClick={() => {
+                  setTrendRange('today')
+                  loadTrend()
+                }}
+              >
+                امروز
+              </button>
+              <button
+                className={`${retroButton} text-[11px]`}
+                onClick={() => {
+                  setTrendRange('3days')
+                  loadTrend()
+                }}
+              >
+                ۳ روز
+              </button>
+              <input
+                className="input text-xs"
+                type="datetime-local"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                title="شروع بازه"
+                placeholder="شروع بازه"
+              />
+              <input
+                className="input text-xs"
+                type="datetime-local"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                title="پایان بازه"
+                placeholder="پایان بازه"
+              />
+              <button
+                className={`${retroButton} text-[11px]`}
+                onClick={() => {
+                  setTrendRange('custom')
+                  loadTrend()
+                }}
+              >
+                اعمال بازه
+              </button>
+              <label className="flex items-center gap-2 ml-2">
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                />
+                <span>بروزرسانی خودکار</span>
+              </label>
+              <input
+                className="input text-xs w-24"
+                type="number"
+                min={10000}
+                step={5000}
+                value={refreshMs}
+                onChange={(e) => setRefreshMs(Number(e.target.value) || 30000)}
+                title="فاصله بروزرسانی (ms)"
+                placeholder="ms"
+              />
+            </div>
+            {trend.length > 0 ? (
+              <div className="h-48 flex items-end gap-1">
+                {trend.map((point) => {
+                  const ratio = maxTrend > 0 ? point.value / maxTrend : 0
+                  const barHeight = Math.max(6, ratio * 100)
+                  return (
+                    <div key={point.label} className="flex-1 flex flex-col items-center gap-2">
+                      <div
+                        className={`w-full bg-[#154b5f] transition-all duration-300`}
+                        style={{ height: `${barHeight}%` }}
+                        title={`${point.label} : ${formatNumberFa(point.value)} ریال`}
+                      ></div>
+                      <span className="text-[10px] text-[#7a6b4f]">{point.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">داده‌ای برای نمایش روند فروش وجود ندارد.</p>
+            )}
           </div>
         </section>
-      )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-6">
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>{t('activity_counter')}</p>
-            <h3 className="text-lg font-semibold mt-2">خلاصه عملیات</h3>
-          </header>
-          {summary ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr>
-                  <th className={retroTableHeader}>شاخص</th>
-                  <th className={retroTableHeader}>مقدار</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">فاکتورهای امروز</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(summary.invoices.today)}</td>
-                </tr>
-                <tr className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">فاکتورهای ۷ روز اخیر</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(summary.invoices['7days'])}</td>
-                </tr>
-                <tr className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">فاکتورهای ماه جاری</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(summary.invoices.month)}</td>
-                </tr>
-                <tr className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">دریافتی‌های امروز</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(summary.receipts_today)} ریال</td>
-                </tr>
-                <tr className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2">پرداخت‌های امروز</td>
-                  <td className="px-3 py-2 text-left">{formatNumberFa(summary.payments_today)} ریال</td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 font-semibold text-[#1f2e3b]">خالص جریان نقدی</td>
-                  <td className="px-3 py-2 text-left font-semibold">
-                    {formatNumberFa(summary.net_today)} ریال
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">اطلاعات خلاصه در دسترس نیست.</p>
-          )}
-          {summary && (
-            <div className="mt-4 text-xs">
-              <p className={`${retroHeading} mb-1`}>Cash Balances</p>
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className={retroPanelPadded}>
+            <header className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className={retroHeading}>Payments</p>
+                <h3 className="text-lg font-semibold mt-2">پرداخت‌ها و دریافت‌ها</h3>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className={`${retroButton} text-[11px]`}
+                  onClick={() => quickAddPayment('in')}
+                >
+                  دریافت سریع
+                </button>
+                <button
+                  className={`${retroButton} text-[11px]`}
+                  onClick={() => quickAddPayment('out')}
+                >
+                  پرداخت سریع
+                </button>
+              </div>
+            </header>
+            {summary ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                  <p className={retroHeading}>دریافتی امروز</p>
+                  <p className="text-lg font-semibold">
+                    {formatNumberFa(summary.receipts_today)} ریال
+                  </p>
+                </div>
+                <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                  <p className={retroHeading}>پرداخت امروز</p>
+                  <p className="text-lg font-semibold">
+                    {formatNumberFa(summary.payments_today)} ریال
+                  </p>
+                </div>
+                <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
+                  <p className={retroHeading}>خالص</p>
+                  <p className="text-lg font-semibold">{formatNumberFa(summary.net_today)} ریال</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">اطلاعات پرداخت در دسترس نیست.</p>
+            )}
+          </div>
+          <div className={retroPanelPadded}>
+            <header className="mb-3">
+              <p className={retroHeading}>Balances</p>
+              <h3 className="text-lg font-semibold mt-2">تراز نقدی به تفکیک روش</h3>
+            </header>
+            {summary ? (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {Object.entries(summary.cash_balances).map(([method, value]) => (
                   <div
                     key={method}
                     className="border border-[#bfb69f] bg-[#f6f1df] px-3 py-2 shadow-inner"
                   >
-                    <p className={`${retroHeading} text-[10px] leading-relaxed`}>{method}</p>
+                    <p className={`${retroHeading} text-[10px]`}>{method}</p>
                     <p className="text-sm font-semibold">{formatNumberFa(value)} ریال</p>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className={retroPanelPadded}>
-          <header className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className={retroHeading}>{t('sales_trend')}</p>
-              <h3 className="text-lg font-semibold mt-2">روند فروش ۳۰ روز اخیر</h3>
-            </div>
-            <button className={`${retroButton} text-[11px]`} onClick={loadDashboardData}>
-              به‌روزرسانی
-            </button>
-          </header>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
-            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('today'); loadTrend()}}>امروز</button>
-            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('3days'); loadTrend()}}>۳ روز</button>
-            <input className="input text-xs" type="datetime-local" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} title="شروع بازه" placeholder="شروع بازه" />
-            <input className="input text-xs" type="datetime-local" value={customTo} onChange={e=>setCustomTo(e.target.value)} title="پایان بازه" placeholder="پایان بازه" />
-            <button className={`${retroButton} text-[11px]`} onClick={()=>{setTrendRange('custom'); loadTrend()}}>اعمال بازه</button>
-            <label className="flex items-center gap-2 ml-2">
-              <input type="checkbox" checked={autoRefresh} onChange={e=>setAutoRefresh(e.target.checked)} />
-              <span>بروزرسانی خودکار</span>
-            </label>
-            <input className="input text-xs w-24" type="number" min={10000} step={5000} value={refreshMs} onChange={e=>setRefreshMs(Number(e.target.value)||30000)} title="فاصله بروزرسانی (ms)" placeholder="ms" />
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">داده‌ای برای تراز نقدی یافت نشد.</p>
+            )}
           </div>
-          {trend.length > 0 ? (
-            <div className="h-48 flex items-end gap-1">
-              {trend.map(point => {
-                const ratio = maxTrend > 0 ? point.value / maxTrend : 0
-                const barHeight = Math.max(6, ratio * 100)
-                return (
-                  <div key={point.label} className="flex-1 flex flex-col items-center gap-2">
-                    <div className={`w-full bg-[#154b5f] transition-all duration-300`} style={{ height: `${barHeight}%` }} title={`${point.label} : ${formatNumberFa(point.value)} ریال`}></div>
-                    <span className="text-[10px] text-[#7a6b4f]">{point.label}</span>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">داده‌ای برای نمایش روند فروش وجود ندارد.</p>
-          )}
-        </div>
-      </section>
+        </section>
 
-      
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className={retroPanelPadded}>
-          <header className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className={retroHeading}>Payments</p>
-              <h3 className="text-lg font-semibold mt-2">پرداخت‌ها و دریافت‌ها</h3>
-            </div>
-            <div className="flex gap-2">
-              <button className={`${retroButton} text-[11px]`} onClick={() => quickAddPayment('in')}>
-                دریافت سریع
-              </button>
-              <button className={`${retroButton} text-[11px]`} onClick={() => quickAddPayment('out')}>
-                پرداخت سریع
-              </button>
-            </div>
-          </header>
-          {summary ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-                <p className={retroHeading}>دریافتی امروز</p>
-                <p className="text-lg font-semibold">{formatNumberFa(summary.receipts_today)} ریال</p>
-              </div>
-              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-                <p className={retroHeading}>پرداخت امروز</p>
-                <p className="text-lg font-semibold">{formatNumberFa(summary.payments_today)} ریال</p>
-              </div>
-              <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-                <p className={retroHeading}>خالص</p>
-                <p className="text-lg font-semibold">{formatNumberFa(summary.net_today)} ریال</p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">اطلاعات پرداخت در دسترس نیست.</p>
-          )}
-        </div>
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>Balances</p>
-            <h3 className="text-lg font-semibold mt-2">تراز نقدی به تفکیک روش</h3>
-          </header>
-          {summary ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {Object.entries(summary.cash_balances).map(([method, value]) => (
-                <div key={method} className="border border-[#bfb69f] bg-[#f6f1df] px-3 py-2 shadow-inner">
-                  <p className={`${retroHeading} text-[10px]`}>{method}</p>
-                  <p className="text-sm font-semibold">{formatNumberFa(value)} ریال</p>
+        {roadmapHighlights.length > 0 && (
+          <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className={retroPanelPadded}>
+              <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <p className={retroHeading}>HP Roadmap</p>
+                  <h3 className="text-lg font-semibold mt-2">پیشرفت نقشه راه</h3>
+                  {roadmapUpdatedJalali && (
+                    <p className={`text-[11px] ${retroMuted} mt-1`}>
+                      به‌روزرسانی: {roadmapUpdatedJalali}
+                    </p>
+                  )}
                 </div>
-              ))}
+                <button className={`${retroButton} text-[11px]`} onClick={openRoadmapModule}>
+                  ورود به نقشه راه
+                </button>
+              </header>
+              <div className="space-y-4">
+                <div className="text-sm">
+                  {roadmapStats.total > 0 ? (
+                    <p>
+                      {formatNumberFa(roadmapStats.done)} از {formatNumberFa(roadmapStats.total)}{' '}
+                      تسک تکمیل شده است.
+                    </p>
+                  ) : (
+                    <p className={retroMuted}>چک‌لیستی برای این نقشه راه ثبت نشده است.</p>
+                  )}
+                </div>
+                <div className="h-3 bg-[#e0d8c1] rounded-full overflow-hidden border border-[#bfb69f]">
+                  <div
+                    className="h-full bg-[#154b5f] transition-all duration-500"
+                    style={{ width: `${roadmapStats.percent}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-[#4b3d2d] leading-6">
+                  ماژول‌های توسعه‌دهندگان، امنیت و ساختار سازمانی در این نسخه به صورت مرحله‌ای دنبال
+                  می‌شوند. برای تخصیص منابع یا بازبینی اولویت‌ها وارد بخش Roadmap شوید.
+                </p>
+              </div>
             </div>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">داده‌ای برای تراز نقدی یافت نشد.</p>
-          )}
-        </div>
-      </section>
 
-      {roadmapHighlights.length > 0 && (
+            <div className={retroPanelPadded}>
+              <header className="mb-3">
+                <p className={retroHeading}>Highlights</p>
+                <h3 className="text-lg font-semibold mt-2">سه گام مهم بعدی</h3>
+              </header>
+              <div className="space-y-3">
+                {roadmapHighlights.map((section) => {
+                  const total = section.checklists.length
+                  const done = section.checklists.filter((item) => item.done).length
+                  const percent = total > 0 ? Math.round((done / total) * 100) : 0
+                  const paragraph =
+                    section.bodyText
+                      ?.split(/\n+/)
+                      .map((part) => part.trim())
+                      .find(Boolean) || 'توضیحی ثبت نشده است.'
+                  return (
+                    <div
+                      key={section.title}
+                      className="border border-[#c5bca5] bg-[#faf4de] p-3 rounded-sm shadow-inner"
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <p className={`${retroHeading} text-sm`}>{section.title}</p>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1f2e3b] text-[#f6f1df]">
+                          {percent}% انجام شده
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#4b3d2d] leading-5">{paragraph}</p>
+                      {section.checklists.length > 0 && (
+                        <ul className="mt-2 space-y-1 text-[11px]">
+                          {section.checklists.slice(0, 3).map((item, idx) => (
+                            <li key={idx} className="flex items-center gap-2">
+                              <span
+                                className={`w-2.5 h-2.5 rounded-full ${
+                                  item.done ? 'bg-green-600' : 'bg-yellow-500'
+                                }`}
+                              ></span>
+                              <span className={item.done ? 'line-through opacity-70' : ''}>
+                                {item.text}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className={retroPanelPadded}>
-            <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <p className={retroHeading}>HP Roadmap</p>
-                <h3 className="text-lg font-semibold mt-2">پیشرفت نقشه راه</h3>
-                {roadmapUpdatedJalali && (
-                  <p className={`text-[11px] ${retroMuted} mt-1`}>به‌روزرسانی: {roadmapUpdatedJalali}</p>
-                )}
-              </div>
-              <button className={`${retroButton} text-[11px]`} onClick={openRoadmapModule}>
-                ورود به نقشه راه
-              </button>
+            <header className="mb-3">
+              <p className={retroHeading}>{t('latest_invoices')}</p>
+              <h3 className="text-lg font-semibold mt-2">فاکتورهای اخیر</h3>
             </header>
-            <div className="space-y-4">
-              <div className="text-sm">
-                {roadmapStats.total > 0 ? (
-                  <p>
-                    {formatNumberFa(roadmapStats.done)} از{' '}
-                    {formatNumberFa(roadmapStats.total)} تسک تکمیل شده است.
-                  </p>
-                ) : (
-                  <p className={retroMuted}>چک‌لیستی برای این نقشه راه ثبت نشده است.</p>
-                )}
-              </div>
-              <div className="h-3 bg-[#e0d8c1] rounded-full overflow-hidden border border-[#bfb69f]">
-                <div
-                  className="h-full bg-[#154b5f] transition-all duration-500"
-                  style={{ width: `${roadmapStats.percent}%` }}
-                ></div>
-              </div>
-              <p className="text-xs text-[#4b3d2d] leading-6">
-                ماژول‌های توسعه‌دهندگان، امنیت و ساختار سازمانی در این نسخه به صورت مرحله‌ای دنبال
-                می‌شوند. برای تخصیص منابع یا بازبینی اولویت‌ها وارد بخش Roadmap شوید.
-              </p>
+            {invoices.length > 0 ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr className="text-right">
+                    <th className={retroTableHeader}>شماره</th>
+                    <th className={retroTableHeader}>طرف حساب</th>
+                    <th className={retroTableHeader}>نوع</th>
+                    <th className={retroTableHeader}>مبلغ</th>
+                    <th className={retroTableHeader}>وضعیت</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id} className="border-b border-[#d9cfb6]">
+                      <td className="px-3 py-2">
+                        {inv.invoice_number || `#${inv.id}`}
+                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                          {inv.server_time ? isoToJalali(inv.server_time) : '-'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{inv.party_name || 'نامشخص'}</td>
+                      <td className="px-3 py-2 text-left">{inv.invoice_type}</td>
+                      <td className="px-3 py-2 text-left">
+                        {formatNumberFa(inv.total || 0)} <span className="text-xs">ریال</span>
+                      </td>
+                      <td
+                        className={`px-3 py-2 text-left ${retroHeading} tracking-[0.3em] text-xs`}
+                      >
+                        {inv.status}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">هیچ فاکتور ثبت نشده است.</p>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button className={`${retroButton} text-[11px]`} onClick={() => onNavigate('sales')}>
+                رفتن به ماژول فروش
+              </button>
             </div>
           </div>
 
           <div className={retroPanelPadded}>
             <header className="mb-3">
-              <p className={retroHeading}>Highlights</p>
-              <h3 className="text-lg font-semibold mt-2">سه گام مهم بعدی</h3>
+              <p className={retroHeading}>{t('inventory_snapshot')}</p>
+              <h3 className="text-lg font-semibold mt-2">محصولات اخیر</h3>
             </header>
-            <div className="space-y-3">
-              {roadmapHighlights.map(section => {
-                const total = section.checklists.length
-                const done = section.checklists.filter(item => item.done).length
-                const percent = total > 0 ? Math.round((done / total) * 100) : 0
-                const paragraph =
-                  section.bodyText
-                    ?.split(/\n+/)
-                    .map(part => part.trim())
-                    .find(Boolean) || 'توضیحی ثبت نشده است.'
-                return (
-                  <div
-                    key={section.title}
-                    className="border border-[#c5bca5] bg-[#faf4de] p-3 rounded-sm shadow-inner"
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <p className={`${retroHeading} text-sm`}>{section.title}</p>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#1f2e3b] text-[#f6f1df]">
-                        {percent}% انجام شده
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#4b3d2d] leading-5">{paragraph}</p>
-                    {section.checklists.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-[11px]">
-                        {section.checklists.slice(0, 3).map((item, idx) => (
-                          <li key={idx} className="flex items-center gap-2">
-                            <span
-                              className={`w-2.5 h-2.5 rounded-full ${
-                                item.done ? 'bg-green-600' : 'bg-yellow-500'
-                              }`}
-                            ></span>
-                            <span className={item.done ? 'line-through opacity-70' : ''}>
-                              {item.text}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )
-              })}
+            {products.length > 0 ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr className="text-right">
+                    <th className={retroTableHeader}>نام</th>
+                    <th className={retroTableHeader}>گروه</th>
+                    <th className={retroTableHeader}>موجودی</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((prod) => (
+                    <tr key={prod.id} className="border-b border-[#d9cfb6]">
+                      <td className="px-3 py-2">
+                        {prod.name}
+                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                          واحد: {prod.unit || 'عدد'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{prod.group || 'بدون گروه'}</td>
+                      <td className="px-3 py-2 text-left">{formatNumberFa(prod.inventory || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">محصولی ثبت نشده است.</p>
+            )}
+            <div className="mt-4 flex justify-end">
+              <button
+                className={`${retroButton} text-[11px]`}
+                onClick={() => onNavigate('inventory')}
+              >
+                مدیریت موجودی
+              </button>
             </div>
           </div>
         </section>
-      )}
 
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>{t('latest_invoices')}</p>
-            <h3 className="text-lg font-semibold mt-2">فاکتورهای اخیر</h3>
-          </header>
-          {invoices.length > 0 ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr className="text-right">
-                  <th className={retroTableHeader}>شماره</th>
-                  <th className={retroTableHeader}>طرف حساب</th>
-                  <th className={retroTableHeader}>نوع</th>
-                  <th className={retroTableHeader}>مبلغ</th>
-                  <th className={retroTableHeader}>وضعیت</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map(inv => (
-                  <tr key={inv.id} className="border-b border-[#d9cfb6]">
-                    <td className="px-3 py-2">
-                      {inv.invoice_number || `#${inv.id}`}
-                      <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                        {inv.server_time ? isoToJalali(inv.server_time) : '-'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{inv.party_name || 'نامشخص'}</td>
-                    <td className="px-3 py-2 text-left">{inv.invoice_type}</td>
-                    <td className="px-3 py-2 text-left">
-                      {formatNumberFa(inv.total || 0)} <span className="text-xs">ریال</span>
-                    </td>
-                    <td className={`px-3 py-2 text-left ${retroHeading} tracking-[0.3em] text-xs`}>
-                      {inv.status}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">هیچ فاکتور ثبت نشده است.</p>
-          )}
-          <div className="mt-4 flex justify-end">
-            <button className={`${retroButton} text-[11px]`} onClick={() => onNavigate('sales')}>
-              رفتن به ماژول فروش
-            </button>
-          </div>
-        </div>
-
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>{t('inventory_snapshot')}</p>
-            <h3 className="text-lg font-semibold mt-2">محصولات اخیر</h3>
-          </header>
-          {products.length > 0 ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr className="text-right">
-                  <th className={retroTableHeader}>نام</th>
-                  <th className={retroTableHeader}>گروه</th>
-                  <th className={retroTableHeader}>موجودی</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map(prod => (
-                  <tr key={prod.id} className="border-b border-[#d9cfb6]">
-                    <td className="px-3 py-2">
-                      {prod.name}
-                      <span className="block text-[10px] text-[#7a6b4f] mt-1">
-                        واحد: {prod.unit || 'عدد'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">{prod.group || 'بدون گروه'}</td>
-                    <td className="px-3 py-2 text-left">{formatNumberFa(prod.inventory || 0)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">محصولی ثبت نشده است.</p>
-          )}
-          <div className="mt-4 flex justify-end">
-            <button className={`${retroButton} text-[11px]`} onClick={() => onNavigate('inventory')}>
-              مدیریت موجودی
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>{t('aging_inventory')}</p>
-            <h3 className="text-lg font-semibold mt-2">محصولات راکد</h3>
-          </header>
-          {oldStock.length > 0 ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr>
-                  <th className={retroTableHeader}>محصول</th>
-                  <th className={retroTableHeader}>موجودی</th>
-                  <th className={retroTableHeader}>آخرین قیمت</th>
-                </tr>
-              </thead>
-              <tbody>
-                {oldStock.map(item => (
-                  <tr key={item.product_id} className="border-b border-[#d9cfb6]">
-                    <td className="px-3 py-2">{item.name}</td>
-                    <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
-                    <td className="px-3 py-2 text-left">
-                      {item.last_price_at ? isoToJalali(item.last_price_at) : 'نامشخص'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">
-              محصول راکدی یافت نشد یا دسترسی به این بخش محدود است.
-            </p>
-          )}
-        </div>
-
-        <div className={retroPanelPadded}>
-          <header className="mb-3">
-            <p className={retroHeading}>{t('checks_due')}</p>
-            <h3 className="text-lg font-semibold mt-2">چک‌های در شرف سررسید</h3>
-          </header>
-          {checksDue.length > 0 ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr>
-                  <th className={retroTableHeader}>شماره</th>
-                  <th className={retroTableHeader}>طرف حساب</th>
-                  <th className={retroTableHeader}>مبلغ</th>
-                  <th className={retroTableHeader}>سررسید</th>
-                  <th className={retroTableHeader}>یادآور</th>
-                  <th className={retroTableHeader}>تایید</th>
-                </tr>
-              </thead>
-              <tbody>
-                {checksDue.map(item => (
-                  <tr key={item.id} className="border-b border-[#d9cfb6]">
-                    <td className="px-3 py-2">{item.payment_number || `#${item.id}`}</td>
-                    <td className="px-3 py-2">{item.party_name || 'نامشخص'}</td>
-                    <td className="px-3 py-2 text-left">{formatNumberFa(item.amount)}</td>
-                    <td className="px-3 py-2 text-left">
-                      {item.due_date ? isoToJalali(item.due_date) : '-'}
-                    </td>
-                    <td className="px-3 py-2 text-left">
-                      <button
-                        className={`${retroButton} text-[11px]`}
-                        onClick={() => sendCheckReminder(item)}
-                        disabled={!findMobileByName(item.party_name)}
-                        title={findMobileByName(item.party_name) ? 'ارسال پیامک' : 'موبایل یافت نشد'}
-                      >SMS</button>
-                    </td>
-                    <td className="px-3 py-2 text-left">
-                      <button className={`${retroButton} text-[11px]`} onClick={() => approveCheque(item)}>تایید</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">چکی با شرایط تعیین‌شده یافت نشد.</p>
-          )}
-        </div>
-      </section>
-
-      <section className={retroPanelPadded}>
-        <header className="mb-3">
-              <p className={retroHeading}>{t('command_pad')}</p>
-              <h3 className="text-lg font-semibold mt-2">عملیات سریع سیستم</h3>
-            </header>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-center">
-          <button className={`${retroButton} w-full`} onClick={() => onNavigate('sales')}>
-            صدور فاکتور جدید
-          </button>
-          <button className={`${retroButton} w-full`} onClick={() => onNavigate('inventory')}>
-            ثبت کالای جدید
-          </button>
-          <button className={`${retroButton} w-full`} onClick={() => onNavigate('finance')}>
-            دریافت / پرداخت
-          </button>
-          <button className={`${retroButton} w-full`} onClick={() => onNavigate('reports')}>
-            گزارش‌های مالی
-          </button>
-          <button className={`${retroButton} w-full`} onClick={openRoadmapModule}>
-            نقشه راه سیستم
-          </button>
-        </div>
-        <p className={`${retroHeading} text-[10px] mt-4 tracking-[0.4em]`}>
-          برای مدیریت جزئیات هر فرآیند، از ماژول‌های تخصصی استفاده کنید.
-        </p>
-      </section>
-
-      {prices && (
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className={retroPanelPadded}>
             <header className="mb-3">
-              <p className={retroHeading}>FX Rates</p>
-              <h3 className="text-lg font-semibold mt-2">نرخ ارز (USD پایه)</h3>
+              <p className={retroHeading}>{t('aging_inventory')}</p>
+              <h3 className="text-lg font-semibold mt-2">محصولات راکد</h3>
             </header>
-            {prices.fx ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                {Object.entries(prices.fx).map(([symbol, value]) => (
-                  <div key={symbol} className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-                    <p className={`${retroHeading} mb-1`}>{symbol}</p>
-                    <p className="text-lg font-semibold">{formatNumberFa(value)}</p>
-                  </div>
-                ))}
-              </div>
+            {oldStock.length > 0 ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr>
+                    <th className={retroTableHeader}>محصول</th>
+                    <th className={retroTableHeader}>موجودی</th>
+                    <th className={retroTableHeader}>آخرین قیمت</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {oldStock.map((item) => (
+                    <tr key={item.product_id} className="border-b border-[#d9cfb6]">
+                      <td className="px-3 py-2">{item.name}</td>
+                      <td className="px-3 py-2 text-left">{formatNumberFa(item.inventory)}</td>
+                      <td className="px-3 py-2 text-left">
+                        {item.last_price_at ? isoToJalali(item.last_price_at) : 'نامشخص'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
-              <p className="text-xs text-[#7a6b4f]">نرخ ارز از سرویس بیرونی دریافت نشد.</p>
+              <p className="text-xs text-[#7a6b4f]">
+                محصول راکدی یافت نشد یا دسترسی به این بخش محدود است.
+              </p>
             )}
           </div>
 
           <div className={retroPanelPadded}>
             <header className="mb-3">
-              <p className={retroHeading}>Crypto</p>
-              <h3 className="text-lg font-semibold mt-2">قیمت رمزارز</h3>
+              <p className={retroHeading}>{t('checks_due')}</p>
+              <h3 className="text-lg font-semibold mt-2">چک‌های در شرف سررسید</h3>
             </header>
-            {prices.crypto ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                {Object.entries(prices.crypto).map(([symbol, value]) => (
-                  <div key={symbol} className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner">
-                    <p className={`${retroHeading} mb-1`}>{symbol.toUpperCase()}</p>
-                    <p className="text-lg font-semibold">{formatNumberFa(value.usd)} USD</p>
-                  </div>
-                ))}
-              </div>
+            {checksDue.length > 0 ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr>
+                    <th className={retroTableHeader}>شماره</th>
+                    <th className={retroTableHeader}>طرف حساب</th>
+                    <th className={retroTableHeader}>مبلغ</th>
+                    <th className={retroTableHeader}>سررسید</th>
+                    <th className={retroTableHeader}>یادآور</th>
+                    <th className={retroTableHeader}>تایید</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {checksDue.map((item) => (
+                    <tr key={item.id} className="border-b border-[#d9cfb6]">
+                      <td className="px-3 py-2">{item.payment_number || `#${item.id}`}</td>
+                      <td className="px-3 py-2">{item.party_name || 'نامشخص'}</td>
+                      <td className="px-3 py-2 text-left">{formatNumberFa(item.amount)}</td>
+                      <td className="px-3 py-2 text-left">
+                        {item.due_date ? isoToJalali(item.due_date) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-left">
+                        <button
+                          className={`${retroButton} text-[11px]`}
+                          onClick={() => sendCheckReminder(item)}
+                          disabled={!findMobileByName(item.party_name)}
+                          title={
+                            findMobileByName(item.party_name) ? 'ارسال پیامک' : 'موبایل یافت نشد'
+                          }
+                        >
+                          SMS
+                        </button>
+                      </td>
+                      <td className="px-3 py-2 text-left">
+                        <button
+                          className={`${retroButton} text-[11px]`}
+                          onClick={() => approveCheque(item)}
+                        >
+                          تایید
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
-              <p className="text-xs text-[#7a6b4f]">قیمت رمزارز در دسترس نیست.</p>
+              <p className="text-xs text-[#7a6b4f]">چکی با شرایط تعیین‌شده یافت نشد.</p>
             )}
           </div>
         </section>
-      )}
+
+        <section className={retroPanelPadded}>
+          <header className="mb-3">
+            <p className={retroHeading}>{t('command_pad')}</p>
+            <h3 className="text-lg font-semibold mt-2">عملیات سریع سیستم</h3>
+          </header>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-center">
+            <button className={`${retroButton} w-full`} onClick={() => onNavigate('sales')}>
+              صدور فاکتور جدید
+            </button>
+            <button className={`${retroButton} w-full`} onClick={() => onNavigate('inventory')}>
+              ثبت کالای جدید
+            </button>
+            <button className={`${retroButton} w-full`} onClick={() => onNavigate('finance')}>
+              دریافت / پرداخت
+            </button>
+            <button className={`${retroButton} w-full`} onClick={() => onNavigate('reports')}>
+              گزارش‌های مالی
+            </button>
+            <button className={`${retroButton} w-full`} onClick={openRoadmapModule}>
+              نقشه راه سیستم
+            </button>
+          </div>
+          <p className={`${retroHeading} text-[10px] mt-4 tracking-[0.4em]`}>
+            برای مدیریت جزئیات هر فرآیند، از ماژول‌های تخصصی استفاده کنید.
+          </p>
+        </section>
+
+        {prices && (
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className={retroPanelPadded}>
+              <header className="mb-3">
+                <p className={retroHeading}>FX Rates</p>
+                <h3 className="text-lg font-semibold mt-2">نرخ ارز (USD پایه)</h3>
+              </header>
+              {prices.fx ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  {Object.entries(prices.fx).map(([symbol, value]) => (
+                    <div
+                      key={symbol}
+                      className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner"
+                    >
+                      <p className={`${retroHeading} mb-1`}>{symbol}</p>
+                      <p className="text-lg font-semibold">{formatNumberFa(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#7a6b4f]">نرخ ارز از سرویس بیرونی دریافت نشد.</p>
+              )}
+            </div>
+
+            <div className={retroPanelPadded}>
+              <header className="mb-3">
+                <p className={retroHeading}>Crypto</p>
+                <h3 className="text-lg font-semibold mt-2">قیمت رمزارز</h3>
+              </header>
+              {prices.crypto ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  {Object.entries(prices.crypto).map(([symbol, value]) => (
+                    <div
+                      key={symbol}
+                      className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner"
+                    >
+                      <p className={`${retroHeading} mb-1`}>{symbol.toUpperCase()}</p>
+                      <p className="text-lg font-semibold">{formatNumberFa(value.usd)} USD</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[#7a6b4f]">قیمت رمزارز در دسترس نیست.</p>
+              )}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   )
 }
-
-

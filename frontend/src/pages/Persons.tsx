@@ -30,7 +30,7 @@ const Persons: React.FC = () => {
       params.set('limit', String(pageSize))
       if (debounced) params.set('q', debounced)
       const res = await apiGet(`/api/persons?${params.toString()}`)
-      const arr = Array.isArray(res) ? res : (res?.items || [])
+      const arr = Array.isArray(res) ? res : res?.items || []
       setItems(arr)
     } catch (e: any) {
       setError(e?.message || 'خطا در دریافت اشخاص')
@@ -40,7 +40,9 @@ const Persons: React.FC = () => {
     }
   }
 
-  React.useEffect(() => { load() }, [debounced, page, pageSize])
+  React.useEffect(() => {
+    load()
+  }, [debounced, page, pageSize])
 
   React.useEffect(() => {
     const id = setTimeout(() => setDebounced(query.trim()), 250)
@@ -52,15 +54,13 @@ const Persons: React.FC = () => {
     const list = items || []
     const res = q
       ? list.filter((p) =>
-          [p.name, p.mobile, p.email, p.type]
-            .filter(Boolean)
-            .some((v) => String(v).includes(q)),
+          [p.name, p.mobile, p.email, p.type].filter(Boolean).some((v) => String(v).includes(q)),
         )
       : list
     if (sortKey) {
       res.sort((a, b) => {
-        const va = (a[sortKey!] ?? '') as any
-        const vb = (b[sortKey!] ?? '') as any
+        const va = (a[sortKey] ?? '') as any
+        const vb = (b[sortKey] ?? '') as any
         const ca = typeof va === 'number' ? va : String(va)
         const cb = typeof vb === 'number' ? vb : String(vb)
         if (ca < cb) return sortDir === 'asc' ? -1 : 1
@@ -86,8 +86,17 @@ const Persons: React.FC = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">اشخاص</h2>
         <div className="flex items-center gap-2">
-          <button className="hp-button" onClick={load} disabled={loading}>{loading ? '...' : 'بارگذاری'}</button>
-          <button className="hp-button" onClick={()=>{ window.location.hash = 'person-new' }}>افزودن شخص</button>
+          <button className="hp-button" onClick={load} disabled={loading}>
+            {loading ? '...' : 'بارگذاری'}
+          </button>
+          <button
+            className="hp-button"
+            onClick={() => {
+              window.location.hash = 'person-new'
+            }}
+          >
+            افزودن شخص
+          </button>
         </div>
       </div>
 
@@ -95,8 +104,23 @@ const Persons: React.FC = () => {
 
       <div className="mt-3">
         <div className="flex items-center gap-2 mb-2">
-          <input className="hp-input w-56" placeholder="جستجو" value={query} onChange={(e)=>{setQuery(e.target.value); setPage(1)}} />
-          <select className="hp-input w-24" value={pageSize} onChange={(e)=>{setPageSize(Number(e.target.value)); setPage(1)}}>
+          <input
+            className="hp-input w-56"
+            placeholder="جستجو"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
+          />
+          <select
+            className="hp-input w-24"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value))
+              setPage(1)
+            }}
+          >
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
@@ -107,11 +131,21 @@ const Persons: React.FC = () => {
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left">
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('name')}>نام</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('mobile')}>موبایل</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('email')}>ایمیل</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('type')}>نوع</th>
-              <th className="px-3 py-2 cursor-pointer" onClick={()=>toggleSort('created_at')}>تاریخ</th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('name')}>
+                نام
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('mobile')}>
+                موبایل
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('email')}>
+                ایمیل
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('type')}>
+                نوع
+              </th>
+              <th className="px-3 py-2 cursor-pointer" onClick={() => toggleSort('created_at')}>
+                تاریخ
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -124,7 +158,14 @@ const Persons: React.FC = () => {
                   <td className="px-3 py-2">{p.type || '-'}</td>
                   <td className="px-3 py-2 flex items-center gap-2">
                     <span>{p.created_at || '-'}</span>
-                    <button className="hp-button secondary" onClick={()=>{ window.location.hash = `person-edit:${p.id}` }}>ویرایش</button>
+                    <button
+                      className="hp-button secondary"
+                      onClick={() => {
+                        window.location.hash = `person-edit:${p.id}`
+                      }}
+                    >
+                      ویرایش
+                    </button>
                   </td>
                 </tr>
               ))
@@ -138,9 +179,21 @@ const Persons: React.FC = () => {
           </tbody>
         </table>
         <div className="flex items-center gap-2 mt-3">
-          <button className="hp-button" onClick={()=> setPage(Math.max(1, page-1))} disabled={page===1}>قبلی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+          >
+            قبلی
+          </button>
           <span className="text-xs">صفحه {page}</span>
-          <button className="hp-button" onClick={()=> setPage(page+1)} disabled={(items||[]).length <= page*pageSize}>بعدی</button>
+          <button
+            className="hp-button"
+            onClick={() => setPage(page + 1)}
+            disabled={(items || []).length <= page * pageSize}
+          >
+            بعدی
+          </button>
         </div>
       </div>
     </div>

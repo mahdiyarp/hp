@@ -1,6 +1,12 @@
 /* Force IranYekan selectively to UI elements to avoid layout regressions */
-body, .hp-card, .retroPanel, .retroPanelPadded, .widget-container, .dashboard, .dashboard * {
-  font-family: "IranYekan", "Vazirmatn", sans-serif !important;
+body,
+.hp-card,
+.retroPanel,
+.retroPanelPadded,
+.widget-container,
+.dashboard,
+.dashboard * {
+  font-family: 'IranYekan', 'Vazirmatn', sans-serif !important;
   direction: rtl;
 }
 
@@ -12,5 +18,5 @@ input,
 textarea,
 table,
 .chart-label {
-  font-family: "IranYekan", "Vazirmatn", sans-serif !important;
+  font-family: 'IranYekan', 'Vazirmatn', sans-serif !important;
 }

@@ -1,5 +1,5 @@
 import React from 'react'
-import { login as loginApi, getAccessToken } from '../services/auth.ts'
+import { login as loginApi, getAccessToken } from '../services/auth'
 
 type MeResponse = {
   username?: string
@@ -41,8 +41,8 @@ const LoginPanel: React.FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const result = await loginApi(username, password)
-      if (result?.access_token) {
+        const result = await loginApi(username, password)
+        if (result && 'access_token' in result) {
         await fetchMe()
       } else if (result?.otpRequired) {
         setError('OTP لازم است')

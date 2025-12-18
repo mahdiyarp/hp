@@ -46,6 +46,7 @@ interface ActivityLog {
 interface SmsSettingsPayload {
   provider?: string
   api_key?: string
+  secret_key?: string
   sender?: string
   enable_notifications?: boolean
   notifications?: {
@@ -58,6 +59,7 @@ interface SmsSettingsPayload {
     daily_reminder_hour?: number
     timezone?: string
   }
+  otp_template_id?: string | number
 }
 
 interface UserSmsSettingsPayload {
@@ -76,16 +78,32 @@ interface UserSmsSettingsPayload {
 
 export default function AccessControlModule({}: ModuleComponentProps) {
   const [users, setUsers] = useState<User[]>([])
-  const [userSortKey, setUserSortKey] = useState<'id' | 'username' | 'full_name' | 'email' | 'role_id' | 'is_active'>('id')
+  const [userSortKey, setUserSortKey] = useState<
+    'id' | 'username' | 'full_name' | 'email' | 'role_id' | 'is_active'
+  >('id')
   const [userSortDir, setUserSortDir] = useState<'asc' | 'desc'>('asc')
   const [userPage, setUserPage] = useState(1)
   const [userPageSize, setUserPageSize] = useState(10)
   const [roles, setRoles] = useState<Role[]>([])
-    const [roleForm, setRoleForm] = useState<{ id?: number; name: string; description: string }>({ name: '', description: '' })
-    const [userForm, setUserForm] = useState<{ id?: number; username: string; full_name?: string; email?: string; role_id?: number | null }>({ username: '', full_name: '', email: '', role_id: null })
+  const [roleForm, setRoleForm] = useState<{ id?: number; name: string; description: string }>({
+    name: '',
+    description: '',
+  })
+  const [userForm, setUserForm] = useState<{
+    id?: number
+    username: string
+    full_name?: string
+    email?: string
+    role_id?: number | null
+  }>({ username: '', full_name: '', email: '', role_id: null })
   const [perms, setPerms] = useState<Permission[]>([])
   const [activities, setActivities] = useState<ActivityLog[]>([])
-  const [activityFilter, setActivityFilter] = useState<{ user?: string; method?: string; status?: string; path?: string }>({})
+  const [activityFilter, setActivityFilter] = useState<{
+    user?: string
+    method?: string
+    status?: string
+    path?: string
+  }>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userPerms, setUserPerms] = useState<Record<number, Record<number, boolean>>>({})
@@ -159,7 +177,8 @@ export default function AccessControlModule({}: ModuleComponentProps) {
       // Optionally load per-user permission overrides
       try {
         const up = await apiGet<any>('/api/users/permissions')
-        if (up && typeof up === 'object') setUserPerms(up as Record<number, Record<number, boolean>>)
+        if (up && typeof up === 'object')
+          setUserPerms(up as Record<number, Record<number, boolean>>)
       } catch (e) {}
       try {
         const a = await apiGet<ActivityLog[]>('/api/admin/activity?limit=200')
@@ -174,12 +193,13 @@ export default function AccessControlModule({}: ModuleComponentProps) {
 
   const filteredActivities = useMemo(() => {
     const f = activityFilter
-    return activities.filter(a => (
-      (!f.user || (a.username ?? '').toLowerCase().includes(f.user.toLowerCase())) &&
-      (!f.method || a.method.toLowerCase() === f.method.toLowerCase()) &&
-      (!f.status || String(a.status_code) === String(f.status)) &&
-      (!f.path || a.path.toLowerCase().includes(f.path.toLowerCase()))
-    ))
+    return activities.filter(
+      (a) =>
+        (!f.user || (a.username ?? '').toLowerCase().includes(f.user.toLowerCase())) &&
+        (!f.method || a.method.toLowerCase() === f.method.toLowerCase()) &&
+        (!f.status || String(a.status_code) === String(f.status)) &&
+        (!f.path || a.path.toLowerCase().includes(f.path.toLowerCase())),
+    )
   }, [activities, activityFilter])
 
   const pagedActivities = useMemo(() => {
@@ -190,14 +210,23 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   function exportActivitiesCsv() {
     const rows = [
       ['time', 'user', 'path', 'method', 'status', 'detail'],
-      ...filteredActivities.map(a => [a.created_at, a.username ?? 'سیستم', a.path, a.method, String(a.status_code), (a.detail ?? '').replace(/\n/g, ' ')]),
+      ...filteredActivities.map((a) => [
+        a.created_at,
+        a.username ?? 'سیستم',
+        a.path,
+        a.method,
+        String(a.status_code),
+        (a.detail ?? '').replace(/\n/g, ' '),
+      ]),
     ]
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const csv = rows
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `activities_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.csv`
+    link.download = `activities_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -208,10 +237,10 @@ export default function AccessControlModule({}: ModuleComponentProps) {
     try {
       if (roleForm.id) {
         const updated = await apiPatch<Role>(`/api/roles/${roleForm.id}`, payload)
-        setRoles(rs => rs.map(r => r.id === updated.id ? updated : r))
+        setRoles((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
       } else {
         const created = await apiPost<Role>('/api/roles', payload)
-        setRoles(rs => [created, ...rs])
+        setRoles((rs) => [created, ...rs])
       }
       setRoleForm({ name: '', description: '' })
     } catch (e) {
@@ -223,7 +252,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
     if (!confirm('حذف این نقش؟')) return
     try {
       await apiDelete(`/api/roles/${id}`)
-      setRoles(rs => rs.filter(r => r.id !== id))
+      setRoles((rs) => rs.filter((r) => r.id !== id))
     } catch (e) {
       alert('حذف نقش ناموفق بود')
     }
@@ -240,10 +269,10 @@ export default function AccessControlModule({}: ModuleComponentProps) {
     try {
       if (userForm.id) {
         const updated = await apiPatch<User>(`/api/users/${userForm.id}`, payload)
-        setUsers(us => us.map(u => u.id === updated.id ? updated : u))
+        setUsers((us) => us.map((u) => (u.id === updated.id ? updated : u)))
       } else {
         const created = await apiPost<User>('/api/users', payload)
-        setUsers(us => [created, ...us])
+        setUsers((us) => [created, ...us])
       }
       setUserForm({ username: '', full_name: '', email: '', role_id: null })
     } catch (e) {
@@ -254,7 +283,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   async function saveUserRole(userId: number, roleId: number | null) {
     try {
       await apiPatch(`/api/users/${userId}/role`, { role_id: roleId })
-      setUsers(us => us.map(u => (u.id === userId ? { ...u, role_id: roleId } : u)))
+      setUsers((us) => us.map((u) => (u.id === userId ? { ...u, role_id: roleId } : u)))
     } catch (e) {}
   }
 
@@ -262,8 +291,8 @@ export default function AccessControlModule({}: ModuleComponentProps) {
     setSavingUserPermId(userId)
     try {
       await apiPut(`/api/users/${userId}/permissions`, userPerms[userId] ?? {})
-    } catch (e) {}
-    finally {
+    } catch (e) {
+    } finally {
       setSavingUserPermId(null)
     }
   }
@@ -275,7 +304,8 @@ export default function AccessControlModule({}: ModuleComponentProps) {
       const kv: Record<string, string> = {}
       if (smsSettings.api_key) kv['smsir_api_key'] = String(smsSettings.api_key)
       if (smsSettings.sender) kv['smsir_line_number'] = String(smsSettings.sender)
-      if ((smsSettings as any).otp_template_id) kv['smsir_otp_template_id'] = String((smsSettings as any).otp_template_id)
+      if ((smsSettings as any).otp_template_id)
+        kv['smsir_otp_template_id'] = String((smsSettings as any).otp_template_id)
       kv['smsir_enabled'] = String((smsSettings.provider ?? '').toLowerCase() === 'sms.ir')
       for (const [key, value] of Object.entries(kv)) {
         await apiPut(`/api/admin/settings/${key}`, { value })
@@ -290,13 +320,19 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   async function sendTestSms() {
     setSavingSms(true)
     try {
-      if ((smsSettings.provider ?? '').toLowerCase() === 'sms.ir' && (smsSettings.api_key || '').length > 0) {
+      if (
+        (smsSettings.provider ?? '').toLowerCase() === 'sms.ir' &&
+        (smsSettings.api_key || '').length > 0
+      ) {
         const res = await apiPost<any>('/api/smsir/test-otp', { mobile: testSmsTo, code: '123456' })
         const msg = res?.detail ? 'ارسال OTP (sms.ir) انجام شد' : 'ارسال OTP انجام شد'
         alert(msg)
       } else {
         // برای درگاه‌های عمومی یا زمانی که sms.ir تنظیم نشده، از تست عمومی استفاده کن
-        const res = await apiPost<{ sent?: boolean; detail?: string }>('/api/sms/test', { mobile: testSmsTo, message: testSmsText })
+        const res = await apiPost<{ sent?: boolean; detail?: string }>('/api/sms/test', {
+          mobile: testSmsTo,
+          message: testSmsText,
+        })
         alert(res?.detail || 'پیام تستی ارسال شد')
       }
     } catch (e: any) {
@@ -337,7 +373,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
 
   const byRole = useMemo(() => {
     const map: Record<string, User[]> = {}
-    users.forEach(u => {
+    users.forEach((u) => {
       const key = String(u.role_id ?? 'بدون نقش')
       if (!map[key]) map[key] = []
       map[key].push(u)
@@ -346,7 +382,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   }, [users])
 
   const smsPerms = useMemo(() => {
-    return perms.filter(p => (p.module || '').toLowerCase().includes('sms'))
+    return perms.filter((p) => (p.module || '').toLowerCase().includes('sms'))
   }, [perms])
 
   return (
@@ -356,7 +392,6 @@ export default function AccessControlModule({}: ModuleComponentProps) {
         <p className={`${retroMuted}`}>مدیریت نقش‌ها، مجوزها، کاربران و اعلان‌های پیامکی</p>
         {error ? <div className={`${retroBadge} mt-2`}>خطا: {error}</div> : null}
         {loading && <div className={`${retroMuted} mt-2`}>در حال بارگذاری…</div>}
-
       </div>
       <section className={`${retroPanel} space-y-3`}>
         <div className="space-y-1">
@@ -364,13 +399,30 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           <p className={`${retroMuted}`}>مدیریت، جست‌وجو و ویرایش نقش‌ها</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <input className="input w-full" placeholder="نام نقش" value={roleForm.name}
-            onChange={e => setRoleForm(f => ({ ...f, name: e.target.value }))} />
-          <input className="input w-full" placeholder="توضیح" value={roleForm.description}
-            onChange={e => setRoleForm(f => ({ ...f, description: e.target.value }))} />
+          <input
+            className="input w-full"
+            placeholder="نام نقش"
+            value={roleForm.name}
+            onChange={(e) => setRoleForm((f) => ({ ...f, name: e.target.value }))}
+          />
+          <input
+            className="input w-full"
+            placeholder="توضیح"
+            value={roleForm.description}
+            onChange={(e) => setRoleForm((f) => ({ ...f, description: e.target.value }))}
+          />
           <div className="flex gap-2">
-            <button className={retroButton} onClick={createOrUpdateRole}>{roleForm.id ? 'ویرایش نقش' : 'ایجاد نقش'}</button>
-            {roleForm.id ? <button className={retroButton} onClick={() => setRoleForm({ name: '', description: '' })}>انصراف</button> : null}
+            <button className={retroButton} onClick={createOrUpdateRole}>
+              {roleForm.id ? 'ویرایش نقش' : 'ایجاد نقش'}
+            </button>
+            {roleForm.id ? (
+              <button
+                className={retroButton}
+                onClick={() => setRoleForm({ name: '', description: '' })}
+              >
+                انصراف
+              </button>
+            ) : null}
           </div>
         </div>
         <table className="w-full text-sm">
@@ -383,14 +435,23 @@ export default function AccessControlModule({}: ModuleComponentProps) {
             </tr>
           </thead>
           <tbody>
-            {roles.map(r => (
+            {roles.map((r) => (
               <tr key={r.id}>
                 <td>{r.id}</td>
                 <td>{r.name}</td>
                 <td>{r.description}</td>
                 <td className="whitespace-nowrap">
-                  <button className={retroButton} onClick={() => setRoleForm({ id: r.id, name: r.name, description: r.description })}>ویرایش</button>
-                  <button className={retroButton} onClick={() => deleteRole(r.id)}>حذف</button>
+                  <button
+                    className={retroButton}
+                    onClick={() =>
+                      setRoleForm({ id: r.id, name: r.name, description: r.description })
+                    }
+                  >
+                    ویرایش
+                  </button>
+                  <button className={retroButton} onClick={() => deleteRole(r.id)}>
+                    حذف
+                  </button>
                 </td>
               </tr>
             ))}
@@ -406,52 +467,195 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           <p className={`${retroMuted}`}>فهرست کاربران، نقش، وضعیت و دسترسی‌ها</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <input className="input w-full" placeholder="نام کاربری" value={userForm.username}
-            onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} />
-          <input className="input w-full" placeholder="نام کامل" value={userForm.full_name ?? ''}
-            onChange={e => setUserForm(f => ({ ...f, full_name: e.target.value }))} />
-          <input className="input w-full" placeholder="ایمیل" value={userForm.email ?? ''}
-            onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} />
-          <select className="input w-full" value={userForm.role_id ?? ''}
-            onChange={e => setUserForm(f => ({ ...f, role_id: e.target.value === '' ? null : Number(e.target.value) }))}>
+          <input
+            className="input w-full"
+            placeholder="نام کاربری"
+            value={userForm.username}
+            onChange={(e) => setUserForm((f) => ({ ...f, username: e.target.value }))}
+          />
+          <input
+            className="input w-full"
+            placeholder="نام کامل"
+            value={userForm.full_name ?? ''}
+            onChange={(e) => setUserForm((f) => ({ ...f, full_name: e.target.value }))}
+          />
+          <input
+            className="input w-full"
+            placeholder="ایمیل"
+            value={userForm.email ?? ''}
+            onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))}
+          />
+          <select
+            className="input w-full"
+            value={userForm.role_id ?? ''}
+            onChange={(e) =>
+              setUserForm((f) => ({
+                ...f,
+                role_id: e.target.value === '' ? null : Number(e.target.value),
+              }))
+            }
+          >
             <option value="">بدون نقش</option>
-            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
           </select>
           <div className="flex gap-2">
-            <button className={retroButton} onClick={createOrUpdateUser}>{userForm.id ? 'ویرایش کاربر' : 'ایجاد کاربر'}</button>
-            {userForm.id ? <button className={retroButton} onClick={() => setUserForm({ username: '', full_name: '', email: '', role_id: null })}>انصراف</button> : null}
+            <button className={retroButton} onClick={createOrUpdateUser}>
+              {userForm.id ? 'ویرایش کاربر' : 'ایجاد کاربر'}
+            </button>
+            {userForm.id ? (
+              <button
+                className={retroButton}
+                onClick={() =>
+                  setUserForm({ username: '', full_name: '', email: '', role_id: null })
+                }
+              >
+                انصراف
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mt-2">
-          <input className="input w-full" placeholder="دعوت: ایمیل" onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))} value={userForm.email ?? ''} />
-          <input className="input w-full" placeholder="دعوت: موبایل" onChange={e => setUserForm(f => ({ ...f, username: e.target.value }))} value={userForm.username} />
-          <select className="input w-full" value={userForm.role_id ?? ''}
-            onChange={e => setUserForm(f => ({ ...f, role_id: e.target.value === '' ? null : Number(e.target.value) }))}>
+          <input
+            className="input w-full"
+            placeholder="دعوت: ایمیل"
+            onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))}
+            value={userForm.email ?? ''}
+          />
+          <input
+            className="input w-full"
+            placeholder="دعوت: موبایل"
+            onChange={(e) => setUserForm((f) => ({ ...f, username: e.target.value }))}
+            value={userForm.username}
+          />
+          <select
+            className="input w-full"
+            value={userForm.role_id ?? ''}
+            onChange={(e) =>
+              setUserForm((f) => ({
+                ...f,
+                role_id: e.target.value === '' ? null : Number(e.target.value),
+              }))
+            }
+          >
             <option value="">نقش دعوت</option>
-            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
           </select>
           <div className="flex gap-2">
-            <button className={retroButton} onClick={async () => {
-              try {
-                const payload: any = { email: (userForm.email ?? '').trim() || undefined, mobile: (userForm.username ?? '').trim() || undefined, role_id: userForm.role_id ?? undefined }
-                const res = await apiPost('/api/admin/users/invite', payload)
-                alert('دعوت ارسال شد')
-              } catch (e) {
-                alert('ارسال دعوت ناموفق بود')
-              }
-            }}>ارسال دعوت</button>
-            <button className={retroButton} onClick={() => setUserForm({ username: '', full_name: '', email: '', role_id: null })}>پاک کردن</button>
+            <button
+              className={retroButton}
+              onClick={async () => {
+                try {
+                  const payload: any = {
+                    email: (userForm.email ?? '').trim() || undefined,
+                    mobile: (userForm.username ?? '').trim() || undefined,
+                    role_id: userForm.role_id ?? undefined,
+                  }
+                  const res = await apiPost('/api/admin/users/invite', payload)
+                  alert('دعوت ارسال شد')
+                } catch (e) {
+                  alert('ارسال دعوت ناموفق بود')
+                }
+              }}
+            >
+              ارسال دعوت
+            </button>
+            <button
+              className={retroButton}
+              onClick={() => setUserForm({ username: '', full_name: '', email: '', role_id: null })}
+            >
+              پاک کردن
+            </button>
           </div>
         </div>
         <table className="w-full text-sm">
           <thead>
             <tr className={retroTableHeader}>
-              <th><button className="underline" onClick={() => { setUserSortKey('id'); setUserSortDir(d => (userSortKey==='id' ? (d==='asc'?'desc':'asc') : 'asc')) }}>ID</button></th>
-              <th><button className="underline" onClick={() => { setUserSortKey('username'); setUserSortDir(d => (userSortKey==='username' ? (d==='asc'?'desc':'asc') : 'asc')) }}>نام کاربری</button></th>
-              <th><button className="underline" onClick={() => { setUserSortKey('full_name'); setUserSortDir(d => (userSortKey==='full_name' ? (d==='asc'?'desc':'asc') : 'asc')) }}>نام کامل</button></th>
-              <th><button className="underline" onClick={() => { setUserSortKey('email'); setUserSortDir(d => (userSortKey==='email' ? (d==='asc'?'desc':'asc') : 'asc')) }}>ایمیل</button></th>
-              <th><button className="underline" onClick={() => { setUserSortKey('role_id'); setUserSortDir(d => (userSortKey==='role_id' ? (d==='asc'?'desc':'asc') : 'asc')) }}>نقش</button></th>
-              <th><button className="underline" onClick={() => { setUserSortKey('is_active'); setUserSortDir(d => (userSortKey==='is_active' ? (d==='asc'?'desc':'asc') : 'asc')) }}>وضعیت</button></th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('id')
+                    setUserSortDir((d) =>
+                      userSortKey === 'id' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  ID
+                </button>
+              </th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('username')
+                    setUserSortDir((d) =>
+                      userSortKey === 'username' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  نام کاربری
+                </button>
+              </th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('full_name')
+                    setUserSortDir((d) =>
+                      userSortKey === 'full_name' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  نام کامل
+                </button>
+              </th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('email')
+                    setUserSortDir((d) =>
+                      userSortKey === 'email' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  ایمیل
+                </button>
+              </th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('role_id')
+                    setUserSortDir((d) =>
+                      userSortKey === 'role_id' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  نقش
+                </button>
+              </th>
+              <th>
+                <button
+                  className="underline"
+                  onClick={() => {
+                    setUserSortKey('is_active')
+                    setUserSortDir((d) =>
+                      userSortKey === 'is_active' ? (d === 'asc' ? 'desc' : 'asc') : 'asc',
+                    )
+                  }}
+                >
+                  وضعیت
+                </button>
+              </th>
               <th>اعلان‌های پیامک</th>
               <th>تخصیص مجوزها</th>
               <th>ذخیره</th>
@@ -475,94 +679,260 @@ export default function AccessControlModule({}: ModuleComponentProps) {
               const page = Math.min(userPage, pages)
               const start = (page - 1) * userPageSize
               const view = sorted.slice(start, start + userPageSize)
-              return view.map(u => (
-              <tr key={u.id}>
-                <td>{u.id}</td>
-                <td>{u.username}</td>
-                <td>{u.full_name}</td>
-                <td>{u.email}</td>
-                <td>
-                  <select className="input w-full" value={u.role_id ?? ''}
-                    onChange={e => {
-                      const val = e.target.value === '' ? null : Number(e.target.value)
-                      void saveUserRole(u.id, val)
-                    }}>
-                    <option value="">بدون نقش</option>
-                    {roles.map(r => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                </td>
-                <td>{u.is_active ? 'فعال' : 'غیرفعال'}</td>
-                <td>
-                  {(() => {
-                    const pref = userSms[u.id] ?? {
-                      enable_notifications: true,
-                      notifications: { invoice_finalize: true, payment_received: true, cheque_due_reminder: true, fiscal_year_close: false },
-                      schedule: { daily_reminder_hour: 9, timezone: 'Asia/Tehran' },
-                    }
-                    return (
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className="flex items-center gap-2"><input style={{accentColor:'#7c3aed'}} type="checkbox" checked={!!pref.enable_notifications} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, enable_notifications: e.target.checked } }))} />فعال</label>
-                        <label className="flex items-center gap-2"><input style={{accentColor:'#7c3aed'}} type="checkbox" checked={!!pref.notifications?.invoice_finalize} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, notifications: { ...pref.notifications, invoice_finalize: e.target.checked } } }))} />فاکتور</label>
-                        <label className="flex items-center gap-2"><input style={{accentColor:'#7c3aed'}} type="checkbox" checked={!!pref.notifications?.payment_received} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, notifications: { ...pref.notifications, payment_received: e.target.checked } } }))} />پرداخت</label>
-                        <label className="flex items-center gap-2"><input style={{accentColor:'#7c3aed'}} type="checkbox" checked={!!pref.notifications?.cheque_due_reminder} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, notifications: { ...pref.notifications, cheque_due_reminder: e.target.checked } } }))} />چک</label>
-                        <label className="flex items-center gap-2"><input style={{accentColor:'#7c3aed'}} type="checkbox" checked={!!pref.notifications?.fiscal_year_close} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, notifications: { ...pref.notifications, fiscal_year_close: e.target.checked } } }))} />سال مالی</label>
+              return view.map((u) => (
+                <tr key={u.id}>
+                  <td>{u.id}</td>
+                  <td>{u.username}</td>
+                  <td>{u.full_name}</td>
+                  <td>{u.email}</td>
+                  <td>
+                    <select
+                      className="input w-full"
+                      value={u.role_id ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? null : Number(e.target.value)
+                        void saveUserRole(u.id, val)
+                      }}
+                    >
+                      <option value="">بدون نقش</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{u.is_active ? 'فعال' : 'غیرفعال'}</td>
+                  <td>
+                    {(() => {
+                      const pref = userSms[u.id] ?? {
+                        enable_notifications: true,
+                        notifications: {
+                          invoice_finalize: true,
+                          payment_received: true,
+                          cheque_due_reminder: true,
+                          fiscal_year_close: false,
+                        },
+                        schedule: { daily_reminder_hour: 9, timezone: 'Asia/Tehran' },
+                      }
+                      return (
                         <div className="grid grid-cols-2 gap-2">
-                          <input className="input" type="number" min={0} max={23} value={pref.schedule?.daily_reminder_hour ?? 9} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, schedule: { ...pref.schedule, daily_reminder_hour: Number(e.target.value) } } }))} />
-                          <input className="input" value={pref.schedule?.timezone ?? 'Asia/Tehran'} onChange={e => setUserSms(s => ({ ...s, [u.id]: { ...pref, schedule: { ...pref.schedule, timezone: e.target.value } } }))} />
-                        </div>
-                        <button className={retroButton} onClick={() => saveUserSms(u.id)} disabled={savingUserSmsId === u.id}>{savingUserSmsId === u.id ? 'در حال ذخیره…' : 'ذخیره'}</button>
-                      </div>
-                    )
-                  })()}
-                </td>
-                <td>
-                  <details className="rounded-sm border border-[#d7caa4] p-2">
-                    <summary className="cursor-pointer text-sm">مشاهده/ویرایش مجوزها</summary>
-                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {perms.map(p => {
-                        const current = !!(userPerms[u.id]?.[p.id])
-                        return (
-                          <label key={p.id} className="flex items-center gap-2">
-                            <input type="checkbox" checked={current}
-                              onChange={e => setUserPerms(prev => ({
-                                ...prev,
-                                [u.id]: { ...(prev[u.id] ?? {}), [p.id]: e.target.checked },
-                              }))} />
-                            {p.name}
+                          <label className="flex items-center gap-2">
+                            <input
+                              style={{ accentColor: '#7c3aed' }}
+                              type="checkbox"
+                              checked={!!pref.enable_notifications}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: { ...pref, enable_notifications: e.target.checked },
+                                }))
+                              }
+                            />
+                            فعال
                           </label>
-                        )
-                      })}
-                    </div>
-                  </details>
-                </td>
-                <td>
-                  <button className={`${retroButton}`} onClick={() => saveUserPerms(u.id)} disabled={savingUserPermId === u.id}>
-                    {savingUserPermId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
-                  </button>
-                </td>
-                <td>
-                  <button className={retroButton} onClick={() => setUserForm({ id: u.id, username: u.username, full_name: u.full_name ?? '', email: u.email ?? '', role_id: u.role_id })}>ویرایش</button>
-                </td>
-              </tr>
+                          <label className="flex items-center gap-2">
+                            <input
+                              style={{ accentColor: '#7c3aed' }}
+                              type="checkbox"
+                              checked={!!pref.notifications?.invoice_finalize}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    notifications: {
+                                      ...pref.notifications,
+                                      invoice_finalize: e.target.checked,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                            فاکتور
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              style={{ accentColor: '#7c3aed' }}
+                              type="checkbox"
+                              checked={!!pref.notifications?.payment_received}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    notifications: {
+                                      ...pref.notifications,
+                                      payment_received: e.target.checked,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                            پرداخت
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              style={{ accentColor: '#7c3aed' }}
+                              type="checkbox"
+                              checked={!!pref.notifications?.cheque_due_reminder}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    notifications: {
+                                      ...pref.notifications,
+                                      cheque_due_reminder: e.target.checked,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                            چک
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              style={{ accentColor: '#7c3aed' }}
+                              type="checkbox"
+                              checked={!!pref.notifications?.fiscal_year_close}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    notifications: {
+                                      ...pref.notifications,
+                                      fiscal_year_close: e.target.checked,
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                            سال مالی
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              className="input"
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={pref.schedule?.daily_reminder_hour ?? 9}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    schedule: {
+                                      ...pref.schedule,
+                                      daily_reminder_hour: Number(e.target.value),
+                                    },
+                                  },
+                                }))
+                              }
+                            />
+                            <input
+                              className="input"
+                              value={pref.schedule?.timezone ?? 'Asia/Tehran'}
+                              onChange={(e) =>
+                                setUserSms((s) => ({
+                                  ...s,
+                                  [u.id]: {
+                                    ...pref,
+                                    schedule: { ...pref.schedule, timezone: e.target.value },
+                                  },
+                                }))
+                              }
+                            />
+                          </div>
+                          <button
+                            className={retroButton}
+                            onClick={() => saveUserSms(u.id)}
+                            disabled={savingUserSmsId === u.id}
+                          >
+                            {savingUserSmsId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
+                          </button>
+                        </div>
+                      )
+                    })()}
+                  </td>
+                  <td>
+                    <details className="rounded-sm border border-[#d7caa4] p-2">
+                      <summary className="cursor-pointer text-sm">مشاهده/ویرایش مجوزها</summary>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {perms.map((p) => {
+                          const current = !!userPerms[u.id]?.[p.id]
+                          return (
+                            <label key={p.id} className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={current}
+                                onChange={(e) =>
+                                  setUserPerms((prev) => ({
+                                    ...prev,
+                                    [u.id]: { ...(prev[u.id] ?? {}), [p.id]: e.target.checked },
+                                  }))
+                                }
+                              />
+                              {p.name}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </details>
+                  </td>
+                  <td>
+                    <button
+                      className={`${retroButton}`}
+                      onClick={() => saveUserPerms(u.id)}
+                      disabled={savingUserPermId === u.id}
+                    >
+                      {savingUserPermId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      className={retroButton}
+                      onClick={() =>
+                        setUserForm({
+                          id: u.id,
+                          username: u.username,
+                          full_name: u.full_name ?? '',
+                          email: u.email ?? '',
+                          role_id: u.role_id,
+                        })
+                      }
+                    >
+                      ویرایش
+                    </button>
+                  </td>
+                </tr>
               ))
             })()}
           </tbody>
         </table>
         <div className="mt-2 flex items-center justify-between">
-          <div className="text-sm">
-            صفحه {userPage}
-          </div>
+          <div className="text-sm">صفحه {userPage}</div>
           <div className="flex items-center gap-2">
             <label className="text-sm">تعداد در صفحه</label>
-            <select className="input" value={userPageSize} onChange={e => { setUserPageSize(Number(e.target.value)); setUserPage(1) }}>
+            <select
+              className="input"
+              value={userPageSize}
+              onChange={(e) => {
+                setUserPageSize(Number(e.target.value))
+                setUserPage(1)
+              }}
+            >
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
             </select>
-            <button className={retroButton} onClick={() => setUserPage(p => Math.max(1, p - 1))}>قبلی</button>
-            <button className={retroButton} onClick={() => setUserPage(p => p + 1)}>بعدی</button>
+            <button className={retroButton} onClick={() => setUserPage((p) => Math.max(1, p - 1))}>
+              قبلی
+            </button>
+            <button className={retroButton} onClick={() => setUserPage((p) => p + 1)}>
+              بعدی
+            </button>
           </div>
         </div>
       </section>
@@ -582,7 +952,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
             </tr>
           </thead>
           <tbody>
-            {perms.map(p => (
+            {perms.map((p) => (
               <tr key={p.id}>
                 <td>{p.id}</td>
                 <td>{p.name}</td>
@@ -600,12 +970,25 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           <p className={`${retroMuted}`}>آخرین درخواست‌ها و عملیات حساس</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          <input className="input w-full" placeholder="فیلتر کاربر" value={activityFilter.user ?? ''}
-            onChange={e => setActivityFilter(f => ({ ...f, user: e.target.value }))} />
-          <input className="input w-full" placeholder="فیلتر مسیر" value={activityFilter.path ?? ''}
-            onChange={e => setActivityFilter(f => ({ ...f, path: e.target.value }))} />
-          <select className="input w-full" value={activityFilter.method ?? ''}
-            onChange={e => setActivityFilter(f => ({ ...f, method: e.target.value || undefined }))}>
+          <input
+            className="input w-full"
+            placeholder="فیلتر کاربر"
+            value={activityFilter.user ?? ''}
+            onChange={(e) => setActivityFilter((f) => ({ ...f, user: e.target.value }))}
+          />
+          <input
+            className="input w-full"
+            placeholder="فیلتر مسیر"
+            value={activityFilter.path ?? ''}
+            onChange={(e) => setActivityFilter((f) => ({ ...f, path: e.target.value }))}
+          />
+          <select
+            className="input w-full"
+            value={activityFilter.method ?? ''}
+            onChange={(e) =>
+              setActivityFilter((f) => ({ ...f, method: e.target.value || undefined }))
+            }
+          >
             <option value="">متد</option>
             <option>GET</option>
             <option>POST</option>
@@ -613,10 +996,16 @@ export default function AccessControlModule({}: ModuleComponentProps) {
             <option>PATCH</option>
             <option>DELETE</option>
           </select>
-          <input className="input w-full" placeholder="وضعیت (مثلا 200)" value={activityFilter.status ?? ''}
-            onChange={e => setActivityFilter(f => ({ ...f, status: e.target.value }))} />
+          <input
+            className="input w-full"
+            placeholder="وضعیت (مثلا 200)"
+            value={activityFilter.status ?? ''}
+            onChange={(e) => setActivityFilter((f) => ({ ...f, status: e.target.value }))}
+          />
           <div className="flex items-center justify-end">
-            <button className={retroButton} onClick={exportActivitiesCsv}>خروجی CSV</button>
+            <button className={retroButton} onClick={exportActivitiesCsv}>
+              خروجی CSV
+            </button>
           </div>
         </div>
         <table className="w-full text-sm">
@@ -631,7 +1020,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
             </tr>
           </thead>
           <tbody>
-            {pagedActivities.map(a => (
+            {pagedActivities.map((a) => (
               <tr key={a.id}>
                 <td>{a.created_at}</td>
                 <td>{a.username ?? 'سیستم'}</td>
@@ -646,19 +1035,40 @@ export default function AccessControlModule({}: ModuleComponentProps) {
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2">
             <label className="text-sm">نمایش</label>
-            <select className="input" value={activityPageSize} onChange={e => { setActivityPageSize(Number(e.target.value)); setActivityPage(1) }}>
+            <select
+              className="input"
+              value={activityPageSize}
+              onChange={(e) => {
+                setActivityPageSize(Number(e.target.value))
+                setActivityPage(1)
+              }}
+            >
               <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <button className={retroButton} disabled={activityPage===1} onClick={() => setActivityPage(p => Math.max(1, p-1))}>قبلی</button>
+            <button
+              className={retroButton}
+              disabled={activityPage === 1}
+              onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+            >
+              قبلی
+            </button>
             <span className={retroMuted}>صفحه {activityPage}</span>
-            <button className={retroButton} disabled={activityPage*activityPageSize>=filteredActivities.length} onClick={() => setActivityPage(p => p+1)}>بعدی</button>
+            <button
+              className={retroButton}
+              disabled={activityPage * activityPageSize >= filteredActivities.length}
+              onClick={() => setActivityPage((p) => p + 1)}
+            >
+              بعدی
+            </button>
           </div>
           <div className="flex items-center gap-2">
-            <button className={retroButton} onClick={() => window.print()}>پرینت</button>
+            <button className={retroButton} onClick={() => window.print()}>
+              پرینت
+            </button>
           </div>
         </div>
       </section>
@@ -672,43 +1082,91 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           <div>
             <p className={retroBadge}>درگاه پیامک</p>
             <div className="mt-2 space-y-2">
-              <select className="input w-full" value={smsSettings.provider}
-                onChange={e => setSmsSettings(s => ({ ...s, provider: e.target.value }))}>
+              <select
+                className="input w-full"
+                value={smsSettings.provider}
+                onChange={(e) => setSmsSettings((s) => ({ ...s, provider: e.target.value }))}
+              >
                 <option value="sms.ir">sms.ir</option>
                 <option value="ippanel">IPPanel</option>
               </select>
-              <input className="input w-full" placeholder="API Key" value={smsSettings.api_key ?? ''}
-                onChange={e => setSmsSettings(s => ({ ...s, api_key: e.target.value }))} />
-              <input className="input w-full" placeholder="شماره ارسال کننده" value={smsSettings.sender ?? ''}
-                onChange={e => setSmsSettings(s => ({ ...s, sender: e.target.value }))} />
+              <input
+                className="input w-full"
+                placeholder="API Key"
+                value={smsSettings.api_key ?? ''}
+                onChange={(e) => setSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
+              />
+              <input
+                className="input w-full"
+                placeholder="شماره ارسال کننده"
+                value={smsSettings.sender ?? ''}
+                onChange={(e) => setSmsSettings((s) => ({ ...s, sender: e.target.value }))}
+              />
             </div>
           </div>
           <div>
             <p className={retroBadge}>اعلان‌ها</p>
             <div className="mt-2 space-y-2">
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={!!smsSettings.enable_notifications}
-                  onChange={e => setSmsSettings(s => ({ ...s, enable_notifications: e.target.checked }))} />
+                <input
+                  type="checkbox"
+                  checked={!!smsSettings.enable_notifications}
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({ ...s, enable_notifications: e.target.checked }))
+                  }
+                />
                 فعال‌سازی اعلان‌ها
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={!!smsSettings.notifications?.invoice_finalize}
-                  onChange={e => setSmsSettings(s => ({ ...s, notifications: { ...s.notifications, invoice_finalize: e.target.checked } }))} />
+                <input
+                  type="checkbox"
+                  checked={!!smsSettings.notifications?.invoice_finalize}
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({
+                      ...s,
+                      notifications: { ...s.notifications, invoice_finalize: e.target.checked },
+                    }))
+                  }
+                />
                 اعلان نهایی‌سازی فاکتور
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={!!smsSettings.notifications?.payment_received}
-                  onChange={e => setSmsSettings(s => ({ ...s, notifications: { ...s.notifications, payment_received: e.target.checked } }))} />
+                <input
+                  type="checkbox"
+                  checked={!!smsSettings.notifications?.payment_received}
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({
+                      ...s,
+                      notifications: { ...s.notifications, payment_received: e.target.checked },
+                    }))
+                  }
+                />
                 اعلان دریافت پرداخت
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={!!smsSettings.notifications?.cheque_due_reminder}
-                  onChange={e => setSmsSettings(s => ({ ...s, notifications: { ...s.notifications, cheque_due_reminder: e.target.checked } }))} />
+                <input
+                  type="checkbox"
+                  checked={!!smsSettings.notifications?.cheque_due_reminder}
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({
+                      ...s,
+                      notifications: { ...s.notifications, cheque_due_reminder: e.target.checked },
+                    }))
+                  }
+                />
                 یادآور سررسید چک
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" checked={!!smsSettings.notifications?.fiscal_year_close}
-                  onChange={e => setSmsSettings(s => ({ ...s, notifications: { ...s.notifications, fiscal_year_close: e.target.checked } }))} />
+                <input
+                  type="checkbox"
+                  checked={!!smsSettings.notifications?.fiscal_year_close}
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({
+                      ...s,
+                      notifications: { ...s.notifications, fiscal_year_close: e.target.checked },
+                    }))
+                  }
+                />
                 اعلان بستن سال مالی
               </label>
             </div>
@@ -718,43 +1176,85 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           <div>
             <p className={retroBadge}>زمان‌بندی یادآورها</p>
             <div className="mt-2 space-y-2">
-              <input className="input w-full" type="number" min={0} max={23}
+              <input
+                className="input w-full"
+                type="number"
+                min={0}
+                max={23}
                 value={smsSettings.schedule?.daily_reminder_hour ?? 9}
-                onChange={e => setSmsSettings(s => ({ ...s, schedule: { ...s.schedule, daily_reminder_hour: Number(e.target.value) } }))}
-                placeholder="ساعت یادآور روزانه (0-23)" />
-              <input className="input w-full" value={smsSettings.schedule?.timezone ?? 'Asia/Tehran'}
-                onChange={e => setSmsSettings(s => ({ ...s, schedule: { ...s.schedule, timezone: e.target.value } }))}
-                placeholder="منطقه زمانی" />
+                onChange={(e) =>
+                  setSmsSettings((s) => ({
+                    ...s,
+                    schedule: { ...s.schedule, daily_reminder_hour: Number(e.target.value) },
+                  }))
+                }
+                placeholder="ساعت یادآور روزانه (0-23)"
+              />
+              <input
+                className="input w-full"
+                value={smsSettings.schedule?.timezone ?? 'Asia/Tehran'}
+                onChange={(e) =>
+                  setSmsSettings((s) => ({
+                    ...s,
+                    schedule: { ...s.schedule, timezone: e.target.value },
+                  }))
+                }
+                placeholder="منطقه زمانی"
+              />
             </div>
           </div>
           <div>
             <p className={retroBadge}>ارسال تست (SMS.ir)</p>
             <div className="mt-2 space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <select className="input w-full" value={smsSettings.provider ?? ''}
-                  onChange={e => setSmsSettings(s => ({ ...s, provider: e.target.value }))}>
+                <select
+                  className="input w-full"
+                  value={smsSettings.provider ?? ''}
+                  onChange={(e) => setSmsSettings((s) => ({ ...s, provider: e.target.value }))}
+                >
                   <option value="">انتخاب درگاه…</option>
                   <option value="sms.ir">SMS.ir</option>
                   <option value="mock">Mock (توسعه)</option>
                 </select>
-                <input className="input w-full" placeholder="شماره خط ارسال (line_number)"
+                <input
+                  className="input w-full"
+                  placeholder="شماره خط ارسال (line_number)"
                   value={smsSettings.sender ?? ''}
-                  onChange={e => setSmsSettings(s => ({ ...s, sender: e.target.value }))} />
-                <input className="input w-full" placeholder="API Key"
+                  onChange={(e) => setSmsSettings((s) => ({ ...s, sender: e.target.value }))}
+                />
+                <input
+                  className="input w-full"
+                  placeholder="API Key"
                   value={smsSettings.api_key ?? ''}
-                  onChange={e => setSmsSettings(s => ({ ...s, api_key: e.target.value }))} />
-                <input className="input w-full" placeholder="Secret Key"
+                  onChange={(e) => setSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
+                />
+                <input
+                  className="input w-full"
+                  placeholder="Secret Key"
                   value={smsSettings.secret_key ?? ''}
-                  onChange={e => setSmsSettings(s => ({ ...s, secret_key: e.target.value }))} />
-                <input className="input w-full" placeholder="OTP Template ID (sms.ir)"
+                  onChange={(e) => setSmsSettings((s) => ({ ...s, secret_key: e.target.value }))}
+                />
+                <input
+                  className="input w-full"
+                  placeholder="OTP Template ID (sms.ir)"
                   value={(smsSettings as any).otp_template_id ?? ''}
-                  onChange={e => setSmsSettings(s => ({ ...s, otp_template_id: e.target.value }))} />
+                  onChange={(e) =>
+                    setSmsSettings((s) => ({ ...s, otp_template_id: e.target.value }))
+                  }
+                />
               </div>
-              <textarea className="input w-full" rows={3} value={testSmsText}
-                onChange={e => setTestSmsText(e.target.value)} />
-              <input className="input w-full" placeholder="شماره گیرنده (مثال: 0912xxxxxxx)"
+              <textarea
+                className="input w-full"
+                rows={3}
+                value={testSmsText}
+                onChange={(e) => setTestSmsText(e.target.value)}
+              />
+              <input
+                className="input w-full"
+                placeholder="شماره گیرنده (مثال: 0912xxxxxxx)"
                 value={testSmsTo}
-                onChange={e => setTestSmsTo(e.target.value)} />
+                onChange={(e) => setTestSmsTo(e.target.value)}
+              />
               <div className="flex gap-2">
                 <button className={retroButton} onClick={saveSmsSettings} disabled={savingSms}>
                   {savingSms ? 'در حال ذخیره…' : 'ذخیره تنظیمات'}

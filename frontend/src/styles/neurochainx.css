@@ -11,9 +11,9 @@
 }
 
 .neuro-panel {
-  background: radial-gradient(circle at top right, rgba(106, 55, 255, 0.35), transparent 40%),
-    radial-gradient(circle at 20% 0%, rgba(63, 188, 255, 0.3), transparent 45%),
-    var(--neuro-bg);
+  background:
+    radial-gradient(circle at top right, rgba(106, 55, 255, 0.35), transparent 40%),
+    radial-gradient(circle at 20% 0%, rgba(63, 188, 255, 0.3), transparent 45%), var(--neuro-bg);
   border: 1px solid var(--neuro-border);
   border-radius: 28px;
   box-shadow: var(--neuro-shadow);
@@ -91,7 +91,9 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
 }
 
 .neuro-radio input {
@@ -112,7 +114,9 @@
   cursor: pointer;
   background: var(--neuro-button);
   box-shadow: 0 12px 30px rgba(58, 8, 65, 0.7);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .neuro-button:disabled {

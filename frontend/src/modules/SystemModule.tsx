@@ -3,6 +3,7 @@ import type { ModuleComponentProps, SmartDateState } from '../components/layout/
 import SmartDatePicker from '../components/SmartDatePicker'
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '../services/api'
 import { isoToJalali } from '../utils/num'
+import authService from '../services/auth'
 import {
   retroBadge,
   retroButton,
@@ -74,24 +75,34 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
   const [creatingBackup, setCreatingBackup] = useState(false)
-  
+
   const showLegacyAccess = false
 
   // SMS state removed; migrated to Developer settings (sms.ir)
-  
+
   // System Settings state
   const [allSettings, setAllSettings] = useState<SystemSetting[]>([])
-  const [settingsByCategory, setSettingsByCategory] = useState<{ [key: string]: SystemSetting[] }>({})
+  const [settingsByCategory, setSettingsByCategory] = useState<{ [key: string]: SystemSetting[] }>(
+    {},
+  )
   const [selectedCategory, setSelectedCategory] = useState<string>('general')
   const [sidebarSide, setSidebarSide] = useState<string>('')
   const [savingSidebarSide, setSavingSidebarSide] = useState(false)
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
-  
+
   // Financial Year state
-  type FinancialYear = { id: number; name: string; start_date: string; end_date?: string | null; is_closed: boolean }
+  type FinancialYear = {
+    id: number
+    name: string
+    start_date: string
+    end_date?: string | null
+    is_closed: boolean
+  }
   const [fYears, setFYears] = useState<FinancialYear[]>([])
-  const [newFY, setNewFY] = useState<{ name: string; start_date: string; end_date?: string }>(() => ({ name: '', start_date: '' }))
+  const [newFY, setNewFY] = useState<{ name: string; start_date: string; end_date?: string }>(
+    () => ({ name: '', start_date: '' }),
+  )
   const [savingFY, setSavingFY] = useState(false)
 
   // Payment Methods state
@@ -118,7 +129,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   const [chainLoading, setChainLoading] = useState(false)
   const [chainEntityType, setChainEntityType] = useState<string>('')
   const [chainEntityId, setChainEntityId] = useState<string>('')
-  const [entityCatalog, setEntityCatalog] = useState<Array<{ entity_type: string; entity_id: string }>>([])
+  const [entityCatalog, setEntityCatalog] = useState<
+    Array<{ entity_type: string; entity_id: string }>
+  >([])
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null)
 
   useEffect(() => {
@@ -164,7 +177,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         setAllSettings(settings)
         // Group by category
         const grouped: { [key: string]: SystemSetting[] } = {}
-        settings.forEach(s => {
+        settings.forEach((s) => {
           const cat = s.category || 'other'
           if (!grouped[cat]) grouped[cat] = []
           grouped[cat].push(s)
@@ -183,6 +196,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           if (side === 'left' || side === 'right') {
             setSidebarSide(side)
           }
+          await loadPaymentMethods()
         }
       } catch (err) {
         console.error(err)
@@ -212,6 +226,160 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     }
   }
 
+  // ===== Payment Methods =====
+  async function loadPaymentMethods() {
+    setPmLoading(true)
+    setPmError(null)
+    try {
+      const list = await apiGet<PaymentMethod[]>('/api/payment-methods')
+      setMethods(Array.isArray(list) ? list : [])
+      try {
+        localStorage.setItem('hesabpak_payment_methods', JSON.stringify(list || []))
+      } catch {}
+    } catch (err: any) {
+      setPmError(err?.message || 'بارگذاری روش‌های پرداخت ناموفق بود')
+      try {
+        const raw = localStorage.getItem('hesabpak_payment_methods')
+        if (raw) setMethods(JSON.parse(raw))
+      } catch {}
+    } finally {
+      setPmLoading(false)
+    }
+  }
+
+  async function createPaymentMethod() {
+    try {
+      const payload = {
+        key: (draftPm.key || '').trim(),
+        name: (draftPm.name || '').trim(),
+        account: draftPm.account || '',
+        enabled: draftPm.enabled ?? true,
+        is_cheque: !!draftPm.is_cheque,
+        order: draftPm.order ?? 100,
+      }
+      if (!payload.key || !payload.name) return alert('کلید و نام لازم است')
+      await apiPost('/api/payment-methods', payload)
+      setDraftPm({ enabled: true, order: 100 })
+      await loadPaymentMethods()
+    } catch (err) {
+      setPmError('ایجاد روش پرداخت ناموفق بود')
+    }
+  }
+
+  async function patchPaymentMethod(id: number, patch: Partial<PaymentMethod>) {
+    try {
+      await apiPatch(`/api/payment-methods/${id}`, patch)
+      setEditingPmId(null)
+      await loadPaymentMethods()
+    } catch (err) {
+      setPmError('بروزرسانی روش پرداخت ناموفق بود')
+    }
+  }
+
+  async function movePaymentMethod(id: number, dir: 'up' | 'down') {
+    try {
+      await apiPost(`/api/payment-methods/${id}/move`, { direction: dir })
+      await loadPaymentMethods()
+    } catch (err) {
+      setPmError('جابجایی ترتیب ناموفق بود')
+    }
+  }
+
+  async function deletePaymentMethod(id: number) {
+    if (!confirm('حذف روش پرداخت؟')) return
+    try {
+      await apiDelete(`/api/payment-methods/${id}`)
+      await loadPaymentMethods()
+    } catch (err) {
+      setPmError('حذف روش پرداخت ناموفق بود')
+    }
+  }
+
+  // ===== Blockchain =====
+  async function refreshBlockchainEntries(limit = 50, bust = false) {
+    try {
+      setChainLoading(true)
+      const q = new URLSearchParams()
+      q.set('limit', String(limit))
+      if (bust) q.set('_', String(Date.now()))
+      const items = await apiGet<BlockchainEntry[]>(`/api/blockchain/entries?${q.toString()}`)
+      setBlockchainEntries(Array.isArray(items) ? items : [])
+      const catalog: Array<{ entity_type: string; entity_id: string }> = [];
+      (Array.isArray(items) ? items : []).forEach((e) => {
+        if (e.entity_type && e.entity_id) {
+          catalog.push({ entity_type: e.entity_type, entity_id: String(e.entity_id) })
+        }
+      })
+      setEntityCatalog(catalog)
+      setChainLoading(false)
+    } catch (err) {
+      setChainLoading(false)
+      setChainMessage('بارگذاری زنجیره ناموفق بود')
+    }
+  }
+
+  async function verifyChainIntegrity() {
+    try {
+      setChainLoading(true)
+      const res = await apiGet<{ status: 'valid' | 'invalid'; message?: string }>(
+        '/api/blockchain/verify',
+      )
+      setChainStatus(res.status || 'unknown')
+      setChainMessage(res.message || null)
+    } catch (err) {
+      setChainStatus('unknown')
+      setChainMessage('بررسی صحت ممکن نشد')
+    } finally {
+      setChainLoading(false)
+    }
+  }
+
+  async function downloadProof() {
+    try {
+      const id = selectedEntryId
+      if (!id) return alert('ابتدا یک رکورد را انتخاب کنید')
+      const res = await authService.fetchWithAuth(`/api/blockchain/entries/${id}/proof`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `merkle-proof-${id}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setChainMessage('دانلود پروف ناموفق بود')
+    }
+  }
+
+  async function exportCurrentChain() {
+    try {
+      const res = await authService.fetchWithAuth('/api/blockchain/export')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `blockchain-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setChainMessage('خروجی زنجیره ناموفق بود')
+    }
+  }
+
+  async function loadChainForEntity(type: string, id: string) {
+    try {
+      setChainLoading(true)
+      setChainEntityType(type)
+      setChainEntityId(id)
+      const items = await apiGet<BlockchainEntry[]>(`/api/blockchain/entity/${type}/${id}`)
+      setBlockchainEntries(Array.isArray(items) ? items : [])
+    } catch (err) {
+      setChainMessage('بارگذاری موجودیت ناموفق بود')
+    } finally {
+      setChainLoading(false)
+    }
+  }
+
   async function createFY() {
     const name = (newFY.name || '').trim()
     let startRaw = (newFY.start_date || '').trim()
@@ -221,17 +389,28 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         startRaw = ls.trim()
       } catch {}
     }
-    if (!name || !startRaw) { alert('نام و تاریخ شروع ضروری است'); return }
+    if (!name || !startRaw) {
+      alert('نام و تاریخ شروع ضروری است')
+      return
+    }
     setSavingFY(true)
     try {
       const { parseJalaliInput } = await import('../utils/date')
       const startParsed = parseJalaliInput(startRaw)
       const endParsed = newFY.end_date ? parseJalaliInput(newFY.end_date) : null
-      if (!startParsed) { alert('فرمت تاریخ شروع نامعتبر است'); setSavingFY(false); return }
+      if (!startParsed) {
+        alert('فرمت تاریخ شروع نامعتبر است')
+        setSavingFY(false)
+        return
+      }
       const payload = {
         name,
         start_date: startParsed?.iso ?? new Date(newFY.start_date).toISOString(),
-        end_date: endParsed ? endParsed.iso : (newFY.end_date ? new Date(newFY.end_date).toISOString() : null)
+        end_date: endParsed
+          ? endParsed.iso
+          : newFY.end_date
+            ? new Date(newFY.end_date).toISOString()
+            : null,
       }
       await apiPost('/api/financial-years', payload)
       await loadData()
@@ -288,10 +467,18 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     try {
       const meId = Number(localStorage.getItem('hesabpak_user_id') || '0')
       await apiPatch(`/api/users/${meId}/preferences`, { active_financial_year_id: fid })
-      try { localStorage.setItem('hesabpak_active_fy_id', String(fid)) } catch {}
+      try {
+        localStorage.setItem('hesabpak_active_fy_id', String(fid))
+      } catch {}
       // Notify and refresh softly
-      try { window.dispatchEvent(new Event('hesabpak-fy-changed')) } catch {}
-      setTimeout(() => { try { window.location.reload() } catch {} }, 100)
+      try {
+        window.dispatchEvent(new Event('hesabpak-fy-changed'))
+      } catch {}
+      setTimeout(() => {
+        try {
+          window.location.reload()
+        } catch {}
+      }, 100)
     } catch (err) {
       console.error(err)
       alert('تنظیم سال فعال ناموفق بود')
@@ -303,7 +490,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     setSavingSidebarSide(true)
     try {
       await apiPost('/api/users/preferences/sidebar-side', { side: sidebarSide })
-      try { localStorage.setItem('hesabpak_sidebar_side_v1', sidebarSide) } catch (e) {}
+      try {
+        localStorage.setItem('hesabpak_sidebar_side_v1', sidebarSide)
+      } catch (e) {}
       alert('تنظیم ذخیره شد')
     } catch (err) {
       console.error(err)
@@ -394,46 +583,97 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       <section className={`${retroPanelPadded} space-y-4`}>
         <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-          {/* Financial Years Management */}
-          <div className={`${retroPanel} p-4`}>
-            <p className={`${retroHeading} text-[#7a6b4f]`}>سال‌های مالی</p>
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className={`${retroHeading}`}>ایجاد سال مالی جدید</p>
-                <div className="mt-2 flex flex-col gap-2">
-                  <input className="rounded p-2" placeholder="نام (مثلاً 1404)" value={newFY.name} onChange={e => setNewFY({ ...newFY, name: e.target.value })} />
-                  <input className="rounded p-2" data-jdp data-jdp-only-date data-jdp-dir="rtl" placeholder="تاریخ شروع (شمسی)" value={newFY.start_date} onFocus={e=>{ try{ (window as any).jalaliDatepicker?.show(e.target) }catch{} }} onChange={e => setNewFY({ ...newFY, start_date: e.target.value })} />
-                  <input className="rounded p-2" data-jdp data-jdp-only-date data-jdp-dir="rtl" placeholder="تاریخ پایان (شمسی)" value={newFY.end_date ?? ''} onFocus={e=>{ try{ (window as any).jalaliDatepicker?.show(e.target) }catch{} }} onChange={e => setNewFY({ ...newFY, end_date: e.target.value })} />
-                  <button className={`${retroButton}`} disabled={savingFY} onClick={createFY}>ایجاد سال مالی</button>
+            {/* Financial Years Management */}
+            <div className={`${retroPanel} p-4`}>
+              <p className={`${retroHeading} text-[#7a6b4f]`}>سال‌های مالی</p>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className={`${retroHeading}`}>ایجاد سال مالی جدید</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <input
+                      className="rounded p-2"
+                      placeholder="نام (مثلاً 1404)"
+                      value={newFY.name}
+                      onChange={(e) => setNewFY({ ...newFY, name: e.target.value })}
+                    />
+                    <input
+                      className="rounded p-2"
+                      data-jdp
+                      data-jdp-only-date
+                      data-jdp-dir="rtl"
+                      placeholder="تاریخ شروع (شمسی)"
+                      value={newFY.start_date}
+                      onFocus={(e) => {
+                        try {
+                          ;(window as any).jalaliDatepicker?.show(e.target)
+                        } catch {}
+                      }}
+                      onChange={(e) => setNewFY({ ...newFY, start_date: e.target.value })}
+                    />
+                    <input
+                      className="rounded p-2"
+                      data-jdp
+                      data-jdp-only-date
+                      data-jdp-dir="rtl"
+                      placeholder="تاریخ پایان (شمسی)"
+                      value={newFY.end_date ?? ''}
+                      onFocus={(e) => {
+                        try {
+                          ;(window as any).jalaliDatepicker?.show(e.target)
+                        } catch {}
+                      }}
+                      onChange={(e) => setNewFY({ ...newFY, end_date: e.target.value })}
+                    />
+                    <button className={`${retroButton}`} disabled={savingFY} onClick={createFY}>
+                      ایجاد سال مالی
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className={`${retroHeading}`}>لیست و عملیات</p>
-                <div className="mt-2 space-y-2">
-                  {fYears.length === 0 && <p className={retroMuted}>سال مالی ثبت نشده است.</p>}
-                  {fYears.map(y => (
-                    <div key={y.id} className="flex items-center justify-between gap-2 border rounded p-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`${retroBadge}`}>{y.name}</span>
-                        <span className={retroMuted}>از {isoToJalali(y.start_date)} تا {y.end_date ? isoToJalali(y.end_date) : '—'}</span>
-                        {y.is_closed && <span className={`${retroBadge} bg-red-800`}>بسته</span>}
+                <div>
+                  <p className={`${retroHeading}`}>لیست و عملیات</p>
+                  <div className="mt-2 space-y-2">
+                    {fYears.length === 0 && <p className={retroMuted}>سال مالی ثبت نشده است.</p>}
+                    {fYears.map((y) => (
+                      <div
+                        key={y.id}
+                        className="flex items-center justify-between gap-2 border rounded p-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`${retroBadge}`}>{y.name}</span>
+                          <span className={retroMuted}>
+                            از {isoToJalali(y.start_date)} تا{' '}
+                            {y.end_date ? isoToJalali(y.end_date) : '—'}
+                          </span>
+                          {y.is_closed && <span className={`${retroBadge} bg-red-800`}>بسته</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button className={`${retroButton}`} onClick={() => exportFY(y.id)}>
+                            دانلود
+                          </button>
+                          <button className={`${retroButton}`} onClick={() => setActiveFY(y.id)}>
+                            تنظیم به سال فعال
+                          </button>
+                          <button
+                            className={`${retroButton}`}
+                            onClick={() => updateFY(y.id, { is_closed: !y.is_closed })}
+                          >
+                            {y.is_closed ? 'بازکردن' : 'بستن'}
+                          </button>
+                          <button className={`${retroButton}`} onClick={() => deleteFY(y.id)}>
+                            حذف
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button className={`${retroButton}`} onClick={() => exportFY(y.id)}>دانلود</button>
-                        <button className={`${retroButton}`} onClick={() => setActiveFY(y.id)}>تنظیم به سال فعال</button>
-                        <button className={`${retroButton}`} onClick={() => updateFY(y.id, { is_closed: !y.is_closed })}>{y.is_closed ? 'بازکردن' : 'بستن'}</button>
-                        <button className={`${retroButton}`} onClick={() => deleteFY(y.id)}>حذف</button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
             <p className={retroHeading}>System Console</p>
             <h2 className="text-2xl font-semibold mt-2">تنظیمات پیشرفته</h2>
             <p className={`text-xs ${retroMuted} mt-2`}>
-              تاریخ هوشمند فعال: {smartDate.jalali ?? 'انتخاب نشده'} | {smartDate.isoDate ?? 'ISO TBD'}
+              تاریخ هوشمند فعال: {smartDate.jalali ?? 'انتخاب نشده'} |{' '}
+              {smartDate.isoDate ?? 'ISO TBD'}
             </p>
           </div>
           <div className={`${retroPanel} px-4 py-3 text-xs`}>
@@ -449,9 +689,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           </div>
         </header>
         <SmartDatePicker
-          onDateSelected={(iso, jalali) =>
-            applySmartDate({ isoDate: iso.slice(0, 10), jalali })
-          }
+          onDateSelected={(iso, jalali) => applySmartDate({ isoDate: iso.slice(0, 10), jalali })}
         />
       </section>
 
@@ -482,7 +720,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
               </tr>
             </thead>
             <tbody>
-              {backups.slice(0, 10).map(item => (
+              {backups.slice(0, 10).map((item) => (
                 <tr key={item.id} className="border-b border-[#d9cfb6]">
                   <td className="px-3 py-2">{item.filename}</td>
                   <td className="px-3 py-2">
@@ -500,9 +738,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             </tbody>
           </table>
         ) : (
-          <p className="text-xs text-[#7a6b4f]">
-            بکاپی یافت نشد یا دسترسی به این بخش محدود است.
-          </p>
+          <p className="text-xs text-[#7a6b4f]">بکاپی یافت نشد یا دسترسی به این بخش محدود است.</p>
         )}
       </section>
 
@@ -513,7 +749,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           <div>
             <p className={retroHeading}>Payment Methods</p>
             <h3 className="text-lg font-semibold mt-2">روش‌های پرداخت</h3>
-            <p className={`text-xs ${retroMuted} mt-2`}>مدیریت کلید، نام، حساب معادل و ترتیب نمایش</p>
+            <p className={`text-xs ${retroMuted} mt-2`}>
+              مدیریت کلید، نام، حساب معادل و ترتیب نمایش
+            </p>
           </div>
           <div className="flex gap-2">
             <button className={`${retroButton}`} onClick={loadPaymentMethods}>
@@ -522,20 +760,49 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           </div>
         </header>
         {pmError && (
-          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-2">{pmError}</div>
+          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-2">
+            {pmError}
+          </div>
         )}
         <div className={`${retroPanel} p-4 space-y-3`}>
           <p className={retroHeading}>ایجاد روش جدید</p>
           <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 items-center">
-            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="کلید (مثلاً cash)" value={draftPm.key || ''} onChange={e=>setDraftPm({...draftPm, key: e.target.value})} />
-            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="نام نمایشی" value={draftPm.name || ''} onChange={e=>setDraftPm({...draftPm, name: e.target.value})} />
-            <input className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="حساب معادل دفتر" value={draftPm.account || ''} onChange={e=>setDraftPm({...draftPm, account: e.target.value})} />
+            <input
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="کلید (مثلاً cash)"
+              value={draftPm.key || ''}
+              onChange={(e) => setDraftPm({ ...draftPm, key: e.target.value })}
+            />
+            <input
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="نام نمایشی"
+              value={draftPm.name || ''}
+              onChange={(e) => setDraftPm({ ...draftPm, name: e.target.value })}
+            />
+            <input
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="حساب معادل دفتر"
+              value={draftPm.account || ''}
+              onChange={(e) => setDraftPm({ ...draftPm, account: e.target.value })}
+            />
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!draftPm.is_cheque} onChange={e=>setDraftPm({...draftPm, is_cheque: e.target.checked})} />
+              <input
+                type="checkbox"
+                checked={!!draftPm.is_cheque}
+                onChange={(e) => setDraftPm({ ...draftPm, is_cheque: e.target.checked })}
+              />
               <span>چک</span>
             </label>
-            <input type="number" className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]" placeholder="ترتیب" value={draftPm.order ?? 100} onChange={e=>setDraftPm({...draftPm, order: parseInt(e.target.value || '0')})} />
-            <button className={retroButton} onClick={createPaymentMethod}>ایجاد</button>
+            <input
+              type="number"
+              className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              placeholder="ترتیب"
+              value={draftPm.order ?? 100}
+              onChange={(e) => setDraftPm({ ...draftPm, order: parseInt(e.target.value || '0') })}
+            />
+            <button className={retroButton} onClick={createPaymentMethod}>
+              ایجاد
+            </button>
           </div>
         </div>
         <div className={`${retroPanel} p-0 overflow-x-auto`}>
@@ -561,69 +828,152 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2 text-center">{idx + 1}</td>
                     <td className="px-3 py-2 font-mono text-xs">
                       {editingPmId === m.id ? (
-                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.key ?? m.key} onChange={e=>setDraftPm({...draftPm, key: e.target.value})} />
+                        <input
+                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
+                          value={draftPm.key ?? m.key}
+                          onChange={(e) => setDraftPm({ ...draftPm, key: e.target.value })}
+                        />
                       ) : (
                         m.key
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {editingPmId === m.id ? (
-                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.name ?? m.name} onChange={e=>setDraftPm({...draftPm, name: e.target.value})} />
+                        <input
+                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
+                          value={draftPm.name ?? m.name}
+                          onChange={(e) => setDraftPm({ ...draftPm, name: e.target.value })}
+                        />
                       ) : (
                         m.name
                       )}
                     </td>
                     <td className="px-3 py-2">
                       {editingPmId === m.id ? (
-                        <input className="border border-[#c5bca5] px-2 py-1 bg-white text-xs" value={draftPm.account ?? (m.account || '')} onChange={e=>setDraftPm({...draftPm, account: e.target.value})} />
+                        <input
+                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
+                          value={draftPm.account ?? (m.account || '')}
+                          onChange={(e) => setDraftPm({ ...draftPm, account: e.target.value })}
+                        />
                       ) : (
                         m.account || '—'
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
-                        <input type="checkbox" checked={draftPm.is_cheque ?? !!m.is_cheque} onChange={e=>setDraftPm({...draftPm, is_cheque: e.target.checked})} />
+                        <input
+                          type="checkbox"
+                          checked={draftPm.is_cheque ?? !!m.is_cheque}
+                          onChange={(e) => setDraftPm({ ...draftPm, is_cheque: e.target.checked })}
+                        />
+                      ) : m.is_cheque ? (
+                        '✓'
                       ) : (
-                        m.is_cheque ? '✓' : '✗'
+                        '✗'
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
-                        <input type="checkbox" checked={draftPm.enabled ?? !!m.enabled} onChange={e=>setDraftPm({...draftPm, enabled: e.target.checked})} />
+                        <input
+                          type="checkbox"
+                          checked={draftPm.enabled ?? !!m.enabled}
+                          onChange={(e) => setDraftPm({ ...draftPm, enabled: e.target.checked })}
+                        />
                       ) : (
-                        <button className="text-xs" onClick={()=>patchPaymentMethod(m.id, { enabled: !m.enabled })}>
-                          <span className={`${retroBadge} ${m.enabled ? '' : 'opacity-50'}`}>{m.enabled ? 'فعال' : 'غیرفعال'}</span>
+                        <button
+                          className="text-xs"
+                          onClick={() => patchPaymentMethod(m.id, { enabled: !m.enabled })}
+                        >
+                          <span className={`${retroBadge} ${m.enabled ? '' : 'opacity-50'}`}>
+                            {m.enabled ? 'فعال' : 'غیرفعال'}
+                          </span>
                         </button>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
-                        <input type="number" className="border border-[#c5bca5] px-2 py-1 bg-white text-xs w-20" value={draftPm.order ?? m.order} onChange={e=>setDraftPm({...draftPm, order: parseInt(e.target.value || '0')})} />
+                        <input
+                          type="number"
+                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs w-20"
+                          value={draftPm.order ?? m.order}
+                          onChange={(e) =>
+                            setDraftPm({ ...draftPm, order: parseInt(e.target.value || '0') })
+                          }
+                        />
                       ) : (
                         <div className="flex items-center justify-center gap-2">
-                          <button title="بالا" onClick={()=>movePaymentMethod(m.id, 'up')} className="text-xs">↑</button>
+                          <button
+                            title="بالا"
+                            onClick={() => movePaymentMethod(m.id, 'up')}
+                            className="text-xs"
+                          >
+                            ↑
+                          </button>
                           <span>{m.order}</span>
-                          <button title="پایین" onClick={()=>movePaymentMethod(m.id, 'down')} className="text-xs">↓</button>
+                          <button
+                            title="پایین"
+                            onClick={() => movePaymentMethod(m.id, 'down')}
+                            className="text-xs"
+                          >
+                            ↓
+                          </button>
                         </div>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center space-x-2">
                       {editingPmId === m.id ? (
                         <>
-                          <button className="text-green-600 hover:text-green-800 text-xs" onClick={()=>{ patchPaymentMethod(m.id, {
-                            key: draftPm.key ?? m.key,
-                            name: draftPm.name ?? m.name,
-                            account: draftPm.account ?? m.account,
-                            enabled: draftPm.enabled ?? m.enabled,
-                            is_cheque: draftPm.is_cheque ?? m.is_cheque,
-                            order: draftPm.order ?? m.order,
-                          }); setEditingPmId(null); setDraftPm({ enabled: true, order: 100 }) }}>✓</button>
-                          <button className="text-red-600 hover:text-red-800 text-xs" onClick={()=>{ setEditingPmId(null); setDraftPm({ enabled: true, order: 100 }) }}>✗</button>
+                          <button
+                            className="text-green-600 hover:text-green-800 text-xs"
+                            onClick={() => {
+                              patchPaymentMethod(m.id, {
+                                key: draftPm.key ?? m.key,
+                                name: draftPm.name ?? m.name,
+                                account: draftPm.account ?? m.account,
+                                enabled: draftPm.enabled ?? m.enabled,
+                                is_cheque: draftPm.is_cheque ?? m.is_cheque,
+                                order: draftPm.order ?? m.order,
+                              })
+                              setEditingPmId(null)
+                              setDraftPm({ enabled: true, order: 100 })
+                            }}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-xs"
+                            onClick={() => {
+                              setEditingPmId(null)
+                              setDraftPm({ enabled: true, order: 100 })
+                            }}
+                          >
+                            ✗
+                          </button>
                         </>
                       ) : (
                         <>
-                          <button className="text-blue-600 hover:text-blue-800 text-xs" onClick={()=>{ setEditingPmId(m.id); setDraftPm({ key: m.key, name: m.name, account: m.account ?? '', enabled: m.enabled, is_cheque: !!m.is_cheque, order: m.order }) }}>ویرایش</button>
-                          <button className="text-red-600 hover:text-red-800 text-xs" onClick={()=>deletePaymentMethod(m.id)}>حذف</button>
+                          <button
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                            onClick={() => {
+                              setEditingPmId(m.id)
+                              setDraftPm({
+                                key: m.key,
+                                name: m.name,
+                                account: m.account ?? '',
+                                enabled: m.enabled,
+                                is_cheque: !!m.is_cheque,
+                                order: m.order,
+                              })
+                            }}
+                          >
+                            ویرایش
+                          </button>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-xs"
+                            onClick={() => deletePaymentMethod(m.id)}
+                          >
+                            حذف
+                          </button>
                         </>
                       )}
                     </td>
@@ -668,9 +1018,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                 chainStatus === 'valid'
                   ? 'bg-[#e7f4e7] text-[#1c4d1c]'
                   : chainStatus === 'invalid'
-                  ? 'bg-[#f9e6e6] text-[#7a1f1f]'
-                  : ''
-            }`}
+                    ? 'bg-[#f9e6e6] text-[#7a1f1f]'
+                    : ''
+              }`}
             >
               {chainStatus === 'valid'
                 ? 'زنجیره معتبر'
@@ -687,7 +1037,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                 value={
                   chainEntityType && chainEntityId ? `${chainEntityType}::${chainEntityId}` : ''
                 }
-                onChange={e => {
+                onChange={(e) => {
                   const value = e.target.value
                   if (!value) {
                     void refreshBlockchainEntries(50, true)
@@ -698,8 +1048,11 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                 }}
               >
                 <option value="">نمایش همه موجودیت‌ها</option>
-                {entityCatalog.map(ent => (
-                  <option key={`${ent.entity_type}::${ent.entity_id}`} value={`${ent.entity_type}::${ent.entity_id}`}>
+                {entityCatalog.map((ent) => (
+                  <option
+                    key={`${ent.entity_type}::${ent.entity_id}`}
+                    value={`${ent.entity_type}::${ent.entity_id}`}
+                  >
                     {ent.entity_type} #{ent.entity_id}
                   </option>
                 ))}
@@ -721,38 +1074,39 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
               </tr>
             </thead>
             <tbody>
-              {blockchainEntries.slice().reverse().map(entry => (
-                <tr key={entry.id} className="border-b border-[#d9cfb6]">
-                  <td className="px-3 py-2 text-center">
-                    <input
-                      type="radio"
-                      checked={selectedEntryId === entry.id}
-                      onChange={() => {
-                        setSelectedEntryId(entry.id)
-                        setChainEntityType(entry.entity_type)
-                        setChainEntityId(entry.entity_id)
-                      }}
-                      name="blockchain-entry"
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-center">{entry.id}</td>
-                  <td className="px-3 py-2">{entry.entity_type}</td>
-                  <td className="px-3 py-2">{entry.action}</td>
-                  <td className="px-3 py-2">{entry.entity_id}</td>
-                  <td className="px-3 py-2 text-left">
-                    {entry.timestamp ? isoToJalali(entry.timestamp) : '---'}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-[10px] break-all">
-                    {entry.current_hash.slice(0, 24)}...
-                  </td>
-                </tr>
-              ))}
+              {blockchainEntries
+                .slice()
+                .reverse()
+                .map((entry) => (
+                  <tr key={entry.id} className="border-b border-[#d9cfb6]">
+                    <td className="px-3 py-2 text-center">
+                      <input
+                        type="radio"
+                        checked={selectedEntryId === entry.id}
+                        onChange={() => {
+                          setSelectedEntryId(entry.id)
+                          setChainEntityType(entry.entity_type)
+                          setChainEntityId(entry.entity_id)
+                        }}
+                        name="blockchain-entry"
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-center">{entry.id}</td>
+                    <td className="px-3 py-2">{entry.entity_type}</td>
+                    <td className="px-3 py-2">{entry.action}</td>
+                    <td className="px-3 py-2">{entry.entity_id}</td>
+                    <td className="px-3 py-2 text-left">
+                      {entry.timestamp ? isoToJalali(entry.timestamp) : '---'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[10px] break-all">
+                      {entry.current_hash.slice(0, 24)}...
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         ) : (
-          <p className="text-xs text-[#7a6b4f]">
-            رکوردی یافت نشد یا دسترسی شما محدود است.
-          </p>
+          <p className="text-xs text-[#7a6b4f]">رکوردی یافت نشد یا دسترسی شما محدود است.</p>
         )}
       </section>
 
@@ -773,7 +1127,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
               </tr>
             </thead>
             <tbody>
-              {activities.map(act => (
+              {activities.map((act) => (
                 <tr key={act.id} className="border-b border-[#d9cfb6]">
                   <td className="px-3 py-2 text-xs">{act.path}</td>
                   <td className="px-3 py-2">{act.method}</td>
@@ -800,118 +1154,134 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           <p className={retroHeading}>System Settings</p>
           <h3 className="text-lg font-semibold mt-2">تنظیمات سیستم</h3>
         </header>
-        
+
         <div className="mb-4 space-y-3">
-          <div className={`${retroPanel} p-3`}> 
+          <div className={`${retroPanel} p-3`}>
             <p className={retroHeading}>جهت منو</p>
-            <p className="text-xs text-[#7a6b4f]">محل نمایش منوی کناری را برای این کاربر انتخاب کنید.</p>
+            <p className="text-xs text-[#7a6b4f]">
+              محل نمایش منوی کناری را برای این کاربر انتخاب کنید.
+            </p>
             <div className="mt-3 flex items-center gap-2">
-              <select className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de] text-sm" value={sidebarSide} onChange={e=>setSidebarSide(e.target.value)}>
+              <select
+                className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de] text-sm"
+                value={sidebarSide}
+                onChange={(e) => setSidebarSide(e.target.value)}
+              >
                 <option value="">پیشفرض (راست)</option>
                 <option value="right">راست</option>
                 <option value="left">چپ</option>
               </select>
-              <button className={`${retroButton} ${savingSidebarSide ? 'opacity-50 pointer-events-none' : ''}`} onClick={saveSidebarSide}>
+              <button
+                className={`${retroButton} ${savingSidebarSide ? 'opacity-50 pointer-events-none' : ''}`}
+                onClick={saveSidebarSide}
+              >
                 ذخیره
               </button>
             </div>
           </div>
 
           <div>
-          <p className={retroHeading}>دسته</p>
-          <select 
-            className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-          >
-            <option value="">همه</option>
-            {Object.keys(settingsByCategory).map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-        </div>
+            <p className={retroHeading}>دسته</p>
+            <select
+              className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              <option value="">همه</option>
+              {Object.keys(settingsByCategory).map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className={`${retroPanel} p-4`}>
-          {(selectedCategory ? settingsByCategory[selectedCategory] || [] : allSettings).length > 0 ? (
-            <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
-              <thead>
-                <tr>
-                  <th className={retroTableHeader}>کلید</th>
-                  <th className={retroTableHeader}>مقدار</th>
-                  <th className={retroTableHeader}>توضیح</th>
-                  <th className={retroTableHeader}>عملیات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(selectedCategory ? settingsByCategory[selectedCategory] || [] : allSettings).map(setting => (
-                  <tr key={setting.key} className="border-b border-[#d9cfb6]">
-                    <td className="px-3 py-2 font-mono text-xs">{setting.key}</td>
-                    <td className="px-3 py-2">
-                      {editingKey === setting.key ? (
-                        <input
-                          type={setting.is_secret ? 'password' : 'text'}
-                          className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') updateSetting(setting.key, editValue)
-                            if (e.key === 'Escape') setEditingKey(null)
-                          }}
-                        />
-                      ) : (
-                        <span className={setting.is_secret ? 'text-gray-400' : ''}>
-                          {setting.is_secret ? '***' : setting.value || '-'}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-[#7a6b4f]">{setting.description || '-'}</td>
-                    <td className="px-3 py-2 text-center space-x-2">
-                      {editingKey === setting.key ? (
-                        <>
-                          <button
-                            className="text-green-600 hover:text-green-800 text-xs"
-                            onClick={() => updateSetting(setting.key, editValue)}
-                          >
-                            ✓
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-800 text-xs"
-                            onClick={() => setEditingKey(null)}
-                          >
-                            ✗
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            className="text-blue-600 hover:text-blue-800 text-xs"
-                            onClick={() => {
-                              setEditingKey(setting.key)
-                              setEditValue(setting.value || '')
-                            }}
-                          >
-                            ویرایش
-                          </button>
-                          <button
-                            className="text-red-600 hover:text-red-800 text-xs"
-                            onClick={() => deleteSetting(setting.key)}
-                          >
-                            حذف
-                          </button>
-                        </>
-                      )}
-                    </td>
+          <div className={`${retroPanel} p-4`}>
+            {(selectedCategory ? settingsByCategory[selectedCategory] || [] : allSettings).length >
+            0 ? (
+              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+                <thead>
+                  <tr>
+                    <th className={retroTableHeader}>کلید</th>
+                    <th className={retroTableHeader}>مقدار</th>
+                    <th className={retroTableHeader}>توضیح</th>
+                    <th className={retroTableHeader}>عملیات</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-xs text-[#7a6b4f]">هیچ تنظیمی در این دسته وجود ندارد.</p>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {(selectedCategory
+                    ? settingsByCategory[selectedCategory] || []
+                    : allSettings
+                  ).map((setting) => (
+                    <tr key={setting.key} className="border-b border-[#d9cfb6]">
+                      <td className="px-3 py-2 font-mono text-xs">{setting.key}</td>
+                      <td className="px-3 py-2">
+                        {editingKey === setting.key ? (
+                          <input
+                            type={setting.is_secret ? 'password' : 'text'}
+                            className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') updateSetting(setting.key, editValue)
+                              if (e.key === 'Escape') setEditingKey(null)
+                            }}
+                          />
+                        ) : (
+                          <span className={setting.is_secret ? 'text-gray-400' : ''}>
+                            {setting.is_secret ? '***' : setting.value || '-'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-[#7a6b4f]">
+                        {setting.description || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-center space-x-2">
+                        {editingKey === setting.key ? (
+                          <>
+                            <button
+                              className="text-green-600 hover:text-green-800 text-xs"
+                              onClick={() => updateSetting(setting.key, editValue)}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              className="text-red-600 hover:text-red-800 text-xs"
+                              onClick={() => setEditingKey(null)}
+                            >
+                              ✗
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              className="text-blue-600 hover:text-blue-800 text-xs"
+                              onClick={() => {
+                                setEditingKey(setting.key)
+                                setEditValue(setting.value || '')
+                              }}
+                            >
+                              ویرایش
+                            </button>
+                            <button
+                              className="text-red-600 hover:text-red-800 text-xs"
+                              onClick={() => deleteSetting(setting.key)}
+                            >
+                              حذف
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs text-[#7a6b4f]">هیچ تنظیمی در این دسته وجود ندارد.</p>
+            )}
+          </div>
         </div>
       </section>
     </div>
   )
 }
-

@@ -61,7 +61,10 @@ export async function createSaleOrder(payload: CreateSaleOrderPayload): Promise<
   return apiPost<SaleOrder>('/api/sales/orders', payload)
 }
 
-export async function updateSaleOrder(id: number, data: Partial<CreateSaleOrderPayload>): Promise<SaleOrder> {
+export async function updateSaleOrder(
+  id: number,
+  data: Partial<CreateSaleOrderPayload>,
+): Promise<SaleOrder> {
   return apiPatch<SaleOrder>(`/api/sales/orders/${id}`, data)
 }
 
@@ -70,6 +73,9 @@ export async function finalizeSaleOrder(id: number, client_time?: string): Promi
 }
 
 // Export a sale order. Currently only CSV supported on backend.
-export async function exportSaleOrder(id: number, format: 'csv' | 'pdf' | 'xlsx' = 'csv'): Promise<{ download_url?: string }> {
+export async function exportSaleOrder(
+  id: number,
+  format: 'csv' | 'pdf' | 'xlsx' = 'csv',
+): Promise<{ download_url?: string }> {
   return apiPost<{ download_url?: string }>(`/api/exports/sale-order/${id}?format=${format}`, {})
 }

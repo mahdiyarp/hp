@@ -43,9 +43,19 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [personBalances, setPersonBalances] = useState<Record<string, number>>({})
-  const [ledgerModal, setLedgerModal] = useState<null | { productId: string; loading: boolean; items: Array<Record<string, any>> }>(null)
+  const [ledgerModal, setLedgerModal] = useState<null | {
+    productId: string
+    loading: boolean
+    items: Array<Record<string, any>>
+  }>(null)
 
-  const activeIndexes = useMemo(() => selectedIndexes.length > 0 ? selectedIndexes : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[]), [selectedIndexes])
+  const activeIndexes = useMemo(
+    () =>
+      selectedIndexes.length > 0
+        ? selectedIndexes
+        : (['products', 'persons', 'invoices', 'payments'] as SearchIndex[]),
+    [selectedIndexes],
+  )
 
   const navigateModule = (moduleId: string) => {
     try {
@@ -55,8 +65,8 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
   }
 
   const toggleIndex = (idx: SearchIndex) => {
-    setSelectedIndexes(prev =>
-      prev.includes(idx) ? prev.filter(item => item !== idx) : [...prev, idx],
+    setSelectedIndexes((prev) =>
+      prev.includes(idx) ? prev.filter((item) => item !== idx) : [...prev, idx],
     )
   }
 
@@ -142,7 +152,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
               <label className={retroHeading}>عبارت جستجو</label>
               <input
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={(e) => setQuery(e.target.value)}
                 className={`${retroInput} w-full`}
                 placeholder="نام محصول، شماره فاکتور، طرف حساب..."
               />
@@ -154,7 +164,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                 min={1}
                 max={50}
                 value={limit}
-                onChange={e => setLimit(Number(e.target.value))}
+                onChange={(e) => setLimit(Number(e.target.value))}
                 className={`${retroInput} w-full`}
               />
             </div>
@@ -163,7 +173,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
           <div className="space-y-2">
             <label className={retroHeading}>نمایه‌های فعال</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-              {(Object.keys(INDEX_LABELS) as SearchIndex[]).map(idx => {
+              {(Object.keys(INDEX_LABELS) as SearchIndex[]).map((idx) => {
                 const active = selectedIndexes.includes(idx)
                 return (
                   <button
@@ -212,7 +222,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
 
       {results && !loading && (
         <section className="space-y-6">
-          {(activeIndexes as string[]).map(idx => {
+          {(activeIndexes as string[]).map((idx) => {
             const hitPack = results[idx]
             const hits = hitPack?.hits ?? []
             return (
@@ -220,21 +230,45 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                 <header className="flex items-center justify-between gap-3">
                   <div>
                     <p className={retroHeading}>نتایج</p>
-                    <h3 className="text-lg font-semibold mt-1">{INDEX_LABELS[idx as SearchIndex]}</h3>
+                    <h3 className="text-lg font-semibold mt-1">
+                      {INDEX_LABELS[idx as SearchIndex]}
+                    </h3>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`${retroBadge} !bg-[#1f2e3b] !text-[#faf4de]`}>تعداد: {hits.length}</span>
+                    <span className={`${retroBadge} !bg-[#1f2e3b] !text-[#faf4de]`}>
+                      تعداد: {hits.length}
+                    </span>
                     {idx === 'products' && (
-                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('inventory')}>باز کردن انبار</button>
+                      <button
+                        className={`${retroButton} text-[11px]`}
+                        onClick={() => navigateModule('inventory')}
+                      >
+                        باز کردن انبار
+                      </button>
                     )}
                     {idx === 'persons' && (
-                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('people')}>باز کردن طرف‌ها</button>
+                      <button
+                        className={`${retroButton} text-[11px]`}
+                        onClick={() => navigateModule('people')}
+                      >
+                        باز کردن طرف‌ها
+                      </button>
                     )}
                     {idx === 'invoices' && (
-                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('sales')}>باز کردن فروش</button>
+                      <button
+                        className={`${retroButton} text-[11px]`}
+                        onClick={() => navigateModule('sales')}
+                      >
+                        باز کردن فروش
+                      </button>
                     )}
                     {idx === 'payments' && (
-                      <button className={`${retroButton} text-[11px]`} onClick={() => navigateModule('finance')}>باز کردن مالی</button>
+                      <button
+                        className={`${retroButton} text-[11px]`}
+                        onClick={() => navigateModule('finance')}
+                      >
+                        باز کردن مالی
+                      </button>
                     )}
                   </div>
                 </header>
@@ -260,39 +294,73 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                     <span className={`${retroBadge}`}>{toPersianDigits(h.id)}</span>
                                     <div>
                                       <div className="font-semibold text-[#1f2e3b]">{h.name}</div>
-                                      {h.code && <div className="text-xs text-[#7a6b4f]">کد: {toPersianDigits(h.code)}</div>}
+                                      {h.code && (
+                                        <div className="text-xs text-[#7a6b4f]">
+                                          کد: {toPersianDigits(h.code)}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2 text-left">
                                   <div className="text-xs text-[#5b4a2f]">{h.group || '-'}</div>
-                                  <div className="text-[11px] text-[#7a6b4f]">واحد: {h.unit || '-'}</div>
+                                  <div className="text-[11px] text-[#7a6b4f]">
+                                    واحد: {h.unit || '-'}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2">
-                                  <span className={`${retroBadge} ${inv < 0 ? '!bg-[#c35c5c]' : inv === 0 ? '!bg-[#bfb69f]' : '!bg-[#3a7d44]'}`}>{formatNumberFaSpaced(inv)}</span>
+                                  <span
+                                    className={`${retroBadge} ${inv < 0 ? '!bg-[#c35c5c]' : inv === 0 ? '!bg-[#bfb69f]' : '!bg-[#3a7d44]'}`}
+                                  >
+                                    {formatNumberFaSpaced(inv)}
+                                  </span>
                                 </td>
                                 <td className="px-3 py-2">
                                   <button
                                     className={`${retroButton} text-[11px]`}
                                     onClick={async () => {
-                                      setLedgerModal({ productId: String(h.id), loading: true, items: [] })
+                                      setLedgerModal({
+                                        productId: String(h.id),
+                                        loading: true,
+                                        items: [],
+                                      })
                                       try {
-                                        const data = await apiGet<any>(`/api/ledger/product/${h.id}`)
+                                        const data = await apiGet<any>(
+                                          `/api/ledger/product/${h.id}`,
+                                        )
                                         let items: any[] = []
                                         if (Array.isArray(data)) {
                                           items = data
                                         } else if (data && Array.isArray(data.entries)) {
                                           items = data.entries
                                         }
-                                        const mapped = items.map((it:any) => ({
+                                        const mapped = items.map((it: any) => ({
                                           time: it.time || it.date || null,
                                           kind: it.kind || it.type || '-',
-                                          qty: typeof it.qty === 'number' ? it.qty : (typeof it.quantity === 'number' ? it.quantity : 0),
-                                          balance: typeof it.balance === 'number' ? it.balance : (typeof it.running_qty === 'number' ? it.running_qty : 0),
+                                          qty:
+                                            typeof it.qty === 'number'
+                                              ? it.qty
+                                              : typeof it.quantity === 'number'
+                                                ? it.quantity
+                                                : 0,
+                                          balance:
+                                            typeof it.balance === 'number'
+                                              ? it.balance
+                                              : typeof it.running_qty === 'number'
+                                                ? it.running_qty
+                                                : 0,
                                         }))
-                                        setLedgerModal({ productId: String(h.id), loading: false, items: mapped })
+                                        setLedgerModal({
+                                          productId: String(h.id),
+                                          loading: false,
+                                          items: mapped,
+                                        })
                                       } catch {
-                                        setLedgerModal({ productId: String(h.id), loading: false, items: [] })
+                                        setLedgerModal({
+                                          productId: String(h.id),
+                                          loading: false,
+                                          items: [],
+                                        })
                                       }
                                     }}
                                   >
@@ -318,7 +386,12 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                         <tbody>
                           {hits.map((h: any, i) => {
                             const bal = personBalances?.[String(h.id)] ?? 0
-                            const badgeCls = bal > 0 ? '!bg-[#3a7d44]' : bal < 0 ? '!bg-[#c35c5c]' : '!bg-[#bfb69f]'
+                            const badgeCls =
+                              bal > 0
+                                ? '!bg-[#3a7d44]'
+                                : bal < 0
+                                  ? '!bg-[#c35c5c]'
+                                  : '!bg-[#bfb69f]'
                             const balLabel = bal > 0 ? 'بدهکار' : bal < 0 ? 'بستانکار' : 'بی‌تراز'
                             return (
                               <tr key={i} className="border-b border-[#d9cfb6]">
@@ -332,7 +405,9 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
                                     <span className={`${retroBadge} ${badgeCls}`}>{balLabel}</span>
-                                    <span className="text-[#1f2e3b]">{formatNumberFaSpaced(Math.abs(bal))}</span>
+                                    <span className="text-[#1f2e3b]">
+                                      {formatNumberFaSpaced(Math.abs(bal))}
+                                    </span>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
@@ -342,8 +417,12 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                       navigateModule('people')
                                       setTimeout(() => {
                                         try {
-                                          const personId = String(h.id || h.person_id || h.code || '')
-                                          const evt = new CustomEvent('open-person-history', { detail: { person_id: personId } })
+                                          const personId = String(
+                                            h.id || h.person_id || h.code || '',
+                                          )
+                                          const evt = new CustomEvent('open-person-history', {
+                                            detail: { person_id: personId },
+                                          })
                                           window.dispatchEvent(evt)
                                         } catch {}
                                       }, 50)
@@ -373,26 +452,48 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                             const amt = Number(h.total || 0)
                             const type = String(h.invoice_type || '')
                             const status = String(h.status || '-')
-                            const statusCls = status === 'paid' ? '!bg-[#3a7d44]' : status === 'cancelled' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            const statusCls =
+                              status === 'paid'
+                                ? '!bg-[#3a7d44]'
+                                : status === 'cancelled'
+                                  ? '!bg-[#c35c5c]'
+                                  : '!bg-[#1f2e3b]'
                             return (
                               <tr key={i} className="border-b border-[#d9cfb6]">
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`${retroBadge}`}>{toPersianDigits(h.invoice_number || h.id)}</span>
+                                    <span className={`${retroBadge}`}>
+                                      {toPersianDigits(h.invoice_number || h.id)}
+                                    </span>
                                     <div>
-                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
-                                      <div className="text-[11px] text-[#7a6b4f]">نوع: {type === 'sale' ? 'فروش' : type === 'purchase' ? 'خرید' : '-'}</div>
+                                      <div className="font-semibold text-[#1f2e3b]">
+                                        {h.party_name || '-'}
+                                      </div>
+                                      <div className="text-[11px] text-[#7a6b4f]">
+                                        نوع:{' '}
+                                        {type === 'sale'
+                                          ? 'فروش'
+                                          : type === 'purchase'
+                                            ? 'خرید'
+                                            : '-'}
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`${retroBadge} ${amt >= 0 ? '!bg-[#3a7d44]' : '!bg-[#c35c5c]'}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                    <span
+                                      className={`${retroBadge} ${amt >= 0 ? '!bg-[#3a7d44]' : '!bg-[#c35c5c]'}`}
+                                    >
+                                      {formatNumberFaSpaced(Math.abs(amt))}
+                                    </span>
                                     <span className={`${retroBadge} ${statusCls}`}>{status}</span>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
-                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                  <div className="text-xs text-[#5b4a2f]">
+                                    {h.server_time ? isoToJalali(h.server_time) : '-'}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2">
                                   <button
@@ -401,7 +502,9 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                       navigateModule('sales')
                                       setTimeout(() => {
                                         try {
-                                          const evt = new CustomEvent('open-invoice-detail', { detail: { invoice_id: Number(h.id || h.invoice_id) } })
+                                          const evt = new CustomEvent('open-invoice-detail', {
+                                            detail: { invoice_id: Number(h.id || h.invoice_id) },
+                                          })
                                           window.dispatchEvent(evt)
                                         } catch {}
                                       }, 50)
@@ -431,22 +534,35 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                           {hits.map((h: any, i) => {
                             const amt = Number(h.amount || 0)
                             const dir = String(h.direction || '')
-                            const dirCls = dir === 'in' ? '!bg-[#3a7d44]' : dir === 'out' ? '!bg-[#c35c5c]' : '!bg-[#1f2e3b]'
+                            const dirCls =
+                              dir === 'in'
+                                ? '!bg-[#3a7d44]'
+                                : dir === 'out'
+                                  ? '!bg-[#c35c5c]'
+                                  : '!bg-[#1f2e3b]'
                             const status = String(h.status || '-')
                             return (
                               <tr key={i} className="border-b border-[#d9cfb6]">
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`${retroBadge}`}>{toPersianDigits(h.payment_number || h.id)}</span>
+                                    <span className={`${retroBadge}`}>
+                                      {toPersianDigits(h.payment_number || h.id)}
+                                    </span>
                                     <div>
-                                      <div className="font-semibold text-[#1f2e3b]">{h.party_name || '-'}</div>
+                                      <div className="font-semibold text-[#1f2e3b]">
+                                        {h.party_name || '-'}
+                                      </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="flex items-center gap-2">
-                                    <span className={`${retroBadge} ${dirCls}`}>{dir === 'in' ? 'دریافت' : dir === 'out' ? 'پرداخت' : '-'}</span>
-                                    <span className={`${retroBadge}`}>{formatNumberFaSpaced(Math.abs(amt))}</span>
+                                    <span className={`${retroBadge} ${dirCls}`}>
+                                      {dir === 'in' ? 'دریافت' : dir === 'out' ? 'پرداخت' : '-'}
+                                    </span>
+                                    <span className={`${retroBadge}`}>
+                                      {formatNumberFaSpaced(Math.abs(amt))}
+                                    </span>
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
@@ -456,7 +572,9 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                   </div>
                                 </td>
                                 <td className="px-3 py-2">
-                                  <div className="text-xs text-[#5b4a2f]">{h.server_time ? isoToJalali(h.server_time) : '-'}</div>
+                                  <div className="text-xs text-[#5b4a2f]">
+                                    {h.server_time ? isoToJalali(h.server_time) : '-'}
+                                  </div>
                                 </td>
                                 <td className="px-3 py-2">
                                   <button
@@ -465,7 +583,9 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                                       navigateModule('finance')
                                       setTimeout(() => {
                                         try {
-                                          const evt = new CustomEvent('open-payment-detail', { detail: { payment_id: Number(h.id || h.payment_id) } })
+                                          const evt = new CustomEvent('open-payment-detail', {
+                                            detail: { payment_id: Number(h.id || h.payment_id) },
+                                          })
                                           window.dispatchEvent(evt)
                                         } catch {}
                                       }, 50)
@@ -493,11 +613,21 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
       )}
 
       {ledgerModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setLedgerModal(null)}>
-          <div className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4" onClick={e=>e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={() => setLedgerModal(null)}
+        >
+          <div
+            className="w-[720px] max-w-[95vw] bg-[#faf4de] border-2 border-[#c5bca5] shadow-[6px_6px_0_#c5bca5] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-bold text-[#1f2e3b]">گردش کالا #{toPersianDigits(ledgerModal.productId)}</h4>
-              <button className={`${retroButton}`} onClick={()=> setLedgerModal(null)}>بستن</button>
+              <h4 className="font-bold text-[#1f2e3b]">
+                گردش کالا #{toPersianDigits(ledgerModal.productId)}
+              </h4>
+              <button className={`${retroButton}`} onClick={() => setLedgerModal(null)}>
+                بستن
+              </button>
             </div>
             {ledgerModal.loading ? (
               <div className="text-xs text-[#7a6b4f]">در حال دریافت گردش...</div>
@@ -513,7 +643,7 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {ledgerModal.items.map((it:any, idx:number) => (
+                    {ledgerModal.items.map((it: any, idx: number) => (
                       <tr key={idx} className="border-b border-[#d9cfb6]">
                         <td className="px-3 py-2">{it.time ? isoToJalali(it.time) : '-'}</td>
                         <td className="px-3 py-2">{it.kind || '-'}</td>
@@ -533,4 +663,3 @@ export default function SearchModule({ smartDate }: ModuleComponentProps) {
     </div>
   )
 }
-

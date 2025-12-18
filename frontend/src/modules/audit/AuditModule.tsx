@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { apiGet, apiPost } from '../../services/api'
-import { retroPanelPadded, retroHeading, retroButton, retroInput, retroLabel } from '../../components/retroTheme'
+import {
+  retroPanelPadded,
+  retroHeading,
+  retroButton,
+  retroInput,
+  retroLabel,
+} from '../../components/retroTheme'
 
 type MerkleBatch = {
   ts: string
@@ -18,7 +24,12 @@ export default function AuditModule() {
   const [entityId, setEntityId] = useState<string>('09123506545')
   const [entryId, setEntryId] = useState<number>(0)
   const [proof, setProof] = useState<any | null>(null)
-  const [recent, setRecent] = useState<Array<{id:number; entity_id:string; action:string; ts:string}> | null>(null)
+  const [recent, setRecent] = useState<Array<{
+    id: number
+    entity_id: string
+    action: string
+    ts: string
+  }> | null>(null)
 
   async function loadLatest() {
     setError(null)
@@ -49,7 +60,9 @@ export default function AuditModule() {
     setError(null)
     setProof(null)
     try {
-      const data = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent(entityId)}&entry_id=${entryId}`)
+      const data = await apiGet<any>(
+        `/api/audit/otp/proof?entity_id=${encodeURIComponent(entityId)}&entry_id=${entryId}`,
+      )
       setProof(data)
     } catch (e: any) {
       setError(e?.message || 'Proof fetch failed')
@@ -65,11 +78,14 @@ export default function AuditModule() {
     try {
       const batch = await apiPost<MerkleBatch>(`/api/audit/otp/batch/build?limit=${limit}`)
       setLatest(batch)
-      const firstId = Array.isArray(batch.entry_ids) && batch.entry_ids.length > 0 ? batch.entry_ids[0] : 0
+      const firstId =
+        Array.isArray(batch.entry_ids) && batch.entry_ids.length > 0 ? batch.entry_ids[0] : 0
       if (firstId) {
         setEntityId((recent && recent[0]?.entity_id) || entityId)
         setEntryId(firstId)
-        const data = await apiGet<any>(`/api/audit/otp/proof?entity_id=${encodeURIComponent((recent && recent[0]?.entity_id) || entityId)}&entry_id=${firstId}`)
+        const data = await apiGet<any>(
+          `/api/audit/otp/proof?entity_id=${encodeURIComponent((recent && recent[0]?.entity_id) || entityId)}&entry_id=${firstId}`,
+        )
         setProof(data)
       }
     } catch (e: any) {
@@ -83,7 +99,9 @@ export default function AuditModule() {
     loadLatest()
     ;(async () => {
       try {
-        const data = await apiGet<Array<{id:number; entity_id:string; action:string; ts:string}>>('/api/audit/otp/recent?limit=20')
+        const data = await apiGet<
+          Array<{ id: number; entity_id: string; action: string; ts: string }>
+        >('/api/audit/otp/recent?limit=20')
         setRecent(data)
       } catch {
         setRecent(null)
@@ -94,22 +112,26 @@ export default function AuditModule() {
   return (
     <div className="p-4">
       <div className={`${retroPanelPadded} space-y-4`}>
-          <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">ساخت Batch مرکل</div>
-              <button className="border border-[#111827] bg-white px-2 py-1 text-[11px]" onClick={async()=>{
-                const ev = (type: 'success'|'error', msg: string) => window.dispatchEvent(new CustomEvent('toast', { detail: { type, message: msg } }))
+        <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">ساخت Batch مرکل</div>
+            <button
+              className="border border-[#111827] bg-white px-2 py-1 text-[11px]"
+              onClick={async () => {
+                const ev = (type: 'success' | 'error', msg: string) =>
+                  window.dispatchEvent(new CustomEvent('toast', { detail: { type, message: msg } }))
                 try {
                   await apiGet('/api/audit/otp/batch/build')
-                  ev('success','Batch ساخته شد')
-                } catch(e){
-                  ev('error','خطا در ساخت Batch')
+                  ev('success', 'Batch ساخته شد')
+                } catch (e) {
+                  ev('error', 'خطا در ساخت Batch')
                 }
-              }}>
-                ساخت Batch
-              </button>
-            </div>
+              }}
+            >
+              ساخت Batch
+            </button>
           </div>
+        </div>
         <h2 className={retroHeading}>سامانه ممیزی نامتغیر (Merkle)</h2>
         <p className="text-sm">ساخت Batch از آخرین رویدادهای OTP و مشاهده مرکل‌روت</p>
 
@@ -121,7 +143,7 @@ export default function AuditModule() {
             value={limit}
             min={1}
             max={500}
-            onChange={e => setLimit(Number(e.target.value) || 50)}
+            onChange={(e) => setLimit(Number(e.target.value) || 50)}
           />
         </div>
 
@@ -129,8 +151,16 @@ export default function AuditModule() {
           <button className={retroButton} onClick={buildBatch} disabled={loading}>
             {loading ? 'در حال ساخت...' : 'ساخت Batch'}
           </button>
-          <button className={retroButton} onClick={loadLatest} disabled={loading}>آخرین Batch</button>
-          <button className={`${retroButton} !bg-[#2563eb] !text-white`} onClick={buildBatchAndProof} disabled={loading}>Batch + Proof</button>
+          <button className={retroButton} onClick={loadLatest} disabled={loading}>
+            آخرین Batch
+          </button>
+          <button
+            className={`${retroButton} !bg-[#2563eb] !text-white`}
+            onClick={buildBatchAndProof}
+            disabled={loading}
+          >
+            Batch + Proof
+          </button>
         </div>
 
         {error && (
@@ -146,7 +176,10 @@ export default function AuditModule() {
             <div className="text-xs">تعداد: {latest.count}</div>
             <div className="text-xs break-all">مرکل‌روت: {latest.merkle_root}</div>
             {latest.entry_ids?.length ? (
-              <div className="mt-2 text-xs">IDs اخیر: {latest.entry_ids.slice(0, 10).join(', ')}{latest.entry_ids.length > 10 ? ' ...' : ''}</div>
+              <div className="mt-2 text-xs">
+                IDs اخیر: {latest.entry_ids.slice(0, 10).join(', ')}
+                {latest.entry_ids.length > 10 ? ' ...' : ''}
+              </div>
             ) : null}
           </div>
         )}
@@ -155,13 +188,21 @@ export default function AuditModule() {
           <div className="mt-4">
             <h4 className={retroHeading}>رویدادهای اخیر OTP</h4>
             <div className="text-xs space-y-1">
-              {recent.map(r => (
+              {recent.map((r) => (
                 <div key={r.id} className="flex items-center gap-2">
                   <span>#{r.id}</span>
                   <span>{r.entity_id}</span>
                   <span>{r.action}</span>
                   <span>{new Date(r.ts).toLocaleString()}</span>
-                  <button className={`${retroButton} !text-xs`} onClick={() => { setEntityId(r.entity_id); setEntryId(r.id); }}>انتخاب برای Proof</button>
+                  <button
+                    className={`${retroButton} !text-xs`}
+                    onClick={() => {
+                      setEntityId(r.entity_id)
+                      setEntryId(r.id)
+                    }}
+                  >
+                    انتخاب برای Proof
+                  </button>
                 </div>
               ))}
             </div>
@@ -173,14 +214,29 @@ export default function AuditModule() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <div>
             <label className={retroLabel}>شناسه موجودیت (entity_id)</label>
-            <input className={`${retroInput} w-full`} value={entityId} onChange={e => setEntityId(e.target.value)} />
+            <input
+              className={`${retroInput} w-full`}
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+            />
           </div>
           <div>
             <label className={retroLabel}>شناسه ورودی (entry_id)</label>
-            <input type="number" className={`${retroInput} w-full`} value={entryId} onChange={e => setEntryId(Number(e.target.value) || 0)} />
+            <input
+              type="number"
+              className={`${retroInput} w-full`}
+              value={entryId}
+              onChange={(e) => setEntryId(Number(e.target.value) || 0)}
+            />
           </div>
           <div>
-            <button className={retroButton} onClick={loadProof} disabled={loading || !entityId || !entryId}>دریافت Proof</button>
+            <button
+              className={retroButton}
+              onClick={loadProof}
+              disabled={loading || !entityId || !entryId}
+            >
+              دریافت Proof
+            </button>
           </div>
         </div>
         {proof && (
