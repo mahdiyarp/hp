@@ -37,7 +37,9 @@ const Reports: React.FC = () => {
       if (filters.customer) params.set('customer', filters.customer)
       if (filters.product) params.set('product', filters.product)
       if (filters.status) params.set('status', filters.status)
-      const res = await apiGet(`/api/reports/sales?${params.toString()}`)
+      const res = await apiGet<any[] | { items: any[] }>(
+        `/api/reports/sales?${params.toString()}`,
+      )
       const arr = Array.isArray(res) ? res : res?.items || []
       setItems(arr)
     } catch (e: any) {

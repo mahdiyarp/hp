@@ -1,6 +1,18 @@
 import React from 'react'
 import { apiGet, apiPost, apiPut } from '../services/api'
 
+type Task = {
+  id?: number
+  title?: string
+  description?: string
+  status?: 'todo' | 'doing' | 'done' | string
+  priority?: 'low' | 'medium' | 'high' | string
+  assignee_id?: string | number
+  entity_type?: string
+  entity_id?: string | number
+  due_date?: string
+}
+
 interface Props {
   mode: 'create' | 'edit'
 }
@@ -44,7 +56,7 @@ const TaskEditor: React.FC<Props> = ({ mode }) => {
     const load = async () => {
       if (mode === 'edit' && id) {
         try {
-          const t = await apiGet(`/api/tasks/${id}`)
+          const t = await apiGet<Task>(`/api/tasks/${id}`)
           setData(t || {})
         } catch (e: any) {
           setError(e?.message || 'خطا در دریافت وظیفه')
@@ -60,12 +72,12 @@ const TaskEditor: React.FC<Props> = ({ mode }) => {
     try {
       setSaving(true)
       if (mode === 'create') {
-        const created = await apiPost('/api/tasks', data)
+        const created = await apiPost<Task>('/api/tasks', data)
         setData(created)
         setId(created?.id || null)
         if (created?.id) window.location.hash = `task-edit:${created.id}`
       } else if (mode === 'edit' && id) {
-        const updated = await apiPut(`/api/tasks/${id}`, data)
+        const updated = await apiPut<Task>(`/api/tasks/${id}`, data)
         setData(updated)
       }
     } catch (e: any) {

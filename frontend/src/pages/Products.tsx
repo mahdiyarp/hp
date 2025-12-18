@@ -28,7 +28,9 @@ const Products: React.FC = () => {
       params.set('page', String(page))
       params.set('limit', String(pageSize))
       if (debounced) params.set('q', debounced)
-      const res = await apiGet(`/api/products?${params.toString()}`)
+      const res = await apiGet<Product[] | { items: Product[] }>(
+        `/api/products?${params.toString()}`,
+      )
       const arr = Array.isArray(res) ? res : res?.items || []
       setItems(arr)
     } catch (e: any) {

@@ -19,7 +19,7 @@ const Tasks: React.FC = () => {
       params.set('limit', String(limit))
       if (status) params.set('status', status)
       if (assignee) params.set('assignee_id', assignee)
-      const res = await apiGet(`/api/tasks?${params.toString()}`)
+      const res = await apiGet<{ items: any[] }>(`/api/tasks?${params.toString()}`)
       setItems(res?.items || [])
     } catch (e: any) {
       setError(e?.message || 'خطا در دریافت وظایف')
