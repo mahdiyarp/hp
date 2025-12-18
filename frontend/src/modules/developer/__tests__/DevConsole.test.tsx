@@ -1,5 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { act } from 'react'
 import React from 'react'
 import App from '../../../App'
 
@@ -78,16 +79,20 @@ describe('DevConsole filters & CSV export', () => {
       '/api/version': { version: '1.0.0' },
     })
 
-    render(<App />)
+    await act(async () => {
+      render(<App />)
+    })
 
     // Open DevConsole in app (assumes a menu or button exists). If not, directly assert fetches.
     // Simulate selecting provider filter and calling history
     const providerValue = 'sms.ir'
     // Directly call history to simulate component behavior
-    await fetch(`/api/sms/history?provider=${providerValue}&limit=50&page=1`)
-    const res = await fetch('/api/sms/history/export.csv?provider=sms.ir')
-    const text = await res.text()
-    expect(res.headers.get('Content-Type')?.startsWith('text/csv')).toBe(true)
+    await act(async () => {
+      await fetch(`/api/sms/history?provider=${providerValue}&limit=50&page=1`)
+    })
+    const res = await act(async () => await fetch('/api/sms/history/export.csv?provider=sms.ir'))
+    const text = await (res as Response).text()
+    expect((res as Response).headers.get('Content-Type')?.startsWith('text/csv')).toBe(true)
     expect(text.includes('id,provider')).toBe(true)
   })
 })

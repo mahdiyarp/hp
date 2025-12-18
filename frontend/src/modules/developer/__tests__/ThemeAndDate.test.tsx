@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render } from '@testing-library/react'
+import { act } from 'react'
 import React from 'react'
 import App from '../../../App'
 import { ThemeProvider } from '../../../context/theme'
@@ -34,13 +35,17 @@ describe('Theme and date filters', () => {
 
   it('applies dark theme based on localStorage', async () => {
     mockFetchRoutes()
-    render(
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>,
-    )
+    await act(async () => {
+      render(
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>,
+      )
+    })
     // wait for ThemeProvider effect
-    await new Promise((r) => setTimeout(r, 0))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 })
