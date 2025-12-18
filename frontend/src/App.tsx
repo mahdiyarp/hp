@@ -227,27 +227,27 @@ export default function App() {
             خطا {apiError.status}: {apiError.message}
           </div>
         )}
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 text-gray-800 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-[var(--retro-surface-bg)] text-[var(--retro-table-header-text)] flex items-center justify-center p-6">
           <div className="max-w-5xl w-full flex flex-col-reverse md:flex-row items-center justify-between gap-10">
             <div className="md:w-1/2 space-y-4 text-right">
-              <p className="text-sm font-mono text-indigo-700 tracking-wider">
+              <p className="text-sm font-mono text-[var(--retro-button-bg)] tracking-wider">
                 HESABPAK CLASSIC CONSOLE
               </p>
-              <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-gray-900">
+              <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-[var(--retro-table-header-text)]">
                 به سیستم جامع حساب‌پاک خوش آمدید
               </h1>
-              <p className="text-sm text-gray-700 leading-6">
+              <p className="text-sm text-[var(--retro-muted-text)] leading-6">
                 برای دسترسی به داشبورد مرکزی و ابزارهای حسابداری، ابتدا وارد شوید. این محیط بر اساس
                 تم کلاسیک طراحی شده تا با سیستم‌های آرشیوی و کاربران باسابقه هماهنگ بماند.
               </p>
-              <div className="flex flex-wrap gap-3 text-xs text-indigo-700">
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">
+              <div className="flex flex-wrap gap-3 text-xs text-[var(--retro-heading-text)]">
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
                   SYNCED TIME
                 </span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
                   RETRO UI MODE
                 </span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
                   SECURE ACCESS
                 </span>
               </div>
@@ -258,7 +258,7 @@ export default function App() {
           </div>
         </div>
         {version && (
-          <div className="fixed bottom-2 right-2 text-xs text-indigo-600 bg-white px-2 py-1 rounded shadow">
+          <div className="fixed bottom-2 right-2 text-xs text-[var(--retro-table-header-text)] bg-white px-2 py-1 rounded shadow">
             v{version}
           </div>
         )}
@@ -340,11 +340,11 @@ export default function App() {
             خطا {apiError.status}: {apiError.message}
           </div>
         )}
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--retro-surface-bg)] flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--retro-button-bg)] mx-auto mb-2"></div>
             <p>در حال راه‌اندازی سیستم هوشمند...</p>
-            <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
+            <p className="text-xs text-[var(--retro-muted-text)] mt-2">چند ثانیه صبر کنید...</p>
           </div>
         </div>
       </FYProvider>

@@ -170,7 +170,7 @@ function computeTimeDeltaSeconds(serverIso: string | null, clientIso: string | n
   return Math.round((clientMs - serverMs) / 1000)
 }
 
-export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
+export default function SalesModule({ smartDate, sync, onNavigate }: ModuleComponentProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -897,9 +897,20 @@ export default function SalesModule({ smartDate, sync }: ModuleComponentProps) {
   return (
     <div className="space-y-8">
       {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <p className={`${retroHeading} text-[#7a1f1f]`}>{error}</p>
+          <p className="text-xs text-[#4b3d2d]">اگر منبع در دسترس نیست یا دسترسی محدود است، از بخش کاربران در تنظیمات بررسی کنید یا بعداً دوباره تلاش کنید.</p>
+          <div className="flex flex-wrap gap-2">
+            <button className={retroButton} onClick={() => loadInvoices(true)}>
+              تلاش مجدد
+            </button>
+            {onNavigate && (
+              <button className={retroButton} onClick={() => onNavigate('settings-users')}>
+                کاربران (Settings)
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
       {(detailLoading || invoiceDetail || detailError) && (

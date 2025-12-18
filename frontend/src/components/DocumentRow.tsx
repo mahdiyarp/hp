@@ -79,7 +79,7 @@ export default function DocumentRow(props: DocumentRowProps) {
               invoice_type === 'sale'
                 ? 'text-green-700 font-semibold'
                 : invoice_type === 'purchase'
-                  ? 'text-blue-700 font-semibold'
+                  ? 'text-[var(--retro-heading-text)] font-semibold'
                   : 'text-gray-600 italic'
             }
           >

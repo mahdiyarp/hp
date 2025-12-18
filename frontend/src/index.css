@@ -4,13 +4,10 @@
 
 /* حذف متغیرها و کلاس‌های تم تیره قدیمی برای جلوگیری از تداخل با تم Retro */
 
-/* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
+/* Register Yekan using local sources only to avoid OTS errors if webfonts are missing/corrupt */
 @font-face {
   font-family: 'Yekan';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('Yekan'), local('IranYekan');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -18,7 +15,7 @@
 
 :root {
   color-scheme: light;
-  --hp-font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
   --retro-panel-bg: #faf4df;

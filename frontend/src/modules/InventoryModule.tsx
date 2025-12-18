@@ -983,7 +983,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
                     <p className={retroHeading}>موجودی فعلی</p>
-                    <p className="text-2xl font-semibold text-blue-700">
+                    <p className="text-2xl font-semibold text-[var(--retro-table-header-text)]">
                       {formatNumberFa(movementData.product.current_stock)}{' '}
                       {movementData.product.unit || 'عدد'}
                     </p>
@@ -1063,12 +1063,12 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                             <td className="px-3 py-2 text-left font-mono text-xs text-[#7a6b4f]">
                               {formatNumberFa(movement.stock_before)}
                             </td>
-                            <td className="px-3 py-2 text-left font-mono font-semibold text-blue-700">
+                            <td className="px-3 py-2 text-left font-mono font-semibold text-[var(--retro-table-header-text)]">
                               {formatNumberFa(movement.stock_after)}
                             </td>
                             <td className="px-3 py-2 text-xs">
                               <button
-                                className="text-blue-700 underline hover:text-blue-900"
+                                className="text-[var(--retro-heading-text)] underline hover:text-[var(--retro-button-bg)]"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   window.open(

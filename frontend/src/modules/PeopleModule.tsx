@@ -82,7 +82,7 @@ type PersonWithBalance = Person & {
   balance: number
 }
 
-export default function PeopleModule({ smartDate }: ModuleComponentProps) {
+export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentProps) {
   const { user } = useAuth()
   const canEdit = !!user && ['Admin', 'Accountant', 'Manager'].includes(user.role)
   const [people, setPeople] = useState<Person[]>([])
@@ -587,9 +587,26 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
   return (
     <div className="space-y-8">
       {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <p className={`${retroHeading} text-[#7a1f1f]`}>{error}</p>
+          <p className="text-xs text-[#4b3d2d]">اگر دسترسی ندارید یا مسیر پیدا نشد، لطفاً از بخش کاربران در تنظیمات بررسی کنید یا بعداً دوباره تلاش کنید.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={retroButton}
+              onClick={() => {
+                loadPeople()
+                loadBalances()
+              }}
+            >
+              تلاش مجدد
+            </button>
+            {onNavigate && (
+              <button className={retroButton} onClick={() => onNavigate('settings-users')}>
+                کاربران (Settings)
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
       <section className={`${retroPanelPadded} space-y-4`}>
@@ -1139,7 +1156,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                     <td className="px-3 py-2 text-xs">
                       <div className="flex gap-2">
                         <button
-                          className="underline text-blue-700 hover:text-blue-900"
+                          className="underline text-[var(--retro-heading-text)] hover:text-[var(--retro-button-bg)]"
                           onClick={(e) => {
                             e.stopPropagation()
                             setEditingPerson(person)
@@ -1357,7 +1374,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                                 <td className="px-3 py-2">
                                   {entry.description}
                                   {entry.invoice && (
-                                    <span className="block text-[10px] text-blue-700 mt-1">
+                                    <span className="block text-[10px] text-[var(--retro-heading-text)] mt-1">
                                       فاکتور: {entry.invoice.invoice_number}
                                     </span>
                                   )}
@@ -1402,7 +1419,7 @@ export default function PeopleModule({ smartDate }: ModuleComponentProps) {
                                 <td className="px-3 py-2 text-xs">
                                   {entry.invoice && (
                                     <button
-                                      className="text-blue-700 underline hover:text-blue-900"
+                                      className="text-[var(--retro-heading-text)] underline hover:text-[var(--retro-button-bg)]"
                                       onClick={async (e) => {
                                         e.stopPropagation()
                                         try {

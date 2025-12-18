@@ -155,7 +155,7 @@ export default function AuditModule() {
             آخرین Batch
           </button>
           <button
-            className={`${retroButton} !bg-[#2563eb] !text-white`}
+            className={`${retroButton} !bg-[var(--retro-button-bg)] !text-[var(--retro-button-text)]`}
             onClick={buildBatchAndProof}
             disabled={loading}
           >

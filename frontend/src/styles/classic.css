@@ -4,7 +4,7 @@
   --fg: #111827;
   --muted: #6b7280;
   --border: #d1d5db;
-  --primary: #2563eb;
+  --primary: var(--retro-button-bg);
   --primary-contrast: #ffffff;
 }
 
@@ -82,8 +82,8 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: var(--retro-input-focus);
+  box-shadow: 0 0 0 2px var(--retro-input-focus);
 }
 
 /* Buttons */

@@ -155,7 +155,7 @@ export default function PaymentEditor() {
             انصراف
           </button>
           <button
-            className="px-3 py-2 bg-indigo-600 text-white rounded"
+            className="px-3 py-2 bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] shadow-[3px_3px_0_var(--retro-button-border)] rounded"
             onClick={save}
             disabled={saving}
           >

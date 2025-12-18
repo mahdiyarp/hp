@@ -80,7 +80,7 @@ export default function Payments() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">پرداخت‌ها</h1>
         <div className="space-x-2 rtl:space-x-reverse">
-          <button className="px-3 py-1 bg-indigo-600 text-white rounded" onClick={exportCsv}>
+          <button className="px-3 py-1 bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-2 border-[var(--retro-button-border)] shadow-[3px_3px_0_var(--retro-button-border)] rounded" onClick={exportCsv}>
             خروجی CSV
           </button>
           <button

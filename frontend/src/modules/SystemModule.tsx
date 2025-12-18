@@ -953,7 +953,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                       ) : (
                         <>
                           <button
-                            className="text-blue-600 hover:text-blue-800 text-xs"
+                            className="text-[var(--retro-heading-text)] hover:text-[var(--retro-button-bg)] text-xs"
                             onClick={() => {
                               setEditingPmId(m.id)
                               setDraftPm({
@@ -1255,7 +1255,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                         ) : (
                           <>
                             <button
-                              className="text-blue-600 hover:text-blue-800 text-xs"
+                              className="text-[var(--retro-heading-text)] hover:text-[var(--retro-button-bg)] text-xs"
                               onClick={() => {
                                 setEditingKey(setting.key)
                                 setEditValue(setting.value || '')

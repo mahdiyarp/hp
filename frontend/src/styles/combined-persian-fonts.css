@@ -1,77 +1,56 @@
 /* Centralized font registrations and fallbacks for Persian UI */
 /* If licensed IranYekan webfonts are not present, fall back to bundled Yekan files to avoid invalid font decoding errors in browsers. */
 
-/* Map IranYekan family to bundled Yekan files when the proper IranYekan woff2 is missing */
+/* Prefer locally installed fonts; do not download from /fonts to avoid OTS errors */
 @font-face {
   font-family: 'IranYekan';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('IranYekan'), local('Yekan');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'IranYekan';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('IranYekan'), local('Yekan');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'IranYekan';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('IranYekan'), local('Yekan');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
-/* Vazirmatn family mapped to Yekan to avoid loading invalid woff2 placeholders */
+/* Vazirmatn as local-only, fallback to local Yekan if present */
 @font-face {
   font-family: 'Vazirmatn';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('Vazirmatn'), local('Yekan');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Vazirmatn';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('Vazirmatn'), local('Yekan');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'Vazirmatn';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('Vazirmatn'), local('Yekan');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
-/* Legacy Yekan (bundled) */
+/* Legacy Yekan: local only */
 @font-face {
   font-family: 'Yekan';
-  src:
-    url('/fonts/Yekan.woff2') format('woff2'),
-    url('/fonts/Yekan.woff') format('woff'),
-    url('/fonts/Yekan.ttf') format('truetype');
+  src: local('Yekan');
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;

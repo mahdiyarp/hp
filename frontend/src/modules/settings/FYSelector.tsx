@@ -89,7 +89,7 @@ export default function FYSelector() {
         ) : (
           <div className="flex items-center gap-3">
             <select
-              className="h-10 w-64 rounded-md border-slate-300 bg-white/80 px-3 text-slate-800 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:bg-slate-800 dark:text-slate-100"
+              className="h-10 w-64 rounded-md border-slate-300 bg-white/80 px-3 text-slate-800 shadow-sm outline-none transition focus:border-[var(--retro-input-focus)] focus:ring-2 focus:ring-[var(--retro-input-focus)] dark:bg-slate-800 dark:text-slate-100"
               value={activeFyId ?? ''}
               onChange={(e) => onChange(Number(e.target.value))}
             >
