@@ -16,6 +16,11 @@
 :root {
   color-scheme: light;
   --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  /* Layout variables (tunable to match reference build) */
+  --hp-container-max: 1200px;
+  --hp-container-px: 20px; /* px-5 */
+  --hp-container-py: 20px; /* py-5 */
+  --hp-sidebar-width: 288px; /* w-72 */
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
   --retro-panel-bg: #faf4df;
@@ -104,9 +109,15 @@ html[dir='rtl'] {
   direction: rtl;
 }
 
-/* Base container spacing for consistent rhythm */
+/* Base container spacing for consistent rhythm (variable-driven) */
 .hp-container {
-  @apply max-w-[1200px] mx-auto px-5 py-5;
+  max-width: var(--hp-container-max);
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--hp-container-px);
+  padding-right: var(--hp-container-px);
+  padding-top: var(--hp-container-py);
+  padding-bottom: var(--hp-container-py);
 }
 
 /* Card panels unified padding and border */
