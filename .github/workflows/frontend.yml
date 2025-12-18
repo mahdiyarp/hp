@@ -33,6 +33,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint Nginx security headers config
+        run: npm run check:headers-config
+
       - name: Unit/Smoke tests (Vitest)
         run: npm run test -- --reporter=verbose
 
