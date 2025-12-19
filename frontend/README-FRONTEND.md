@@ -163,6 +163,25 @@ npm --prefix frontend run -s test:e2e
 - هدر سراسری: [frontend/src/components/layout/AppShell.tsx](frontend/src/components/layout/AppShell.tsx) از کلاس `hp-container` و `py-5` استفاده می‌کند.
 - نکته: برای یکسانی دقیق با مرجع، عرض‌های سخت‌کُد داخلی مانند `max-w-6xl` در مودال‌ها حذف شده‌اند تا از کانتینر بیرونی پیروی کنند.
 
+## Theme Override (Override فایل تم)
+
+- فایل اختیاری: [frontend/public/theme-override.css](frontend/public/theme-override.css)
+- بارگذاری در صفحه: لینک در [frontend/index.html](frontend/index.html) اضافه شده است.
+- هدف: تنظیم دقیق رنگ‌ها/فواصل/عرض‌ها بدون دست‌کاری فایل‌های سورس. هر مقدار در این فایل تعریف شود، مقادیر پیش‌فرض `src/index.css` را override می‌کند.
+- نمونه متغیرها:
+
+```css
+:root {
+  --hp-container-max: 72rem;
+  --hp-sidebar-width: 288px;
+  --retro-panel-bg: #faf4df;
+  --retro-border: #c5bca5;
+  --retro-button-bg: #154b5f;
+}
+```
+
+- پیشنهاد: برای هم‌راستاسازی با نسخهٔ مرجع (Reference)، ابتدا تغییرات را در این فایل اعمال کنید و سپس با اسکریپت `./run-frontend-sync.ps1 -NoBuild` سرویس را بازبینی کنید.
+
 ## گیتینگ دسترسی (Access Gating)
 - هر ماژول یک برچسب `feature` دارد (مانند `reports`, `invoices`, `payments`, `products`, `persons`, `settings`).
 - لیست ویژگی‌های سازمان از مسیر `/api/org/features` خوانده می‌شود.
@@ -175,3 +194,15 @@ npm --prefix frontend run -s test:e2e
 - Smoke Navigation: تست سبک برای `#settings-users` در `frontend/src/smoke/navigation.test.tsx`.
 - Roadmap Hidden: تست جدید تأیید می‌کند که در پاسخ 404، کامپوننت Roadmap خروجی رندر نمی‌کند.
  - Permissions Gating: تست سبک برای اطمینان از مخفی‌شدن ماژول‌های بدون مجوز (مثلاً Reports بدون `reports:view`).
+
+## داشبورد: محدودیت نمایش آیتم‌ها
+
+- فهرست «فاکتورهای اخیر» و «محصولات اخیر» دارای محدودکنندهٔ فارسی و قابل‌انتخاب است (۵/۱۰/۲۰/۵۰).
+- مقدار پیش‌فرض ۵ است و انتخاب کاربر در LocalStorage با کلیدهای `hp_dash_invoice_limit` و `hp_dash_product_limit` ذخیره می‌شود.
+- فایل مرتبط: `frontend/src/modules/DashboardModule.tsx` (props داخلی نیازی به تغییر ندارد).
+- تست E2E: `frontend/e2e/dashboard-limits.spec.ts` تأیید می‌کند که تعداد ردیف‌ها با انتخاب کاربر هم‌خوان است.
+
+## راست‌ترازی هدر (RTL)
+
+- کلاس کمکی `hp-container-right` برای راست‌محور کردن کانتینر افزوده شده و در هدر/بدنه اعمال می‌شود.
+- فایل‌ها: `frontend/src/index.css` و `frontend/src/components/layout/AppShell.tsx`.
