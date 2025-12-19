@@ -227,7 +227,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
       {sidebarSide === 'right' && asideElement}
       <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720]">
         <header className="border-b-2 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6]">
-          <div className="hp-container py-5 flex flex-col gap-3">
+          <div className="hp-container hp-container-right py-5 flex flex-col gap-3">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <p className={`${retroHeading} text-[var(--retro-muted-text)]`}>
@@ -300,7 +300,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
           </div>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <div className="hp-container py-8 space-y-8">
+          <div className="hp-container hp-container-right py-8 space-y-8">
             <ErrorBoundary>
               <React.Suspense
                 fallback={

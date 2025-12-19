@@ -120,6 +120,12 @@ html[dir='rtl'] {
   padding-bottom: var(--hp-container-py);
 }
 
+/* Right-anchored variant for RTL layouts to align with right sidebar seam */
+.hp-container-right {
+  margin-right: 0;
+  margin-left: auto;
+}
+
 /* Card panels unified padding and border */
 .hp-card {
   @apply border-2 border-retro-panelBorder bg-retro-panel shadow-retroPanel rounded-sm p-5;
