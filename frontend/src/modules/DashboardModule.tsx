@@ -212,7 +212,9 @@ export default function DashboardModule({
 }: ModuleComponentProps) {
   const { t } = useI18n()
   const [viewMode, setViewMode] = useState<'summary' | 'widgets'>('summary')
-  const [itemLimit, setItemLimit] = useState<number>(10)
+  // محدودیت نمایش برای جداول «فاکتورهای اخیر» و «محصولات اخیر»
+  const [invoiceLimit, setInvoiceLimit] = useState<number>(5)
+  const [productLimit, setProductLimit] = useState<number>(5)
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -1032,9 +1034,25 @@ export default function DashboardModule({
 
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           <div className={retroPanelPadded}>
-            <header className="mb-3">
-              <p className={retroHeading}>{t('latest_invoices')}</p>
-              <h3 className="text-lg font-semibold mt-2">فاکتورهای اخیر</h3>
+            <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className={retroHeading}>{t('latest_invoices')}</p>
+                <h3 className="text-lg font-semibold mt-2">فاکتورهای اخیر</h3>
+              </div>
+              <label className="text-xs flex items-center gap-2">
+                <span>تعداد نمایش:</span>
+                <select
+                  className="bg-[var(--retro-input-bg)] border border-[var(--retro-input-border)] text-[var(--retro-input-text)] px-2 py-1 text-xs rounded-sm"
+                  value={invoiceLimit}
+                  onChange={(e) => setInvoiceLimit(Number(e.target.value) || 5)}
+                  aria-label="تعداد نمایش فاکتورهای اخیر"
+               >
+                  <option value={5}>۵</option>
+                  <option value={10}>۱۰</option>
+                  <option value={20}>۲۰</option>
+                  <option value={50}>۵۰</option>
+                </select>
+              </label>
             </header>
             {invoices.length > 0 ? (
               <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
@@ -1048,7 +1066,7 @@ export default function DashboardModule({
                   </tr>
                 </thead>
                 <tbody>
-                  {invoices.map((inv) => (
+                  {invoices.slice(0, invoiceLimit).map((inv) => (
                     <tr key={inv.id} className="border-b border-[#d9cfb6]">
                       <td className="px-3 py-2">
                         {inv.invoice_number || `#${inv.id}`}
@@ -1081,9 +1099,25 @@ export default function DashboardModule({
           </div>
 
           <div className={retroPanelPadded}>
-            <header className="mb-3">
-              <p className={retroHeading}>{t('inventory_snapshot')}</p>
-              <h3 className="text-lg font-semibold mt-2">محصولات اخیر</h3>
+            <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className={retroHeading}>{t('inventory_snapshot')}</p>
+                <h3 className="text-lg font-semibold mt-2">محصولات اخیر</h3>
+              </div>
+              <label className="text-xs flex items-center gap-2">
+                <span>تعداد نمایش:</span>
+                <select
+                  className="bg-[var(--retro-input-bg)] border border-[var(--retro-input-border)] text-[var(--retro-input-text)] px-2 py-1 text-xs rounded-sm"
+                  value={productLimit}
+                  onChange={(e) => setProductLimit(Number(e.target.value) || 5)}
+                  aria-label="تعداد نمایش محصولات اخیر"
+                >
+                  <option value={5}>۵</option>
+                  <option value={10}>۱۰</option>
+                  <option value={20}>۲۰</option>
+                  <option value={50}>۵۰</option>
+                </select>
+              </label>
             </header>
             {products.length > 0 ? (
               <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
@@ -1095,7 +1129,7 @@ export default function DashboardModule({
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((prod) => (
+                  {products.slice(0, productLimit).map((prod) => (
                     <tr key={prod.id} className="border-b border-[#d9cfb6]">
                       <td className="px-3 py-2">
                         {prod.name}
