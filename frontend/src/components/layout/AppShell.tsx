@@ -31,6 +31,8 @@ export interface ModuleDefinition {
   icon?: React.ReactNode
   hidden?: boolean
   feature?: string
+  // نام‌های مجوز لازم برای نمایش این ماژول
+  requiredPermissions?: string[]
 }
 
 interface AppShellProps {
@@ -39,6 +41,8 @@ interface AppShellProps {
   user: { username: string; role: string } | null
   onLogout: () => void
   orgFeatures?: string[]
+  // لیست نام مجوزهای اعطا شده به کاربر
+  permissions?: string[]
 }
 
 const SMART_DATE_ISO_KEY = 'hesabpak_selected_date'
@@ -49,16 +53,24 @@ function normalizeIsoDate(value: string | null | undefined) {
   return value.length >= 10 ? value.slice(0, 10) : value
 }
 
-export default function AppShell({ modules, sync, user, onLogout, orgFeatures }: AppShellProps) {
+export default function AppShell({ modules, sync, user, onLogout, orgFeatures, permissions }: AppShellProps) {
   const { t } = useI18n()
   const visibleModules = useMemo(() => {
     const allowAll = !!(user && (user.role === 'Admin' || /Developer/i.test(user.role)))
     return modules.filter((m) => {
       if (m.hidden) return false
+      // Admin/Developer همه‌چیز را می‌بینند
       if (allowAll) return true
-      return !m.feature || (orgFeatures || []).includes(m.feature)
+      // ابتدا فیلتر بر اساس ویژگی‌های سازمان
+      const featureOk = !m.feature || (orgFeatures || []).includes(m.feature)
+      if (!featureOk) return false
+      // سپس گیتینگ بر اساس مجوزها (اگر تعریف شده)
+      const req = m.requiredPermissions || []
+      if (req.length === 0) return true
+      const granted = new Set(permissions || [])
+      return req.every((p) => granted.has(p))
     })
-  }, [modules, orgFeatures, user])
+  }, [modules, orgFeatures, user, permissions])
   const moduleMap = useMemo(() => {
     const map = new Map<string, ModuleDefinition>()
     visibleModules.forEach((m) => map.set(m.id, m))

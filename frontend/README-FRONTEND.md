@@ -169,7 +169,9 @@ npm --prefix frontend run -s test:e2e
 - برای کاهش خطاهای 403، چند درخواست سبک با احراز اجرا می‌شود (مثلاً `/api/invoices?limit=1`). اگر پاسخ OK باشد، آن ویژگی فعال تلقی می‌شود.
 - نتیجهٔ سرور و تشخیص کلاینتی ادغام می‌شود و `AppShell` فقط ماژول‌هایی را نمایش می‌دهد که `feature` آن در لیست نهایی باشد (به‌جز Admin/Developer که همه را می‌بینند).
 - Roadmap: اگر `/api/roadmap` موجود نباشد (404)، ماژول Roadmap بی‌سروصدا مخفی می‌شود تا نویز UI کم شود.
+ - مجوزها (Permissions): علاوه بر ویژگی‌ها، برخی ماژول‌ها نیاز به مجوز مشخص دارند. فهرست نام مجوزهای کاربر از `AuthContext` گرفته می‌شود و به `AppShell` پاس داده می‌شود؛ اگر ماژولی `requiredPermissions` داشته باشد، تنها در صورت داشتن همهٔ آن‌ها نمایش داده می‌شود (Admin/Developer از این قانون معاف‌اند).
 
 ## تست‌ها
 - Smoke Navigation: تست سبک برای `#settings-users` در `frontend/src/smoke/navigation.test.tsx`.
 - Roadmap Hidden: تست جدید تأیید می‌کند که در پاسخ 404، کامپوننت Roadmap خروجی رندر نمی‌کند.
+ - Permissions Gating: تست سبک برای اطمینان از مخفی‌شدن ماژول‌های بدون مجوز (مثلاً Reports بدون `reports:view`).

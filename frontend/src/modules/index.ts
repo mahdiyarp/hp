@@ -76,6 +76,7 @@ export const modules: ModuleDefinition[] = [
     component: DashboardModule,
     badge: 'DASHBOARD',
     feature: 'reports',
+    requiredPermissions: ['reports:view'],
   },
   {
     id: 'reports',
@@ -84,6 +85,7 @@ export const modules: ModuleDefinition[] = [
     component: ReportsModule,
     badge: 'REPORTS',
     feature: 'reports',
+    requiredPermissions: ['reports:view'],
   },
   {
     id: 'sales',
@@ -92,6 +94,7 @@ export const modules: ModuleDefinition[] = [
     component: SalesModule,
     badge: 'SALES',
     feature: 'invoices',
+    requiredPermissions: ['invoices:view'],
   },
   {
     id: 'finance',
@@ -100,6 +103,7 @@ export const modules: ModuleDefinition[] = [
     component: FinanceModule,
     badge: 'TREASURY',
     feature: 'payments',
+    requiredPermissions: ['payments:view'],
   },
   {
     id: 'inventory',
@@ -108,6 +112,7 @@ export const modules: ModuleDefinition[] = [
     component: InventoryModule,
     badge: 'STOCK',
     feature: 'products',
+    requiredPermissions: ['products:view'],
   },
   {
     id: 'people',
@@ -116,6 +121,7 @@ export const modules: ModuleDefinition[] = [
     component: PeopleModule,
     badge: 'RELATIONS',
     feature: 'persons',
+    requiredPermissions: ['persons:view'],
   },
   {
     id: 'settings',
@@ -125,6 +131,7 @@ export const modules: ModuleDefinition[] = [
     badge: 'SYSTEM',
     hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:view'],
   },
   {
     id: 'settings-users',
@@ -134,6 +141,7 @@ export const modules: ModuleDefinition[] = [
     badge: 'USERS',
     hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'banks',
@@ -142,6 +150,7 @@ export const modules: ModuleDefinition[] = [
     component: BanksModule,
     badge: 'BANKS',
     feature: 'settings',
+    requiredPermissions: ['settings:view'],
   },
   {
     id: 'developer',
