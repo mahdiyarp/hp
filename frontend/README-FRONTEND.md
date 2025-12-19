@@ -162,3 +162,14 @@ npm --prefix frontend run -s test:e2e
   - `--hp-sidebar-width`: 288px (معادل `w-72`) — عرض سایدبار راست.
 - هدر سراسری: [frontend/src/components/layout/AppShell.tsx](frontend/src/components/layout/AppShell.tsx) از کلاس `hp-container` و `py-5` استفاده می‌کند.
 - نکته: برای یکسانی دقیق با مرجع، عرض‌های سخت‌کُد داخلی مانند `max-w-6xl` در مودال‌ها حذف شده‌اند تا از کانتینر بیرونی پیروی کنند.
+
+## گیتینگ دسترسی (Access Gating)
+- هر ماژول یک برچسب `feature` دارد (مانند `reports`, `invoices`, `payments`, `products`, `persons`, `settings`).
+- لیست ویژگی‌های سازمان از مسیر `/api/org/features` خوانده می‌شود.
+- برای کاهش خطاهای 403، چند درخواست سبک با احراز اجرا می‌شود (مثلاً `/api/invoices?limit=1`). اگر پاسخ OK باشد، آن ویژگی فعال تلقی می‌شود.
+- نتیجهٔ سرور و تشخیص کلاینتی ادغام می‌شود و `AppShell` فقط ماژول‌هایی را نمایش می‌دهد که `feature` آن در لیست نهایی باشد (به‌جز Admin/Developer که همه را می‌بینند).
+- Roadmap: اگر `/api/roadmap` موجود نباشد (404)، ماژول Roadmap بی‌سروصدا مخفی می‌شود تا نویز UI کم شود.
+
+## تست‌ها
+- Smoke Navigation: تست سبک برای `#settings-users` در `frontend/src/smoke/navigation.test.tsx`.
+- Roadmap Hidden: تست جدید تأیید می‌کند که در پاسخ 404، کامپوننت Roadmap خروجی رندر نمی‌کند.
