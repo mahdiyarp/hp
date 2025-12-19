@@ -6,6 +6,7 @@ import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
 import { apiGet, apiPost } from './services/api'
 import { getOrgFeatures } from './services/org'
+import { fetchWithAuth } from './services/auth'
 import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
 import ThemeToggle from './components/ThemeToggle'
@@ -198,7 +199,46 @@ export default function App() {
     ;(async () => {
       try {
         const res = await getOrgFeatures()
-        setOrgFeatures(res.features || [])
+        const serverFeatures = res.features || []
+        // Auto-detect features by probing minimal endpoints to avoid 403 storms
+        const detected: string[] = []
+        try {
+          const nowIso = new Date().toISOString()
+          const startIso = new Date(new Date(nowIso).getTime() - 24 * 3600 * 1000).toISOString()
+          const probes: Array<{ feature: string; path: string }> = [
+            { feature: 'invoices', path: '/api/invoices?limit=1' },
+            { feature: 'payments', path: '/api/payments?limit=1' },
+            { feature: 'products', path: '/api/products?limit=1' },
+            { feature: 'persons', path: '/api/persons' },
+            {
+              feature: 'reports',
+              path:
+                `/api/reports/pnl?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(
+                  nowIso,
+                )}&method=FIFO`,
+            },
+          ]
+          const results = await Promise.all(
+            probes.map(async ({ feature, path }) => {
+              try {
+                const res = await fetchWithAuth(path, {
+                  method: 'GET',
+                  headers: { 'X-Date-Format': 'jalali' },
+                })
+                return { feature, ok: res.ok }
+              } catch {
+                return { feature, ok: false }
+              }
+            }),
+          )
+          results.forEach((r) => {
+            if (r.ok) detected.push(r.feature)
+          })
+        } catch {
+          // ignore detection errors
+        }
+        const union = Array.from(new Set([...(serverFeatures || []), ...detected]))
+        setOrgFeatures(union)
       } catch {
         setOrgFeatures([])
       }

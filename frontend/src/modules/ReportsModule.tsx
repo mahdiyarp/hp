@@ -119,15 +119,12 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
   }, [rangeDays, smartDate.isoDate, useCustomRange, jalaliStart, jalaliEnd, costMethod])
 
   useEffect(() => {
-    // Dynamically load chart libraries; ignore failures in test envs
+    // Dynamically load chart libraries; ignore failures in environments missing chart deps
     ;(async () => {
       try {
-        const chartLib = 'chart.js'
-        const chart = await import(/* @vite-ignore */ chartLib)
-        const { Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } = chart
-        if (Chart && ArcElement) {
-          Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
-        }
+        const chartAutoLib = 'chart.js/auto'
+        const chartAuto = await import(/* @vite-ignore */ chartAutoLib)
+        // chart.js/auto pre-registers all necessary elements
         const rcLib = 'react-chartjs-2'
         const rc = await import(/* @vite-ignore */ rcLib)
         Bar = rc.Bar

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
 import { apiGet } from '../services/api'
+import { fetchWithAuth } from '../services/auth'
 import {
   retroButton,
   retroHeading,
@@ -32,6 +33,7 @@ interface RoadmapResponse {
 export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
   const [data, setData] = useState<RoadmapResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hidden, setHidden] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -42,8 +44,14 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     setLoading(true)
     setError(null)
     try {
-      const resp = await apiGet<RoadmapResponse>('/api/roadmap')
-      setData(resp)
+      const res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      if (res.status === 404) {
+        setHidden(true)
+        return
+      }
+      if (!res.ok) throw new Error('failed')
+      const data = (await res.json()) as RoadmapResponse
+      setData(data)
     } catch (err) {
       console.error(err)
       setError('نقشه راه در دسترس نیست. بعداً دوباره تلاش کنید.')
@@ -114,6 +122,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     )
   }
 
+  if (hidden) return null
   if (!data) return null
 
   return (
