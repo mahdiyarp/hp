@@ -182,6 +182,18 @@ npm --prefix frontend run -s test:e2e
 
 - پیشنهاد: برای هم‌راستاسازی با نسخهٔ مرجع (Reference)، ابتدا تغییرات را در این فایل اعمال کنید و سپس با اسکریپت `./run-frontend-sync.ps1 -NoBuild` سرویس را بازبینی کنید.
 
+- ابزار کمکی برای استخراج متغیرها:
+
+```bash
+# نمایش متغیرهای موجود در یک فایل CSS
+node scripts/extract-css-vars.cjs frontend/public/theme-override.css
+
+# خروجی JSON برای مقایسه راحت‌تر
+node scripts/extract-css-vars.cjs frontend/public/theme-override.css --json
+```
+
+می‌توانید مسیر مرجع (مثلاً نسخهٔ F:\hp - Copy) را به اسکریپت بدهید تا تفاوت‌ها را راحت‌تر بررسی کنید.
+
 ## گیتینگ دسترسی (Access Gating)
 - هر ماژول یک برچسب `feature` دارد (مانند `reports`, `invoices`, `payments`, `products`, `persons`, `settings`).
 - لیست ویژگی‌های سازمان از مسیر `/api/org/features` خوانده می‌شود.
