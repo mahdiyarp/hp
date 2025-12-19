@@ -213,8 +213,29 @@ export default function DashboardModule({
   const { t } = useI18n()
   const [viewMode, setViewMode] = useState<'summary' | 'widgets'>('summary')
   // محدودیت نمایش برای جداول «فاکتورهای اخیر» و «محصولات اخیر»
-  const [invoiceLimit, setInvoiceLimit] = useState<number>(5)
-  const [productLimit, setProductLimit] = useState<number>(5)
+  const [invoiceLimit, setInvoiceLimit] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('hp_dash_invoice_limit')
+      return v ? Math.max(1, Number(v)) : 5
+    } catch {
+      return 5
+    }
+  })
+  const [productLimit, setProductLimit] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem('hp_dash_product_limit')
+      return v ? Math.max(1, Number(v)) : 5
+    } catch {
+      return 5
+    }
+  })
+
+  useEffect(() => {
+    try { localStorage.setItem('hp_dash_invoice_limit', String(invoiceLimit)) } catch {}
+  }, [invoiceLimit])
+  useEffect(() => {
+    try { localStorage.setItem('hp_dash_product_limit', String(productLimit)) } catch {}
+  }, [productLimit])
   const [financialData, setFinancialData] = useState<FinancialData | null>(null)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [invoices, setInvoices] = useState<Invoice[]>([])
