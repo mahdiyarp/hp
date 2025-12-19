@@ -161,7 +161,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures }:
   }, [sync])
   const asideElement = (
     <aside
-      className={`${'shrink-0'} ${sidebarSide === 'right' ? 'border-r-4' : 'border-l-4'} border-[#d7caa4] bg-[#111821] flex flex-col sticky top-0 h-screen z-20`}
+      className={`${'shrink-0'} ${sidebarSide === 'right' ? 'border-l-4' : 'border-r-4'} border-[#d7caa4] bg-[#111821] flex flex-col sticky top-0 h-screen z-20 overflow-hidden`}
       style={{ width: 'var(--hp-sidebar-width)' }}
     >
       <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
