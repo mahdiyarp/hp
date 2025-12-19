@@ -151,3 +151,14 @@ npm --prefix frontend run -s test:e2e
   - گزارش فعالیت و خروجی CSV: `frontend/e2e/users-activity.spec.ts`
   - قفل فونت Yekan: `frontend/e2e/font-yekan.spec.ts`
   - ورود OTP (بای‌پس دمو): `frontend/e2e/otp-login.spec.ts` (نیازمند `DEMO_ALLOW_OTP_NO_SMS=true`)
+
+## متغیرهای چیدمان (Layout Vars)
+
+- محل تنظیم: [frontend/src/index.css](frontend/src/index.css)
+- متغیرها:
+  - `--hp-container-max`: 72rem (معادل Tailwind `max-w-6xl`) — عرض کانتینر مشترک هدر/بدنه.
+  - `--hp-container-px`: 1.5rem (معادل `px-6`) — پدینگ افقی کانتینر.
+  - `--hp-container-py`: 1.25rem (معادل `py-5`) — پدینگ عمودی پیش‌فرض کانتینر.
+  - `--hp-sidebar-width`: 288px (معادل `w-72`) — عرض سایدبار راست.
+- هدر سراسری: [frontend/src/components/layout/AppShell.tsx](frontend/src/components/layout/AppShell.tsx) از کلاس `hp-container` و `py-5` استفاده می‌کند.
+- نکته: برای یکسانی دقیق با مرجع، عرض‌های سخت‌کُد داخلی مانند `max-w-6xl` در مودال‌ها حذف شده‌اند تا از کانتینر بیرونی پیروی کنند.
