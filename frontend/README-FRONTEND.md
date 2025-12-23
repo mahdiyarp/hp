@@ -2,13 +2,49 @@
 
 This file documents how the frontend image is built and served in this repository.
 
+## Auto-Save Helper (Settings)
+
+- همین فایل شامل `scheduleAutoSaveIdleReset` (بازگشت به حالت «idle» با تأخیر ۲٫۵ ثانیه) است تا پیام وضعیت پس از ذخیره پاک‌سازی شود.
+
+## Toast Messaging
+
+- تمام پیام‌های موفق/هشدار/خطا باید از هلسپر مشترک `frontend/src/utils/toast.ts` استفاده کنند؛ `toast.success|error|warning|info` یک رویداد سراسری dispatch می‌کند و AppShell آن را به توست رترو تبدیل می‌کند.
+- برای جلوگیری از پیام‌های خالی، تابع `emitToast` متن را trim می‌کند؛ در صورت خطای API متن fallback مناسب بدهید (مثلاً `toast.error('ذخیره ناموفق بود')`).
+- پیش‌فرض نمایش ۳٫۵ ثانیه است (`DEFAULT_TOAST_DURATION`) و ارسال پشت‌سرهم همان پیام تا ۱٫۵ ثانیه بی‌اثر می‌شود (`DEFAULT_TOAST_DEDUPE_MS`). در صورت نیاز می‌توانید `duration`, `dedupeMs` یا `id` اختصاصی پاس دهید تا کنترل کامل‌تری روی پیام داشته باشید.
+- ماژول‌های Dashboard، Access Control، Finance، People، Roadmap، Developer و Banks همگی نمونهٔ پیاده‌سازی هستند؛ در صورت اضافه‌کردن feature جدید، همان الگو را دنبال کنید تا alert بلاک‌کننده به UI برنگردد.
+
+## Retro Confirm Dialog
+
+- برای همهٔ اقدام‌های مخرب از هلسپر جدید `useConfirmDialog()` استفاده کنید (فایل: `frontend/src/context/ConfirmDialogContext.tsx`). این Provider در `main.tsx` دور کل اپ پیچیده شده و یک مودال رترو با دکمه‌های استاندارد نمایش می‌دهد.
+- نمونهٔ استفاده:
+
+```tsx
+const confirm = useConfirmDialog()
+const ok = await confirm({
+  message: 'این رکورد حذف شود؟',
+  confirmText: 'حذف',
+  tone: 'danger',
+})
+if (!ok) return
+```
+
+- People، System، Dashboard، PageBuilder و داشبورد قابل‌تنظیم به این مودال مهاجرت کرده‌اند؛ برای ماژول‌های جدید یا Confirm های باقیمانده از همین الگو پیروی کنید.
+
 ## Settings → Users
 
 - مسیر دسترسی: از منو یا میان‌بر در هدر به `#settings-users`.
 - تم کلاسیک و RTL حفظ شده است؛ هیچ تغییری در سبک کلی اعمال نشده.
 - ماژول واحد: مسیر `frontend/src/modules/settings/UsersModule.tsx`.
 - سرویس‌های مرتبط: `frontend/src/services/auth.ts`, `frontend/src/services/api`.
-- تست‌ها: فایل `frontend/tests/users.module.test.tsx` شامل رندر اولیه و بارگذاری داده.
+- تست‌ها: `frontend/src/modules/settings/__tests__/UsersModule.*` رفتار ذخیرهٔ خودکار را با تایمر جعلی پوشش می‌دهند.
+- سیاست ذخیره‌سازی: نقش‌ها، سایدبار، پیامک سازمانی و مجوزها همگی بدون دکمهٔ دستی ثبت می‌شوند و متن وضعیت مشترک دارند.
+
+## Settings → Access Control / System / Developer / SMS
+
+- Access Control (`frontend/src/modules/settings/AccessControlModule.tsx`): ویرایش نقش‌ها، مجوزها و تنظیمات پیامکی کاربر/سازمان همگی به کمک autoSave انجام می‌شود؛ هیچ دکمهٔ «ذخیره» باقی نمانده است.
+- System (`frontend/src/modules/SystemModule.tsx`): ترجیح مکان سایدبار و جدول کلید/مقدار سیستم با همان دیبونس ذخیره می‌شوند؛ برای هر ردیف پیام وضعیت اختصاصی نمایش داده می‌شود.
+- Developer (sms.ir) و پنل IPPanel اکنون از همان تأخیر ۷۰۰ms استفاده می‌کنند تا تجربهٔ کاربر یکسان باشد (قبلاً ۸۰۰ms بود).
+- APIهای درگیر: `/api/admin/settings/*`, `/api/users/preferences/*`, `/api/settings/sms`.
 
 ## Smoke tests
 
@@ -92,6 +128,17 @@ BACKEND_URL=http://localhost:8000 npm run dev
 
 The Vite dev server runs on port 3000 by default (configured in `vite.config.ts`). It proxies `/api` to the backend address.
 
+## Frontend-only demo mode
+
+If reviewers only have access to the static frontend, enable the built-in mock backend:
+
+```bash
+# frontend/.env.local
+VITE_FRONTEND_ONLY=true
+```
+
+When this flag is set, `frontend/src/services/mockApi.ts` intercepts every `apiGet/apiPost/...` call and returns realistic demo data (version info, Dashboard cards, developer analytics, SMS history, settings، roadmap و ...). همچنین AuthContext به‌صورت خودکار کاربر توسعه‌دهندهٔ دمو را وارد می‌کند تا تمام ماژول‌ها بدون نیاز به بک‌اند قابل بازدید باشند. در محیط‌های واقعی مقدار را unset بگذارید تا درخواست‌ها به سرور ارسال شود.
+
 ## Healthchecks & readiness
 
 The frontend container includes a healthcheck that curls `/` to verify the site is serving. Backend has no healthcheck here; consider adding one if needed.
@@ -119,3 +166,103 @@ If you want, I can also:
 - همگام‌سازی خودکار فونت قبل از build/preview: `frontend/scripts/sync-fonts.cjs`
 - مسیر فونت‌ها: `frontend/public/fonts/` — فایل‌های `Yekan.woff2/woff/ttf` را اینجا قرار دهید.
 - تست E2E فونت: `frontend/e2e/font-yekan.spec.ts`
+
+## E2E (Playwright) و OTP (دمو)
+
+- پیش‌نیاز: بک‌اند روی `http://localhost:8000` در حال اجرا باشد. فرانت‌اند می‌تواند از طریق nginx روی `http://localhost:3000` سرو شود (اسکریپت `./run-frontend-sync.ps1`).
+- اسکریپت آماده‌سازی تست‌ها (`frontend/scripts/test-setup.cjs`) به‌صورت خودکار قبل از اجرای تست‌ها انجام می‌شود (نصب مرورگرهای Playwright و همگام‌سازی فونت Yekan).
+
+اجرای E2E با PowerShell (Windows):
+
+```powershell
+$env:BASE_URL = "http://localhost:3000";
+$env:BACKEND_URL = "http://localhost:8000";
+$env:DEMO_ALLOW_OTP_NO_SMS = "true";
+npm --prefix "frontend" run -s test:e2e
+```
+
+اجرای E2E با Bash:
+
+```bash
+BASE_URL=http://localhost:3000 \
+BACKEND_URL=http://localhost:8000 \
+DEMO_ALLOW_OTP_NO_SMS=true \
+npm --prefix frontend run -s test:e2e
+```
+
+- تست‌ها:
+  - ناوبری: `frontend/e2e/navigation.spec.ts`
+  - دستیار توسعه‌دهنده: `frontend/e2e/dev-assistant.spec.ts` (به‌صورت پیش‌فرض localhost؛ فقط وقتی بک‌اند واقعاً در دسترس/سالم نباشد skip می‌شود)
+  - چیدمان RTL و سایدبار راست: `frontend/e2e/layout-rtl.spec.ts`
+  - نقش‌ها/مجوزها (Users): `frontend/e2e/users-permissions.spec.ts`
+  - گزارش فعالیت و خروجی CSV: `frontend/e2e/users-activity.spec.ts`
+  - قفل فونت Yekan: `frontend/e2e/font-yekan.spec.ts`
+  - ورود OTP (بای‌پس دمو): `frontend/e2e/otp-login.spec.ts` (نیازمند `DEMO_ALLOW_OTP_NO_SMS=true`)
+
+## متغیرهای چیدمان (Layout Vars)
+
+- محل تنظیم: [frontend/src/index.css](frontend/src/index.css)
+- متغیرها:
+  - `--hp-container-max`: 72rem (معادل Tailwind `max-w-6xl`) — عرض کانتینر مشترک هدر/بدنه.
+  - `--hp-container-px`: 1.5rem (معادل `px-6`) — پدینگ افقی کانتینر.
+  - `--hp-container-py`: 1.25rem (معادل `py-5`) — پدینگ عمودی پیش‌فرض کانتینر.
+  - `--hp-sidebar-width`: 288px (معادل `w-72`) — عرض سایدبار راست.
+- هدر سراسری: [frontend/src/components/layout/AppShell.tsx](frontend/src/components/layout/AppShell.tsx) از کلاس `hp-container` و `py-5` استفاده می‌کند.
+- نکته: برای یکسانی دقیق با مرجع، عرض‌های سخت‌کُد داخلی مانند `max-w-6xl` در مودال‌ها حذف شده‌اند تا از کانتینر بیرونی پیروی کنند.
+
+## Theme Override (Override فایل تم)
+
+- فایل اختیاری: [frontend/public/theme-override.css](frontend/public/theme-override.css)
+- بارگذاری در صفحه: لینک در [frontend/index.html](frontend/index.html) اضافه شده است.
+- هدف: تنظیم دقیق رنگ‌ها/فواصل/عرض‌ها بدون دست‌کاری فایل‌های سورس. هر مقدار در این فایل تعریف شود، مقادیر پیش‌فرض `src/index.css` را override می‌کند.
+- نمونه متغیرها:
+
+```css
+:root {
+  --hp-container-max: 72rem;
+  --hp-sidebar-width: 288px;
+  --retro-panel-bg: #faf4df;
+  --retro-border: #c5bca5;
+  --retro-button-bg: #154b5f;
+}
+```
+
+- پیشنهاد: برای هم‌راستاسازی با نسخهٔ مرجع (Reference)، ابتدا تغییرات را در این فایل اعمال کنید و سپس با اسکریپت `./run-frontend-sync.ps1 -NoBuild` سرویس را بازبینی کنید.
+
+- ابزار کمکی برای استخراج متغیرها:
+
+```bash
+# نمایش متغیرهای موجود در یک فایل CSS
+node scripts/extract-css-vars.cjs frontend/public/theme-override.css
+
+# خروجی JSON برای مقایسه راحت‌تر
+node scripts/extract-css-vars.cjs frontend/public/theme-override.css --json
+```
+
+می‌توانید مسیر مرجع (مثلاً نسخهٔ F:\hp - Copy) را به اسکریپت بدهید تا تفاوت‌ها را راحت‌تر بررسی کنید.
+
+## گیتینگ دسترسی (Access Gating)
+- هر ماژول یک برچسب `feature` دارد (مانند `reports`, `invoices`, `payments`, `products`, `persons`, `settings`).
+- لیست ویژگی‌های سازمان از مسیر `/api/org/features` خوانده می‌شود.
+- برای کاهش خطاهای 403، چند درخواست سبک با احراز اجرا می‌شود (مثلاً `/api/invoices?limit=1`). اگر پاسخ OK باشد، آن ویژگی فعال تلقی می‌شود.
+- نتیجهٔ سرور و تشخیص کلاینتی ادغام می‌شود و `AppShell` فقط ماژول‌هایی را نمایش می‌دهد که `feature` آن در لیست نهایی باشد (به‌جز Admin/Developer که همه را می‌بینند).
+- Roadmap: اگر `/api/roadmap` موجود نباشد (404)، ماژول Roadmap بی‌سروصدا مخفی می‌شود تا نویز UI کم شود.
+ - مجوزها (Permissions): علاوه بر ویژگی‌ها، برخی ماژول‌ها نیاز به مجوز مشخص دارند. فهرست نام مجوزهای کاربر از `AuthContext` گرفته می‌شود و به `AppShell` پاس داده می‌شود؛ اگر ماژولی `requiredPermissions` داشته باشد، تنها در صورت داشتن همهٔ آن‌ها نمایش داده می‌شود (Admin/Developer از این قانون معاف‌اند).
+
+## تست‌ها
+- Smoke Navigation: تست سبک برای `#settings-users` در `frontend/src/smoke/navigation.test.tsx`.
+- Roadmap Hidden: تست جدید تأیید می‌کند که در پاسخ 404، کامپوننت Roadmap خروجی رندر نمی‌کند.
+ - Permissions Gating: تست سبک برای اطمینان از مخفی‌شدن ماژول‌های بدون مجوز (مثلاً Reports بدون `reports:view`).
+
+## داشبورد: محدودیت نمایش آیتم‌ها
+
+- فهرست «فاکتورهای اخیر» و «محصولات اخیر» دارای محدودکنندهٔ فارسی و قابل‌انتخاب است (۵/۱۰/۲۰/۵۰).
+- مقدار پیش‌فرض ۵ است و انتخاب کاربر در LocalStorage با کلیدهای `hp_dash_invoice_limit` و `hp_dash_product_limit` ذخیره می‌شود.
+- فایل مرتبط: `frontend/src/modules/DashboardModule.tsx` (props داخلی نیازی به تغییر ندارد).
+- تست E2E: `frontend/e2e/dashboard-limits.spec.ts` تأیید می‌کند که تعداد ردیف‌ها با انتخاب کاربر هم‌خوان است.
+
+## راست‌ترازی هدر (RTL)
+
+- کلاس کمکی `hp-container-right` برای راست‌محور کردن کانتینر افزوده شده و در هدر/بدنه اعمال می‌شود.
+- فایل‌ها: `frontend/src/index.css` و `frontend/src/components/layout/AppShell.tsx`.
+- فاوآیکون جدید (`public/favicon.svg`) یک ایموجی «bp» است؛ حفره‌های حروف به‌صورت چشمان هوشمند کار می‌کنند و قوس بالا/پایین به ترتیب ابرو و دهان پویا را می‌سازند. اگر مرورگری SVG را پشتیبانی نکند، آیکون `.ico` قبلی همچنان به عنوان fallback در `index.html` باقی مانده است.

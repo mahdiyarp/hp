@@ -1,19 +1,23 @@
-export { }
+import React from 'react'
+export {}
 import DashboardModule from './DashboardModule'
-import SalesModule from './SalesModule'
+import RoadmapModule from './RoadmapModule'
+const SalesModule = React.lazy(() => import('./SalesModule'))
 import FinanceModule from './FinanceModule'
 import InventoryModule from './InventoryModule'
-import PeopleModule from './PeopleModule'
+const PeopleModule = React.lazy(() => import('./PeopleModule'))
 import ReportsModule from './ReportsModule'
-import SystemModule from './SystemModule'
+const SystemModule = React.lazy(() => import('./SystemModule'))
+const PageBuilderModule = React.lazy(() => import('./PageBuilderModule'))
 import UsersModule from './settings/UsersModule'
+import AccessControlModule from './settings/AccessControlModule'
 import BanksModule from './settings/BanksModule'
 import DevConsole from './developer/DevConsole'
 import AssistantModule from './developer/AssistantModule'
 import SmsPanel from './sms/SmsPanel'
 import PApiPanel from './PApiPanel'
 import AuditModule from './audit/AuditModule'
-import { getAccessToken, loginDeveloper } from '../services/auth.ts'
+import { getAccessToken, loginDeveloper } from '../services/auth'
 import type { ModuleDefinition } from '../components/layout/AppShell'
 
 function base64urlDecode(input: string): string {
@@ -28,6 +32,8 @@ function base64urlDecode(input: string): string {
   }
 }
 
+const DEVELOPER_ROLES = new Set(['Admin', 'Developer', 'Developer NFT'])
+
 function isDeveloperMobileUser(): boolean {
   try {
     const token = getAccessToken()
@@ -39,6 +45,8 @@ function isDeveloperMobileUser(): boolean {
     if (!payloadStr) return false
     const payloadJson = JSON.parse(payloadStr)
     const sub = String(payloadJson.sub || '')
+    const role = String(payloadJson.role || payloadJson['x-role'] || '')
+    if (DEVELOPER_ROLES.has(role)) return true
     // Allow developer menu only for the specific mobile user
     return sub === '09123506545' || sub === 'developer'
   } catch {
@@ -64,7 +72,7 @@ function getUserRoleFromToken(): string | null {
 
 function isAdminOrDeveloper(): boolean {
   const role = getUserRoleFromToken()
-  return role === 'Admin' || isDeveloperMobileUser()
+  return (role && DEVELOPER_ROLES.has(role)) || isDeveloperMobileUser()
 }
 
 export const modules: ModuleDefinition[] = [
@@ -75,6 +83,7 @@ export const modules: ModuleDefinition[] = [
     component: DashboardModule,
     badge: 'DASHBOARD',
     feature: 'reports',
+    requiredPermissions: ['reports:view'],
   },
   {
     id: 'reports',
@@ -83,6 +92,16 @@ export const modules: ModuleDefinition[] = [
     component: ReportsModule,
     badge: 'REPORTS',
     feature: 'reports',
+    requiredPermissions: ['reports:view'],
+  },
+  {
+    id: 'roadmap',
+    label: 'نقشه راه',
+    description: 'برنامه پیشروی تیم و وضعیت تسک‌های کلیدی',
+    component: RoadmapModule,
+    badge: 'ROADMAP',
+    feature: 'reports',
+    requiredPermissions: ['reports:view'],
   },
   {
     id: 'sales',
@@ -91,6 +110,7 @@ export const modules: ModuleDefinition[] = [
     component: SalesModule,
     badge: 'SALES',
     feature: 'invoices',
+    requiredPermissions: ['invoices:view'],
   },
   {
     id: 'finance',
@@ -99,6 +119,7 @@ export const modules: ModuleDefinition[] = [
     component: FinanceModule,
     badge: 'TREASURY',
     feature: 'payments',
+    requiredPermissions: ['payments:view'],
   },
   {
     id: 'inventory',
@@ -107,6 +128,7 @@ export const modules: ModuleDefinition[] = [
     component: InventoryModule,
     badge: 'STOCK',
     feature: 'products',
+    requiredPermissions: ['products:view'],
   },
   {
     id: 'people',
@@ -115,6 +137,7 @@ export const modules: ModuleDefinition[] = [
     component: PeopleModule,
     badge: 'RELATIONS',
     feature: 'persons',
+    requiredPermissions: ['persons:view'],
   },
   {
     id: 'settings',
@@ -122,8 +145,8 @@ export const modules: ModuleDefinition[] = [
     description: 'تاریخ هوشمند، بکاپ‌ها، یکپارچه‌سازی و لاگ‌ها',
     component: SystemModule,
     badge: 'SYSTEM',
-    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:view'],
   },
   {
     id: 'settings-users',
@@ -131,8 +154,17 @@ export const modules: ModuleDefinition[] = [
     description: 'مدیریت کاربران، نقش‌ها، مجوزها و گزارش فعالیت',
     component: UsersModule,
     badge: 'USERS',
-    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
+  },
+  {
+    id: 'access-control',
+    label: 'نقش‌ها و دسترسی‌ها',
+    description: 'مدیریت نقش‌ها، مجوزها، دسترسی کاربران و تنظیمات پیامک',
+    component: AccessControlModule,
+    badge: 'ACCESS',
+    feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'banks',
@@ -141,6 +173,7 @@ export const modules: ModuleDefinition[] = [
     component: BanksModule,
     badge: 'BANKS',
     feature: 'settings',
+    requiredPermissions: ['settings:view'],
   },
   {
     id: 'developer',
@@ -148,8 +181,17 @@ export const modules: ModuleDefinition[] = [
     description: 'پنل کامل دیباگ، تنظیمات، لاگ‌ها و تست‌ها',
     component: DevConsole,
     badge: 'DEV',
-    hidden: !isDeveloperMobileUser(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
+  },
+  {
+    id: 'page-builder',
+    label: 'صفحه‌ساز',
+    description: 'ساخت صفحات Drag & Drop با GrapesJS و مدیریت قالب‌ها',
+    component: PageBuilderModule,
+    badge: 'BUILDER',
+    feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'dev-assistant',
@@ -157,8 +199,8 @@ export const modules: ModuleDefinition[] = [
     description: 'دستیار متنی برای دستورات سریع توسعه/حسابداری',
     component: AssistantModule,
     badge: 'ASSIST',
-    hidden: !isDeveloperMobileUser(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'sms-panel',
@@ -166,8 +208,8 @@ export const modules: ModuleDefinition[] = [
     description: 'ارسال، خطوط، تاریخچه و متریک‌ها',
     component: SmsPanel,
     badge: 'SMS',
-    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'papi-panel',
@@ -175,8 +217,8 @@ export const modules: ModuleDefinition[] = [
     description: 'ارسال پیامک و ورود با OTP از p.api.ir',
     component: PApiPanel,
     badge: 'PAPI',
-    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'audit',
@@ -184,7 +226,7 @@ export const modules: ModuleDefinition[] = [
     description: 'نمایش وضعیت زنجیره و ساخت Batch Merkle',
     component: AuditModule,
     badge: 'AUDIT',
-    hidden: !isAdminOrDeveloper(),
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
 ]

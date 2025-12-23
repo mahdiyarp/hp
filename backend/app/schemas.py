@@ -72,6 +72,50 @@ class UserUpdate(BaseModel):
     active_financial_year_id: Optional[int] = None
 
 
+class UserPartySyncUserSample(BaseModel):
+    id: int
+    username: Optional[str] = None
+    mobile: Optional[str] = None
+
+
+class UserPartySyncPartySample(BaseModel):
+    id: str
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+
+
+class UserPartySyncStats(BaseModel):
+    total_users: int
+    mobile_users: int
+    missing_mobile_users: int
+    linked_users: int
+    linked_parties: int
+    orphan_parties_count: int
+    coverage_percent: int
+    unlinked_users_total: int
+    orphan_parties_total: int
+    sample_limit: int
+    generated_at: datetime
+    top_unlinked_users: List[UserPartySyncUserSample]
+    top_orphan_parties: List[UserPartySyncPartySample]
+
+
+class PageTemplateBase(BaseModel):
+    name: str
+    html: str
+    css: Optional[str] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+class PageTemplateUpsert(PageTemplateBase):
+    id: Optional[int] = None
+
+
+class PageTemplateOut(PageTemplateBase):
+    id: int
+    updated_at: datetime
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str

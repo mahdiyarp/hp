@@ -5,9 +5,15 @@ export function digitsToLatin(s: string): string {
   let out = ''
   for (const ch of s || '') {
     const pi = PERSIAN_DIGITS.indexOf(ch)
-    if (pi >= 0) { out += String(pi); continue }
+    if (pi >= 0) {
+      out += String(pi)
+      continue
+    }
     const ai = ARABIC_INDIC_DIGITS.indexOf(ch)
-    if (ai >= 0) { out += String(ai); continue }
+    if (ai >= 0) {
+      out += String(ai)
+      continue
+    }
     out += ch
   }
   return out
@@ -15,7 +21,7 @@ export function digitsToLatin(s: string): string {
 
 export function normalizeIranMobile(input: string): string | null {
   if (!input) return null
-  let s = digitsToLatin(String(input)).trim().replace(/\s|\-/g, '')
+  let s = digitsToLatin(String(input)).trim().replace(/[\s-]/g, '')
   if (s.startsWith('+')) s = s.slice(1)
   if (s.startsWith('00')) s = s.slice(2)
   if (s.startsWith('98')) s = '0' + s.slice(2)

@@ -31,9 +31,31 @@ def override_user():
     return DummyUser()
 
 
-app.dependency_overrides[db.get_db] = override_get_db
-app.dependency_overrides[get_current_user] = override_user
-app.dependency_overrides[assistant_router._admin] = lambda *_: None  # type: ignore
+def _allow_admin(*_):
+    return None
+
+
+@pytest.fixture(autouse=True, scope="module")
+def override_dependencies():
+    prev_db = app.dependency_overrides.get(db.get_db)
+    prev_user = app.dependency_overrides.get(get_current_user)
+    prev_admin = app.dependency_overrides.get(assistant_router._admin)
+    app.dependency_overrides[db.get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_user
+    app.dependency_overrides[assistant_router._admin] = _allow_admin  # type: ignore
+    yield
+    if prev_db is not None:
+        app.dependency_overrides[db.get_db] = prev_db
+    else:
+        app.dependency_overrides.pop(db.get_db, None)
+    if prev_user is not None:
+        app.dependency_overrides[get_current_user] = prev_user
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
+    if prev_admin is not None:
+        app.dependency_overrides[assistant_router._admin] = prev_admin
+    else:
+        app.dependency_overrides.pop(assistant_router._admin, None)
 
 client = TestClient(app)
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet } from '../services/api'
+import { fetchWithAuth, loginDeveloper } from '../services/auth'
 import {
   retroButton,
   retroHeading,
@@ -10,6 +10,7 @@ import {
   retroTableHeader,
 } from '../components/retroTheme'
 import { formatNumberFa, isoToJalali } from '../utils/num'
+import { toast } from '../utils/toast'
 
 interface RoadmapChecklist {
   text: string
@@ -32,6 +33,7 @@ interface RoadmapResponse {
 export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
   const [data, setData] = useState<RoadmapResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [hidden, setHidden] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -42,8 +44,18 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     setLoading(true)
     setError(null)
     try {
-      const resp = await apiGet<RoadmapResponse>('/api/roadmap')
-      setData(resp)
+      let res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      if (res.status === 401 || res.status === 403) {
+        await loginDeveloper()
+        res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      }
+      if (res.status === 404) {
+        setHidden(true)
+        return
+      }
+      if (!res.ok) throw new Error('failed')
+      const data = (await res.json()) as RoadmapResponse
+      setData(data)
     } catch (err) {
       console.error(err)
       setError('نقشه راه در دسترس نیست. بعداً دوباره تلاش کنید.')
@@ -54,9 +66,9 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
 
   const stats = useMemo(() => {
     if (!data) return { total: 0, done: 0, percent: 0 }
-    const checklist = data.sections.flatMap(section => section.checklists || [])
+    const checklist = data.sections.flatMap((section) => section.checklists || [])
     if (checklist.length === 0) return { total: 0, done: 0, percent: 0 }
-    const done = checklist.filter(item => item.done).length
+    const done = checklist.filter((item) => item.done).length
     return { total: checklist.length, done, percent: Math.round((done / checklist.length) * 100) }
   }, [data])
 
@@ -73,9 +85,9 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     if (!data?.markdown) return
     try {
       await navigator.clipboard.writeText(data.markdown)
-      alert('متن نقشه راه کپی شد.')
+      toast.success('متن نقشه راه کپی شد')
     } catch (err) {
-      alert('مرورگر اجازه کپی خودکار نداد.')
+      toast.error('مرورگر اجازه کپی خودکار نداد')
     }
   }
 
@@ -114,6 +126,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     )
   }
 
+  if (hidden) return null
   if (!data) return null
 
   return (
@@ -166,7 +179,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
       </section>
 
       <section className="space-y-4">
-        {data.sections.map(section => (
+        {data.sections.map((section) => (
           <article key={section.title} className={retroPanelPadded}>
             <header className="mb-2 flex items-center justify-between gap-3">
               <div>
@@ -181,7 +194,7 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
                 <span className="text-[11px] px-2 py-1 rounded border border-[#bfb69f] bg-[#f6f1df]">
                   {formatNumberFa(
                     Math.round(
-                      (section.checklists.filter(item => item.done).length /
+                      (section.checklists.filter((item) => item.done).length /
                         section.checklists.length) *
                         100,
                     ),
@@ -223,4 +236,3 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     </div>
   )
 }
-

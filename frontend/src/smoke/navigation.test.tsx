@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
 
 // Mock API layer to avoid network during App bootstrap
 vi.mock('../services/api', () => {
@@ -51,14 +52,22 @@ vi.mock('../context/AuthContext', () => ({
 
 // Ensure the modules list contains our target and is visible
 vi.mock('../modules', async (orig) => {
-  const actual = await (orig as any)()
+  const actual = await orig()
   // keep other modules but ensure settings-users exists and is not hidden
   const list = Array.isArray(actual.modules) ? actual.modules : []
   const hasUsers = list.some((m: any) => m.id === 'settings-users')
   const usersModule = hasUsers
     ? list.find((m: any) => m.id === 'settings-users')
-    : { id: 'settings-users', label: 'کاربران', description: '', component: (await import('../modules/settings/UsersModule')).default }
-  const normalized = [{ ...usersModule, hidden: false }, ...list.filter((m: any) => m.id !== 'settings-users')]
+    : {
+        id: 'settings-users',
+        label: 'کاربران',
+        description: '',
+        component: (await import('../modules/settings/UsersModule')).default,
+      }
+  const normalized = [
+    { ...usersModule, hidden: false },
+    ...list.filter((m: any) => m.id !== 'settings-users'),
+  ]
   return { modules: normalized }
 })
 
@@ -67,7 +76,11 @@ import App from '../App'
 describe('Smoke: navigation to #settings-users', () => {
   it('renders Users module when hash is set', async () => {
     window.location.hash = '#settings-users'
-    render(<App />)
+    render(
+      <ConfirmDialogTestWrapper>
+        <App />
+      </ConfirmDialogTestWrapper>,
+    )
     await waitFor(() => {
       // UsersModule top heading
       expect(screen.getByText(/کاربران و دسترسی‌ها/)).toBeInTheDocument()

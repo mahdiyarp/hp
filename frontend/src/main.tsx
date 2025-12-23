@@ -9,13 +9,18 @@ import './styles/combined-persian-fonts.css'
 import './styles/classic.css'
 import './utils/persian-font-watcher.js' // runtime watcher for corrupted chars
 // Append-only import for optional auto-fix CSS if present
-try { require('./styles/persian-auto-fix.css'); } catch (e) { /* file may not exist; fine */ }
+try {
+  require('./styles/persian-auto-fix.css')
+} catch (e) {
+  /* file may not exist; fine */
+}
 import { AuthProvider } from './context/AuthContext'
 import { I18nProvider } from './i18n/I18nContext'
 import { ThemeProvider } from './context/theme'
-import { getAccessToken, loginDeveloper } from './services/auth.ts'
+import { ConfirmDialogProvider } from './context/ConfirmDialogContext'
+import { getAccessToken, loginDeveloper } from './services/auth'
 // Backward-compat global shims to avoid legacy bundle errors
-import * as authMod from './services/auth.ts'
+import * as authMod from './services/auth'
 ;(window as any).login = authMod.login
 ;(window as any).auth = authMod
 
@@ -24,7 +29,11 @@ document.documentElement.lang = 'fa'
 document.documentElement.dir = 'rtl'
 
 // راه‌اندازی دیت‌پیکر شمسی برای تمام input های دارای data-jdp
-declare global { interface Window { jalaliDatepicker?: any } }
+declare global {
+  interface Window {
+    jalaliDatepicker?: any
+  }
+}
 const initJDP = () => {
   try {
     if (window.jalaliDatepicker?.startWatch) {
@@ -59,9 +68,11 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <I18nProvider>
         <ThemeProvider>
-          <App />
+          <ConfirmDialogProvider>
+            <App />
+          </ConfirmDialogProvider>
         </ThemeProvider>
       </I18nProvider>
     </AuthProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 )

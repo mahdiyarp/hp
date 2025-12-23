@@ -3,12 +3,20 @@ import { test, expect } from '@playwright/test'
 const base = process.env.BASE_URL || 'http://localhost:3000'
 const backend = process.env.BACKEND_URL || 'http://localhost:8000'
 
-// Basic smoke for Developer Assistant module
-// Skip in CI if backend URL is not provided (assistant endpoints require backend)
-// This keeps E2E green when only the frontend container is up
-test.skip(!process.env.BACKEND_URL, 'Skipping assistant E2E: BACKEND_URL not set')
+// Basic smoke for Developer Assistant module.
+// Uses localhost defaults; skips only if backend is not reachable.
 
 test('Developer Assistant toggles and replies', async ({ page }) => {
+  // If backend is not reachable, skip gracefully (frontend-only runs).
+  try {
+    const health = await page.request.get(`${backend}/health`)
+    if (!health.ok()) {
+      test.skip(true, 'Skipping assistant E2E: backend not healthy')
+    }
+  } catch {
+    test.skip(true, 'Skipping assistant E2E: backend not reachable')
+  }
+
   // Dev login and inject token
   const resp = await page.request.post(`${backend}/api/auth/login-dev`, {
     data: { username: 'developer', password: 'developer' },
@@ -20,7 +28,7 @@ test('Developer Assistant toggles and replies', async ({ page }) => {
   }, token)
 
   await page.goto(`${base}/#dev-assistant`)
-  await expect(page.getByText('دستیار توسعه‌دهنده')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'دستیار توسعه‌دهنده' })).toBeVisible()
 
   // Ensure enabled: if button says "فعال‌سازی", click it; otherwise it's already on
   const toggleBtn = page.getByRole('button', { name: /(فعال‌سازی|خاموش کردن)/ })

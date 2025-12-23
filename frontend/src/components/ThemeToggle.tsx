@@ -1,11 +1,11 @@
-import React from 'react';
-import { useTheme, Theme } from '../context/theme';
+import React from 'react'
+import { useTheme, Theme } from '../context/theme'
 
-const labels: Record<Theme, string> = { light: 'روشن', dark: 'تاریک', system: 'سیستم' };
+const labels: Record<Theme, string> = { light: 'روشن', dark: 'تاریک', system: 'سیستم' }
 
 export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const next: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
+  const { theme, setTheme } = useTheme()
+  const next: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' }
   return (
     <button
       aria-label="Theme toggle"
@@ -15,5 +15,5 @@ export default function ThemeToggle() {
     >
       تم: {labels[theme]}
     </button>
-  );
+  )
 }

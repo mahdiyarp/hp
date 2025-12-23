@@ -1,15 +1,19 @@
+@import './styles/retro-forms.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* حذف متغیرها و کلاس‌های تم تیره قدیمی برای جلوگیری از تداخل با تم Retro */
 
-/* Load Yekan webfont from public/fonts. Place Yekan.woff2 in frontend/public/fonts/ */
+/* Register Yekan using local sources only to avoid OTS errors if webfonts are missing/corrupt */
 @font-face {
   font-family: 'Yekan';
   src: url('/fonts/Yekan.woff2') format('woff2'),
        url('/fonts/Yekan.woff') format('woff'),
-       url('/fonts/Yekan.ttf') format('truetype');
+       url('/fonts/Yekan.ttf') format('truetype'),
+       local('Yekan'),
+       local('IranYekan');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -17,7 +21,26 @@
 
 :root {
   color-scheme: light;
-  --hp-font-family: 'Yekan', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  /* Layout variables (tunable to match reference build) */
+  --hp-container-max: 72rem; /* Tailwind max-w-6xl (1152px) */
+  --hp-container-px: 1.5rem; /* px-6 (24px) */
+  --hp-container-py: 1.25rem; /* py-5 (20px) */
+  --hp-sidebar-width: 288px; /* w-72 */
+
+  /* Shell / Sidebar theme primitives (keeps existing palette but avoids hard-coded hex scattered in components) */
+  --hp-shell-bg: #141d24;
+  --hp-shell-text: #f5f1e6;
+  --hp-sidebar-bg: #111821;
+  --hp-sidebar-border-accent: #d7caa4;
+  --hp-sidebar-divider: #2d3b45;
+  --hp-sidebar-text: #d4d8dc;
+  --hp-sidebar-text-hover: #f5f1e6;
+  --hp-sidebar-muted: #aeb4b9;
+  --hp-sidebar-hover-bg: #0f1720;
+  --hp-sidebar-active-bg: #d7caa4;
+  --hp-sidebar-active-border: #b7a77a;
+  --hp-sidebar-active-shadow: #b7a77a;
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
   --retro-panel-bg: #faf4df;
@@ -41,7 +64,9 @@
   --retro-muted-text: #6b5840;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
 }
 
@@ -104,25 +129,33 @@ html[dir='rtl'] {
   direction: rtl;
 }
 
-/* Base container spacing for consistent rhythm */
+/* Base container spacing for consistent rhythm (variable-driven) */
 .hp-container {
-  @apply max-w-[1200px] mx-auto px-5 py-5;
+  width: 100%;
+  max-width: var(--hp-container-max);
+  box-sizing: border-box;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: var(--hp-container-px);
+  padding-right: var(--hp-container-px);
+  padding-top: var(--hp-container-py);
+  padding-bottom: var(--hp-container-py);
 }
 
-/* Card panels unified padding and border */
-.hp-card {
-  @apply border-2 border-retro-panelBorder bg-retro-panel shadow-retroPanel rounded-sm p-5;
+/* Right-anchored variant for RTL layouts to align with right sidebar seam */
+.hp-container-right {
+  margin-right: 0;
+  margin-left: auto;
 }
+
+/* Card panels - استفاده از تعریف دستی در خطوط 66-72 */
 
 /* Headings unified style */
 .hp-heading {
   @apply text-xs uppercase tracking-widest5 text-retro-muted;
 }
 
-/* Form controls unified style */
-.hp-input {
-  @apply bg-[#f6f1df] border border-[#bfb69f] text-retro-text placeholder:text-retro-muted px-3 py-2 rounded-sm focus:outline-none focus:ring-2 focus:ring-retro-brand focus:border-retro-brand transition font-yekan;
-}
+/* Form controls - استفاده از تعریف دستی در خطوط 84-93 */
 
 /* Buttons unified style */
 .hp-button {

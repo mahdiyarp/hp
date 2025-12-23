@@ -89,6 +89,33 @@ Notes:
 - The developer user is preconfigured: mobile `09123506545`, password `09123506545`.
 - Organization features are derived from the user's NFT assets via `/api/org/features`.
 
+### Frontend E2E (Playwright)
+
+برای اجرای تست‌های E2E فرانت‌اند (Playwright):
+
+PowerShell (Windows):
+
+```powershell
+$env:BASE_URL = "http://localhost:3000";
+$env:BACKEND_URL = "http://localhost:8000";
+$env:DEMO_ALLOW_OTP_NO_SMS = "true";
+npm --prefix "frontend" run -s test:e2e
+```
+
+Bash:
+
+```bash
+BASE_URL=http://localhost:3000 \
+BACKEND_URL=http://localhost:8000 \
+DEMO_ALLOW_OTP_NO_SMS=true \
+npm --prefix frontend run -s test:e2e
+```
+
+نکات:
+- اسکریپت آماده‌سازی تست‌ها به‌صورت خودکار قبل از اجرا انجام می‌شود: همگام‌سازی فونت Yekan و نصب مرورگرهای Playwright (`frontend/scripts/test-setup.cjs`).
+- تست OTP به حالت دمو نیاز دارد: `DEMO_ALLOW_OTP_NO_SMS=true`.
+- جزئیات بیشتر و فهرست تست‌ها در [frontend/README-FRONTEND.md](frontend/README-FRONTEND.md) آمده است.
+
 ## Frontend zero-rebuild sync (Windows)
 
 When Docker registry pulls are blocked or you want instant updates on port 3000 without rebuilding the image, use the live-mount override and helper:
@@ -149,6 +176,12 @@ $token = ($tokenResp.Content | ConvertFrom-Json).access_token
 Invoke-WebRequest -Uri "http://localhost:3000/api/current-user/modules" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
 ```
 
+### وضعیت تست‌ها و بیلد (آذر ۱۴۰۴)
+
+- `npm --prefix frontend run test` → ✅ (Vitest همهٔ ۲۰ فایل را عبور داد؛ شامل ماژول‌های Settings، People و DevConsole)
+- `npm --prefix frontend run build` → ✅ (PageBuilder با `grapesjs@0.21.5` بسته شد، هشدار اندازه برای باندل‌های بزرگ پابرجاست)
+- `python -m pytest backend/tests` → ❌ چند سناریو هنوز خطا دارند: [tests/test_dashboard_endpoints.py](backend/tests/test_dashboard_endpoints.py#L120-L212)، [tests/test_endpoints.py](backend/tests/test_endpoints.py#L30-L55)، [tests/test_fiscal_year_module.py](backend/tests/test_fiscal_year_module.py#L40-L110)، [tests/test_invoice_finalize_integration.py](backend/tests/test_invoice_finalize_integration.py#L1-L40)، [tests/test_phone_login_normalization.py](backend/tests/test_phone_login_normalization.py#L10-L90) و [tests/test_sms_settings_api.py](backend/tests/test_sms_settings_api.py#L250-L300). نتیجهٔ فعلی: 12 شکست از 98 تست.
+
 ### Environment Flags
 
 - `DEV_FEATURES_ENABLED` (default: off): Enables dev-only endpoints like `/api/auth/login-dev` and `/api/dev/assistant/*`. Accepts `true|1|dev|yes`.
@@ -194,6 +227,16 @@ A lightweight background scheduler can emit automation events (e.g., overdue che
 - Headless smoke test workflow under `.github/workflows/headless-smoke.yml`.
 - Optional 2FA (TOTP) for sign-in flows is available via `/api/auth/otp/*` endpoints.
 
+### Frontend Environment & Fonts
+
+- `VITE_BACKEND_URL`: When serving the frontend from a different origin (e.g., port 3000 behind Nginx), set this to the backend base (e.g., `http://localhost:8000`). The client will prefix all `/api/*` calls with this value. Without it, same-origin proxy is used.
+- Fonts: The UI is locked to Yekan to avoid OTS decode errors. A cleanup script removes obviously corrupt WOFF2 placeholders and ensures a valid Yekan is present:
+
+```powershell
+npm --prefix frontend run clean-fonts
+```
+
+This runs during CI and before preview/build via the existing scripts. If you provide licensed IranYekan/Vazirmatn, keep them >10KB and valid; otherwise the fallback mapping to `Yekan` remains active.
 ### Developer Setup
 
 ```bash

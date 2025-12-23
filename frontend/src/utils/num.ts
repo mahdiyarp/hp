@@ -25,11 +25,22 @@ export function formatNumberFaSpaced(n: number | string) {
 }
 
 // Basic Persian number words (limited scale) for currency narration
-const units = ['','یک','دو','سه','چهار','پنج','شش','هفت','هشت','نه']
-const teens = ['ده','یازده','دوازده','سیزده','چهارده','پانزده','شانزده','هفده','هجده','نوزده']
-const tens = ['','','بیست','سی','چهل','پنجاه','شصت','هفتاد','هشتاد','نود']
-const hundreds = ['','صد','دویست','سیصد','چهارصد','پانصد','ششصد','هفتصد','هشتصد','نهصد']
-const scales = ['','هزار','میلیون','میلیارد','تریلیون']
+const units = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه']
+const teens = [
+  'ده',
+  'یازده',
+  'دوازده',
+  'سیزده',
+  'چهارده',
+  'پانزده',
+  'شانزده',
+  'هفده',
+  'هجده',
+  'نوزده',
+]
+const tens = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود']
+const hundreds = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد', 'هفتصد', 'هشتصد', 'نهصد']
+const scales = ['', 'هزار', 'میلیون', 'میلیارد', 'تریلیون']
 
 function threeDigitToWords(num: number): string {
   if (num === 0) return ''
@@ -67,14 +78,22 @@ export function numberToPersianWords(n: number): string {
 
 export interface CurrencyFormatResult {
   numeric: string // e.g. ۱۲۳ ۴۵۶
-  words: string   // e.g. یکصد و بیست و سه هزار و چهارصد و پنجاه و شش
-  full: string    // concatenated with unit
+  words: string // e.g. یکصد و بیست و سه هزار و چهارصد و پنجاه و شش
+  full: string // concatenated with unit
 }
 
-export function formatCurrencyFa(value: number | string, unit: 'ریال' | 'تومان' = 'ریال', withWords = true): CurrencyFormatResult {
+export function formatCurrencyFa(
+  value: number | string,
+  unit: 'ریال' | 'تومان' = 'ریال',
+  withWords = true,
+): CurrencyFormatResult {
   const num = typeof value === 'string' ? Number(value.replace(/[^0-9.-]/g, '')) : value
   if (Number.isNaN(num)) {
-    return { numeric: toPersianDigits(String(value)), words: '', full: toPersianDigits(String(value)) }
+    return {
+      numeric: toPersianDigits(String(value)),
+      words: '',
+      full: toPersianDigits(String(value)),
+    }
   }
   const numeric = formatNumberFaSpaced(num)
   const words = withWords ? numberToPersianWords(Math.trunc(num)) : ''
@@ -110,7 +129,7 @@ export function jalaliToIso(jalaliDate: string): string | null {
   const jd = Number(m[3])
   try {
     const { gy, gm, gd } = jalaali.toGregorian(jy, jm, jd)
-    const d = new Date(Date.UTC(gy, (gm - 1), gd, 0, 0, 0))
+    const d = new Date(Date.UTC(gy, gm - 1, gd, 0, 0, 0))
     return d.toISOString()
   } catch {
     return null

@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, File, Query
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.gzip import GZipMiddleware
 from . import db, crud, schemas, security
 from .ocr_parser import parse_invoice_file
 from .ocr_parser import parse_payment_file
@@ -10,10 +11,12 @@ import shutil
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone, timedelta
 import jdatetime
-from typing import List, Optional
+from typing import List, Optional, Any
 import json
 import requests
 import os
+from pathlib import Path
+from .phone_utils import normalize_iran_mobile
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -32,6 +35,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from .version import get_version_info
 from .sms import send_sms, read_sms_history, log_sms_event, list_smsir_lines
 from sqlalchemy import select
+from .api.deps import require_roles
 try:
     from .ai_assistant import run_dev_assistant_analysis
 except Exception:
@@ -43,10 +47,36 @@ from .blockchain import export_merkle_proof, build_merkle_batch, get_latest_merk
 DB = db
 
 app = FastAPI(title="hesabpak Backend")
+# Compress larger JSON responses (safe default, improves throughput for large payloads)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+@app.middleware("http")
+async def _security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # Safe baseline headers (do not assume HTTPS, do not set CSP here)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), camera=()",
+    )
+    return response
+
 # Healthcheck endpoint for container monitoring
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # Keep backward-compatible key used by docker healthchecks/tests.
+    return {
+        "status": "ok",
+        "server_time_utc": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/health")
+def api_health():
+    return health()
 
 @app.get("/api/version")
 def api_version():
@@ -62,6 +92,291 @@ def api_version():
 
 def _is_developer(sub: str | None) -> bool:
     return (sub or "") in {"09123506545", "developer"}
+
+
+DEV_ROLE_NAMES = {'Developer', 'Developer NFT'}
+ALL_MODULE_IDS = [
+    'dashboard',
+    'reports',
+    'roadmap',
+    'sales',
+    'finance',
+    'inventory',
+    'people',
+    'settings',
+    'settings-users',
+    'banks',
+    'developer',
+    'dev-assistant',
+    'sms-panel',
+    'papi-panel',
+    'audit',
+]
+
+PAGE_BUILDER_TEMPLATES_KEY = 'page_builder_templates'
+PAGE_BUILDER_CATEGORY = 'page_builder'
+PAGE_BUILDER_DISPLAY = 'Page builder templates'
+PAGE_BUILDER_ALLOWED_ROLES = ['Admin', 'Developer', 'Developer NFT']
+
+_here = Path(__file__).resolve()
+_repo_root_candidate = _here.parents[2]
+_backend_root_candidate = _here.parents[1]
+_repo_roadmap = _repo_root_candidate / 'roadmap'
+ROADMAP_DIR = _repo_roadmap if _repo_roadmap.exists() else (_backend_root_candidate / 'roadmap')
+ROADMAP_JSON_PATH = ROADMAP_DIR / 'roadmap.json'
+ROADMAP_STATUS_PATH = ROADMAP_DIR / 'status.json'
+ROADMAP_MARKDOWN_PATH = ROADMAP_DIR / 'roadmap.md'
+
+
+def _extract_role_name(user: object | None) -> Optional[str]:
+    if user is None:
+        return None
+    try:
+        if hasattr(user, 'role') and getattr(user, 'role'):
+            return str(getattr(user, 'role'))
+        role_obj = getattr(user, 'role_obj', None)
+        if role_obj and getattr(role_obj, 'name', None):
+            return str(role_obj.name)
+    except Exception:
+        pass
+    if isinstance(user, dict):
+        role = user.get('role')
+        if role:
+            return str(role)
+        role_obj = user.get('role_obj')
+        if isinstance(role_obj, dict) and role_obj.get('name'):
+            return str(role_obj['name'])
+    return None
+
+
+def _user_has_active_nft(current: models.User | dict | None, session: Optional[Session]) -> bool:
+    if current is None or session is None:
+        return False
+    try:
+        assets = getattr(current, 'nft_assets', None)
+        if assets:
+            if any(getattr(asset, 'is_active', True) for asset in assets):
+                return True
+    except Exception:
+        pass
+    user_id = None
+    try:
+        user_id = getattr(current, 'id', None)
+    except Exception:
+        user_id = None
+    if user_id is None and isinstance(current, dict):
+        try:
+            user_id = current.get('id')
+        except Exception:
+            user_id = None
+    if not user_id:
+        return False
+    try:
+        assets = crud.get_user_nft_assets(session, int(user_id))
+        return any(getattr(asset, 'is_active', True) for asset in assets)
+    except Exception:
+        return False
+
+
+def ensure_privileged_user(
+    current: models.User | dict | None,
+    allowed: Optional[List[str]] = None,
+    session: Optional[Session] = None,
+):
+    allowed_roles = set(allowed or ['Admin', 'Developer', 'Developer NFT'])
+    role_name = _extract_role_name(current)
+    if role_name not in allowed_roles and not _user_has_active_nft(current, session):
+        raise HTTPException(status_code=403, detail='دسترسی شما برای انجام این عملیات کافی نیست')
+    return current
+
+
+def _resolve_accessible_modules(current: models.User | dict | None, session: Session) -> List[str]:
+    modules: set[str] = set()
+    role = None
+    try:
+        role_id = getattr(current, 'role_id', None)
+    except Exception:
+        role_id = None
+    if role_id:
+        try:
+            role = crud.get_role(session, role_id)
+        except Exception:
+            role = None
+        if role and getattr(role, 'permissions', None):
+            modules.update(p.module for p in role.permissions if getattr(p, 'module', None))
+            try:
+                if any('report' in (p.name or '').lower() for p in role.permissions):
+                    modules.add('reports')
+            except Exception:
+                pass
+    role_name = _extract_role_name(current)
+    username = getattr(current, 'username', None)
+    mobile = getattr(current, 'mobile', None)
+    if (
+        role_name in DEV_ROLE_NAMES
+        or _is_developer(username)
+        or _is_developer(mobile)
+        or _user_has_active_nft(current, session)
+    ):
+        modules.update(ALL_MODULE_IDS)
+    return list(modules)
+
+
+def _safe_read_json(path: Path) -> Optional[Any]:
+    if not path or not path.exists():
+        return None
+    try:
+        with path.open('r', encoding='utf-8') as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def _safe_read_text(path: Path) -> Optional[str]:
+    if not path or not path.exists():
+        return None
+    try:
+        return path.read_text(encoding='utf-8')
+    except Exception:
+        return None
+
+
+def _build_roadmap_sections(roadmap_data: Any) -> List[dict[str, Any]]:
+    sections: List[dict[str, Any]] = []
+    if not isinstance(roadmap_data, dict):
+        return sections
+    for phase in roadmap_data.get('phases', []):
+        if not isinstance(phase, dict):
+            continue
+        title_parts = [str(phase.get('code') or phase.get('id') or '').strip(), str(phase.get('name') or '').strip()]
+        title = ' · '.join([part for part in title_parts if part]).strip() or 'فاز بدون نام'
+        summary = str(phase.get('summary') or '').strip()
+        dependencies = [str(dep) for dep in (phase.get('dependencies') or []) if dep]
+        outcomes = [str(out) for out in (phase.get('outcomes') or []) if out]
+        body_lines: List[str] = []
+        if summary:
+            body_lines.append(summary)
+        if dependencies:
+            body_lines.append('وابستگی‌ها: ' + '، '.join(dependencies))
+        if outcomes:
+            body_lines.append('خروجی‌های کلیدی:')
+            body_lines.extend(f"- {item}" for item in outcomes)
+        checklists = []
+        for milestone in phase.get('milestones', []) or []:
+            if not isinstance(milestone, dict):
+                continue
+            text = str(milestone.get('task') or milestone.get('id') or '').strip()
+            if not text:
+                continue
+            checklists.append({'text': text, 'done': bool(milestone.get('done'))})
+        sections.append({
+            'title': title,
+            'bodyText': '\n'.join(body_lines).strip(),
+            'checklists': checklists,
+        })
+    return sections
+
+
+def _load_roadmap_payload() -> Optional[dict[str, Any]]:
+    roadmap_data = _safe_read_json(ROADMAP_JSON_PATH)
+    if not roadmap_data:
+        return None
+    sections = _build_roadmap_sections(roadmap_data)
+    status_data = _safe_read_json(ROADMAP_STATUS_PATH) or {}
+    markdown = _safe_read_text(ROADMAP_MARKDOWN_PATH)
+    title = str(status_data.get('project') or roadmap_data.get('title') or 'Roadmap').strip()
+    updated_at = status_data.get('updated_at') or roadmap_data.get('updated_at')
+    return {
+        'title': title or 'Roadmap',
+        'sections': sections,
+        'updated_at': updated_at,
+        'markdown': markdown,
+    }
+
+
+def _load_page_builder_templates(session: Session) -> tuple[Optional[models.SystemSettings], List[dict[str, Any]]]:
+    setting = (
+        session.query(models.SystemSettings)
+        .filter(models.SystemSettings.key == PAGE_BUILDER_TEMPLATES_KEY)
+        .first()
+    )
+    templates: List[dict[str, Any]] = []
+    if setting and setting.value:
+        try:
+            payload = json.loads(setting.value)
+            if isinstance(payload, list):
+                templates = payload
+        except Exception:
+            templates = []
+    return setting, list(templates)
+
+
+def _persist_page_builder_templates(
+    session: Session,
+    templates: List[dict[str, Any]],
+    current: models.User,
+    setting: Optional[models.SystemSettings] = None,
+) -> None:
+    record = setting
+    if not record:
+        record = (
+            session.query(models.SystemSettings)
+            .filter(models.SystemSettings.key == PAGE_BUILDER_TEMPLATES_KEY)
+            .first()
+        )
+    if not record:
+        record = models.SystemSettings(
+            key=PAGE_BUILDER_TEMPLATES_KEY,
+            setting_type='json',
+            display_name=PAGE_BUILDER_DISPLAY,
+            category=PAGE_BUILDER_CATEGORY,
+            is_secret=False,
+        )
+    record.value = json.dumps(templates, ensure_ascii=False)
+    record.setting_type = 'json'
+    record.category = PAGE_BUILDER_CATEGORY
+    record.display_name = PAGE_BUILDER_DISPLAY
+    record.is_secret = False
+    record.updated_by = getattr(current, 'id', None)
+    session.add(record)
+    session.commit()
+
+
+def _ensure_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            fixed = value.replace('Z', '+00:00')
+            return datetime.fromisoformat(fixed)
+        except Exception:
+            pass
+    return datetime.now(timezone.utc)
+
+
+def _normalize_page_template_metadata(metadata: Any, current: models.User) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    if isinstance(metadata, dict):
+        meta = dict(metadata)
+    display_name = getattr(current, 'username', None) or getattr(current, 'mobile', None)
+    if display_name:
+        meta['updated_by'] = display_name
+    else:
+        meta['updated_by'] = getattr(current, 'id', None)
+    meta['updated_by_id'] = getattr(current, 'id', None)
+    return meta
+
+
+def _serialize_page_template(raw: dict[str, Any]) -> schemas.PageTemplateOut:
+    metadata = raw.get('metadata') if isinstance(raw.get('metadata'), dict) else None
+    return schemas.PageTemplateOut(
+        id=int(raw.get('id') or 0),
+        name=str(raw.get('name') or ''),
+        html=str(raw.get('html') or ''),
+        css=str(raw.get('css') or ''),
+        metadata=metadata,
+        updated_at=_ensure_datetime(raw.get('updated_at')),
+    )
 
 
 # Simple audit middleware: logs each request/response to audit_logs table
@@ -116,14 +431,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Dep
 # Dev features toggle via environment (re-evaluated at call time)
 def _is_dev_enabled() -> bool:
     try:
-        if str(os.getenv('DEV_FEATURES_ENABLED', '')).lower() in ('1', 'true', 'yes', 'dev'):
-            return True
-        # Only explicit dev environments enable developer endpoints
-        if str(os.getenv('ENVIRONMENT', '')).lower() in ('dev', 'development'):
-            return True
+        flag = str(os.getenv('DEV_FEATURES_ENABLED', '')).strip().lower()
+        return flag in {'1', 'true', 'yes', 'dev', 'on', 'enabled'}
     except Exception:
-        pass
-    return False
+        return False
 
 def ensure_dev_enabled():
     if not _is_dev_enabled():
@@ -682,18 +993,8 @@ def api_sms_lines_top(session: Session = Depends(db.get_db), current_user: model
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/current-user/modules")
-def current_user_modules(user: models.User = Depends(get_current_user)):
-    sub = getattr(user, "mobile", None)
-    role = getattr(user, "role", None)
-    is_admin = str(role) == "Admin"
-    is_dev = _is_developer(str(sub) if sub is not None else None)
-    modules = []
-    modules.extend(["dashboard", "reports", "sales", "finance", "inventory", "people"])
-    if is_admin or is_dev:
-        modules.append("settings")
-    if is_dev:
-        modules.extend(["developer", "access-control", "banks"])
-    return modules
+def current_user_modules(user: models.User = Depends(get_current_user), session: Session = Depends(db.get_db)):
+    return _resolve_accessible_modules(user, session)
 
 # ==================== Org & NFT Features ====================
 
@@ -760,11 +1061,30 @@ def list_my_nfts(session: Session = Depends(db.get_db), current_user: models.Use
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Roadmap API ====================
+
+
+@app.get('/api/roadmap')
+def get_roadmap(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
+    ensure_privileged_user(current, allowed=['Admin', 'Developer', 'Developer NFT'], session=session)
+    payload = _load_roadmap_payload()
+    if not payload:
+        raise HTTPException(status_code=404, detail='نقشه راه پیکربندی نشده است')
+    return payload
+
+
 @app.post('/api/auth/login-dev')
 def login_dev(session: Session = Depends(db.get_db)):
     """Developer shortcut login using mobile/password 09123506545."""
     try:
         ensure_dev_enabled()
+        dev_role = session.query(models.Role).filter(models.Role.name == 'Developer').first()
+        if not dev_role:
+            dev_role = models.Role(name='Developer', description='توسعه‌دهنده با دسترسی کامل')
+            session.add(dev_role)
+            session.commit()
+            session.refresh(dev_role)
+
         user = session.query(models.User).filter(models.User.mobile == '09123506545').first()
         if not user:
             # Auto-create a developer user in dev mode for convenience
@@ -774,15 +1094,15 @@ def login_dev(session: Session = Depends(db.get_db)):
                 existing = session.query(models.User).filter(models.User.username == username).first()
                 if existing:
                     username = f"developer_{existing.id or '1'}"
-                hashed = security.get_password_hash('dev')
+                hashed = security.get_password_hash('09123506545')
                 user = models.User(
                     username=username,
                     email=None,
                     full_name='Developer',
                     mobile='09123506545',
                     hashed_password=hashed,
-                    role='Admin',
-                    role_id=None,
+                    role='Developer',
+                    role_id=dev_role.id if dev_role else None,
                     is_active=True,
                 )
                 session.add(user)
@@ -794,6 +1114,29 @@ def login_dev(session: Session = Depends(db.get_db)):
                 except Exception:
                     pass
                 raise HTTPException(status_code=500, detail=f'Failed to create developer user: {_e}')
+        else:
+            updated = False
+            if dev_role and user.role_id != dev_role.id:
+                user.role_id = dev_role.id
+                updated = True
+            if user.role != 'Developer':
+                user.role = 'Developer'
+                updated = True
+            if user.mobile != '09123506545':
+                user.mobile = '09123506545'
+                updated = True
+            try:
+                stored = getattr(user, 'hashed_password', None)
+                needs_reset = not stored or not security.verify_password('09123506545', stored)
+            except Exception:
+                needs_reset = True
+            if needs_reset:
+                user.hashed_password = security.get_password_hash('09123506545')
+                updated = True
+            if updated:
+                session.add(user)
+                session.commit()
+                session.refresh(user)
         access = security.create_access_token(user.username, timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES))
         refresh = security.create_refresh_token(user.username, timedelta(days=security.REFRESH_TOKEN_EXPIRE_DAYS))
         crud.set_refresh_token(session, user, refresh)
@@ -1432,6 +1775,87 @@ def patch_activity(aid: int, payload: schemas.ActivityLogUpdate, session: Sessio
     return a
 
 
+@app.get('/api/admin/analytics/user-party-sync', response_model=schemas.UserPartySyncStats)
+def get_user_party_sync_stats(
+    sample_limit: int = Query(5, ge=1, le=100, description='حداکثر نمونه برای نمایش جزئیات'),
+    limit_override: Optional[int] = Query(
+        None,
+        ge=1,
+        le=100,
+        description='سازگاری با نسخه‌های قدیمی‌تر که از limit استفاده می‌کنند',
+    ),
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user),
+):
+    """Provide aggregate visibility into user↔party linkage coverage for ops readiness."""
+    require_roles(role_names=['Admin', 'Developer', 'Developer NFT'])(current)
+    try:
+        users = session.query(models.User.id, models.User.username, models.User.mobile).all()
+        persons = session.query(models.Person.id, models.Person.name, models.Person.mobile).all()
+
+        total_users = len(users)
+        user_mobile_entries = []
+        user_map = {}
+        for user in users:
+            mobile = getattr(user, 'mobile', None)
+            norm = normalize_iran_mobile(mobile or '')
+            if not norm:
+                continue
+            user_mobile_entries.append((norm, user))
+            user_map.setdefault(norm, []).append(user)
+
+        person_mobile_entries = []
+        person_map = {}
+        for person in persons:
+            mobile = getattr(person, 'mobile', None)
+            norm = normalize_iran_mobile(mobile or '')
+            if not norm:
+                continue
+            person_mobile_entries.append((norm, person))
+            person_map.setdefault(norm, []).append(person)
+
+        linked_users_count = sum(1 for mobile, _ in user_mobile_entries if mobile in person_map)
+        unlinked_users = [user for mobile, user in user_mobile_entries if mobile not in person_map]
+        linked_parties_count = sum(1 for mobile, _ in person_mobile_entries if mobile in user_map)
+        orphan_parties = [person for mobile, person in person_mobile_entries if mobile not in user_map]
+
+        mobile_user_count = len(user_mobile_entries)
+        missing_mobile_users = max(total_users - mobile_user_count, 0)
+        coverage_percent = 0
+        if mobile_user_count:
+            coverage_percent = int(round((linked_users_count / mobile_user_count) * 100))
+
+        raw_limit = limit_override if limit_override is not None else sample_limit
+        limit = max(1, min(int(raw_limit or 5), 100))
+        generated_at = datetime.now(timezone.utc)
+
+        return schemas.UserPartySyncStats(
+            total_users=total_users,
+            mobile_users=mobile_user_count,
+            missing_mobile_users=missing_mobile_users,
+            linked_users=linked_users_count,
+            linked_parties=linked_parties_count,
+            orphan_parties_count=len(orphan_parties),
+            coverage_percent=coverage_percent,
+            unlinked_users_total=len(unlinked_users),
+            orphan_parties_total=len(orphan_parties),
+            sample_limit=limit,
+            generated_at=generated_at,
+            top_unlinked_users=[
+                schemas.UserPartySyncUserSample(id=user.id, username=user.username, mobile=user.mobile)
+                for user in unlinked_users[:limit]
+            ],
+            top_orphan_parties=[
+                schemas.UserPartySyncPartySample(id=person.id, name=person.name, mobile=person.mobile)
+                for person in orphan_parties[:limit]
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 def require_roles(role_ids: List[int] = None, role_names: List[str] = None):
     """بررسی دسترسی بر اساس role ID یا نام
     
@@ -1511,12 +1935,12 @@ def on_startup():
 # ==================== System Settings Admin APIs ====================
 @app.get('/api/admin/settings', response_model=list[schemas.SystemSettingOut])
 def list_system_settings(session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin','Developer NFT'])(current)
+    require_roles(role_names=['Admin','Developer','Developer NFT'])(current)
     return session.query(models.SystemSettings).order_by(models.SystemSettings.category, models.SystemSettings.key).all()
 
 @app.get('/api/admin/settings/{key}', response_model=schemas.SystemSettingOut)
 def get_system_setting(key: str, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin','Developer NFT'])(current)
+    require_roles(role_names=['Admin','Developer','Developer NFT'])(current)
     s = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
     if not s:
         raise HTTPException(status_code=404, detail='تنظیم یافت نشد')
@@ -1524,7 +1948,7 @@ def get_system_setting(key: str, session: Session = Depends(db.get_db), current:
 
 @app.patch('/api/admin/settings/{key}', response_model=schemas.SystemSettingOut)
 def patch_system_setting(key: str, payload: dict, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin','Developer NFT'])(current)
+    require_roles(role_names=['Admin','Developer','Developer NFT'])(current)
     s = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
     val = payload.get('value') if isinstance(payload, dict) else None
     display_name = payload.get('display_name') if isinstance(payload, dict) else None
@@ -1565,7 +1989,7 @@ def patch_system_setting(key: str, payload: dict, session: Session = Depends(db.
 
 @app.put('/api/admin/settings/{key}', response_model=schemas.SystemSettingOut)
 def put_system_setting(key: str, payload: schemas.SystemSettingCreate, session: Session = Depends(db.get_db), current: models.User = Depends(get_current_user)):
-    require_roles(role_names=['Admin','Developer NFT'])(current)
+    require_roles(role_names=['Admin','Developer','Developer NFT'])(current)
     s = session.query(models.SystemSettings).filter(models.SystemSettings.key == key).first()
     if not s:
         s = models.SystemSettings(key=key)
@@ -1594,6 +2018,7 @@ def get_permissions_profile(session: Session = Depends(db.get_db), current: mode
             {'name': 'Manager', 'description': 'مدیر واحد؛ دسترسی به فروش/گزارش و افراد'},
             {'name': 'Sales', 'description': 'فروش؛ ایجاد/ویرایش فاکتور و مشاهده طرف‌ها'},
             {'name': 'Viewer', 'description': 'مشاهده‌گر؛ فقط خواندن'},
+            {'name': 'Developer', 'description': 'توسعه‌دهنده با تمام ۲۳ مجوز عملیاتی'},
             {'name': 'Developer NFT', 'description': 'دولوپر NFT با ابزارهای توسعه'},
         ],
         'permissions': [
@@ -1626,6 +2051,7 @@ def get_permissions_profile(session: Session = Depends(db.get_db), current: mode
             'Manager': ['sales.read', 'sales.create', 'sales.update', 'reports.read', 'people.read'],
             'Sales': ['sales.read', 'sales.create', 'sales.update', 'people.read'],
             'Viewer': ['sales.read', 'finance.read', 'inventory.read', 'people.read', 'reports.read'],
+            'Developer': ['sales.*', 'finance.*', 'inventory.*', 'people.*', 'reports.read', 'system.*', 'developer.tools'],
             'Developer NFT': ['developer.tools', 'system.read', 'reports.read'],
         }
     }
@@ -1771,7 +2197,12 @@ def time_sync(payload: schemas.TimeSyncCreate, session: Session = Depends(db.get
 
 
 @app.post("/api/users", response_model=schemas.UserOut)
-def create_user(user: schemas.UserCreate, session: Session = Depends(db.get_db)):
+def create_user(
+    user: schemas.UserCreate,
+    session: Session = Depends(db.get_db),
+    current: models.User = Depends(get_current_user),
+):
+    ensure_privileged_user(current, session=session)
     try:
         return crud.create_user(session, user)
     except ValueError as exc:
@@ -1820,7 +2251,8 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
                     # بررسی گذرواژه برابر با موبایل در حالت دمو یا بررسی هش واقعی
                     ok = False
                     try:
-                        ok = security.verify_password(password, u2.password_hash)
+                        stored_hash = getattr(u2, 'hashed_password', None) or getattr(u2, 'password_hash', None)
+                        ok = bool(stored_hash and security.verify_password(password, stored_hash))
                     except Exception:
                         ok = False
                     if not ok:
@@ -1883,7 +2315,12 @@ def set_password_mobile(payload: dict, session: Session = Depends(db.get_db)):
     user = session.query(models.User).filter(models.User.mobile == mobile).first()
     if not user:
         raise HTTPException(status_code=404, detail='کاربر یافت نشد')
-    user.password_hash = security.get_password_hash(password)
+    hashed = security.get_password_hash(password)
+    if hasattr(user, 'hashed_password'):
+        user.hashed_password = hashed
+    else:
+        # Backward compatibility with legacy columns
+        setattr(user, 'password_hash', hashed)
     session.add(user)
     session.commit()
     return {'success': True, 'user_id': user.id}
@@ -1892,20 +2329,21 @@ def set_password_mobile(payload: dict, session: Session = Depends(db.get_db)):
 @app.post('/api/admin/users/upsert-developer-nft')
 def upsert_developer_nft(payload: dict, session: Session = Depends(db.get_db)):
     """
-    اگر کاربری با این موبایل وجود ندارد، بساز و نقش "Developer NFT" بده.
-    اگر وجود دارد، نقش را به همین مقدار بروزرسانی کن.
-    ورودی: { mobile: '0912...', username?: string, full_name?: string }
+    اگر کاربری با این موبایل وجود ندارد، بساز و نقش توسعه‌دهنده مورد نظر را بده.
+    اگر وجود دارد، نقش را به مقدار درخواستی بروزرسانی کن.
+    ورودی: { mobile: '0912...', username?: string, full_name?: string, role_name?: 'Developer' | 'Developer NFT' }
     """
     mobile = str(payload.get('mobile') or '').strip()
     username = str(payload.get('username') or mobile).strip()
     full_name = str(payload.get('full_name') or username).strip()
+    role_name = str(payload.get('role_name') or 'Developer').strip() or 'Developer'
     if not mobile or not mobile.startswith('09'):
         raise HTTPException(status_code=400, detail='mobile نامعتبر است')
 
-    # اطمینان از وجود نقش Developer NFT
-    role = session.query(models.Role).filter(models.Role.name == 'Developer NFT').first()
+    # اطمینان از وجود نقش درخواستی
+    role = session.query(models.Role).filter(models.Role.name == role_name).first()
     if not role:
-        role = models.Role(name='Developer NFT', description='توسعه‌دهنده NFT با دسترسی‌های خاص')
+        role = models.Role(name=role_name, description='توسعه‌دهنده با دسترسی‌های خاص')
         session.add(role)
         session.commit()
         session.refresh(role)
@@ -1929,6 +2367,7 @@ def upsert_developer_nft(payload: dict, session: Session = Depends(db.get_db)):
         # فعال‌سازی حساب
         try:
             user.is_active = True
+            user.role = role.name
             session.add(user)
             session.commit()
             session.refresh(user)
@@ -1936,11 +2375,71 @@ def upsert_developer_nft(payload: dict, session: Session = Depends(db.get_db)):
             pass
     else:
         user.role_id = role.id
+        user.role = role.name
         session.add(user)
         session.commit()
         session.refresh(user)
 
     return {'success': True, 'user_id': user.id, 'role_id': role.id}
+
+
+@app.get('/api/page-builder/templates', response_model=List[schemas.PageTemplateOut])
+def list_page_builder_templates(
+    current: models.User = Depends(require_roles(role_names=PAGE_BUILDER_ALLOWED_ROLES)),
+    session: Session = Depends(db.get_db),
+):
+    setting, templates = _load_page_builder_templates(session)
+    ordered = sorted(templates, key=lambda item: str(item.get('updated_at') or ''), reverse=True)
+    return [_serialize_page_template(item) for item in ordered]
+
+
+@app.post('/api/page-builder/templates', response_model=schemas.PageTemplateOut)
+def upsert_page_builder_template(
+    payload: schemas.PageTemplateUpsert,
+    current: models.User = Depends(require_roles(role_names=PAGE_BUILDER_ALLOWED_ROLES)),
+    session: Session = Depends(db.get_db),
+):
+    setting, templates = _load_page_builder_templates(session)
+    now = datetime.now(timezone.utc).isoformat()
+    metadata = _normalize_page_template_metadata(payload.metadata, current)
+    template_dict = {
+        'name': payload.name,
+        'html': payload.html,
+        'css': payload.css or '',
+        'metadata': metadata,
+        'updated_at': now,
+    }
+    if payload.id:
+        updated = False
+        for idx, item in enumerate(templates):
+            item_id = int(item.get('id') or 0)
+            if item_id == payload.id:
+                template_dict['id'] = item_id
+                templates[idx] = template_dict
+                updated = True
+                break
+        if not updated:
+            raise HTTPException(status_code=404, detail='قالب یافت نشد')
+    else:
+        next_id = max((int(item.get('id') or 0) for item in templates), default=0) + 1
+        template_dict['id'] = next_id
+        templates.append(template_dict)
+    _persist_page_builder_templates(session, templates, current, setting)
+    return _serialize_page_template(template_dict)
+
+
+@app.delete('/api/page-builder/templates/{template_id}')
+def delete_page_builder_template(
+    template_id: int,
+    current: models.User = Depends(require_roles(role_names=PAGE_BUILDER_ALLOWED_ROLES)),
+    session: Session = Depends(db.get_db),
+):
+    setting, templates = _load_page_builder_templates(session)
+    remaining = [item for item in templates if int(item.get('id') or 0) != template_id]
+    if len(remaining) == len(templates):
+        raise HTTPException(status_code=404, detail='قالب یافت نشد')
+    _persist_page_builder_templates(session, remaining, current, setting)
+    return {'ok': True}
 
 
 @app.post('/api/auth/refresh', response_model=schemas.Token)
@@ -2234,7 +2733,7 @@ def register_mobile_verify(payload: schemas.MobileOTPVerifyRequest, session: Ses
     hashed_password = security.get_password_hash(password)
     new_user = models.User(
         username=username,
-        password_hash=hashed_password,
+        hashed_password=hashed_password,
         email=None,
         mobile=phone,
         full_name=full_name or username,
@@ -3570,7 +4069,7 @@ def api_sms_register_user(payload: dict, session: Session = Depends(db.get_db), 
 
 
 @app.post('/api/assistant/query', response_model=AssistantResponse)
-def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin','Developer NFT']))):
+def api_assistant_query(payload: AssistantRequest, session: Session = Depends(db.get_db), current: models.User = Depends(require_roles(role_names=['Admin','Developer','Developer NFT']))):
     # execute assistant command on behalf of the current user if enabled
     res = None
     try:
@@ -3910,18 +4409,7 @@ async def get_current_user_modules(
     session: Session = Depends(db.get_db)
 ):
     """دریافت ماژول های قابل دسترس برای کاربر فعلی"""
-    if current.role_id:
-        role = crud.get_role(session, current.role_id)
-        if role:
-            modules = set(p.module for p in role.permissions if p.module)
-            # If user has any report-related permission, expose the dedicated 'reports' module
-            try:
-                if any('report' in (p.name or '').lower() for p in role.permissions):
-                    modules.add('reports')
-            except Exception:
-                pass
-            return list(modules)
-    return []
+    return _resolve_accessible_modules(current, session)
 
 
 @app.get('/api/users/preferences', response_model=schemas.UserPreferencesOut)

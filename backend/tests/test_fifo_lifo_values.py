@@ -1,6 +1,9 @@
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+
+import pytest
 from fastapi.testclient import TestClient
 
 # Ensure test DB is a file sqlite shared with the app
@@ -19,12 +22,21 @@ from app import models
 DB.Base.metadata.create_all(bind=DB.engine)
 
 # Override auth dependency with admin-like user
-from types import SimpleNamespace
 fake_perm = models.Permission(id=0, name='finance_report', description='Finance', module='finance')
 fake_role = models.Role(id=1, name='Admin', description='Admin')
 fake_role.permissions = [fake_perm]
 fake_user = SimpleNamespace(id=1, username='tester', role='Admin', role_id=1, is_active=True, role_obj=fake_role)
-app.dependency_overrides[get_current_user] = lambda: fake_user
+
+
+@pytest.fixture(autouse=True, scope="module")
+def override_user_dependency():
+    prev = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    yield
+    if prev is not None:
+        app.dependency_overrides[get_current_user] = prev
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
 
 client = TestClient(app)
 

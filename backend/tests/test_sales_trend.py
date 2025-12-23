@@ -1,7 +1,10 @@
-from fastapi.testclient import TestClient
 import os
 import sys
 from datetime import datetime, timedelta
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Use SQLite for tests
 test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'hp_test.db'))
@@ -12,11 +15,20 @@ if backend_pkg_root not in sys.path:
     sys.path.insert(0, backend_pkg_root)
 
 from app.main import app, get_current_user  # type: ignore
-from types import SimpleNamespace
 
 # Override auth
 fake_user = SimpleNamespace(id=1, username='tester', role='Admin', assistant_enabled=True)
-app.dependency_overrides[get_current_user] = lambda: fake_user
+
+
+@pytest.fixture(autouse=True, scope="module")
+def override_user_dependency():
+    prev = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    yield
+    if prev is not None:
+        app.dependency_overrides[get_current_user] = prev
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
 
 client = TestClient(app)
 

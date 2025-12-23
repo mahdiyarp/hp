@@ -6,9 +6,11 @@ import { FYProvider } from './context/FYContext'
 import { modules } from './modules'
 import { apiGet, apiPost } from './services/api'
 import { getOrgFeatures } from './services/org'
-import { getAccessToken } from './services/auth.ts'
+import { fetchWithAuth } from './services/auth'
+import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
 import ThemeToggle from './components/ThemeToggle'
+import { DEFAULT_TOAST_DURATION } from './utils/toast'
 
 export type SyncRecord = {
   serverUtc: string
@@ -58,10 +60,15 @@ export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
   const [version, setVersion] = useState<string | null>(null)
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
-  const { user, modules: userModules, logout } = useAuth()
+  const { user, modules: userModules, permissions, logout } = useAuth()
   const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
   const [orgFeatures, setOrgFeatures] = useState<string[] | null>(null)
-  const [toast, setToast] = useState<{ type:'success'|'error'|'info'|'warning'; message:string; duration?:number; position?:'bl'|'br'|'tl'|'tr' }|null>(null)
+  const [toast, setToast] = useState<{
+    type: 'success' | 'error' | 'info' | 'warning'
+    message: string
+    duration?: number
+    position?: 'bl' | 'br' | 'tl' | 'tr'
+  } | null>(null)
 
   async function syncTime() {
     const before = new Date()
@@ -92,21 +99,20 @@ export default function App() {
 
   async function initializeSmartDate() {
     try {
-      const data = (await apiGet<AutoContextResponse>('/api/financial/auto-context'))
-        const today = data.context?.current_jalali?.formatted
-        let todayIso = new Date().toISOString().split('T')[0]
-        if (typeof today === 'string') {
-          const parsed = parseJalaliInput(today)
-          if (parsed?.iso) {
-            todayIso = parsed.iso.slice(0, 10)
-          }
+      const data = await apiGet<AutoContextResponse>('/api/financial/auto-context')
+      const today = data.context?.current_jalali?.formatted
+      let todayIso = new Date().toISOString().split('T')[0]
+      if (typeof today === 'string') {
+        const parsed = parseJalaliInput(today)
+        if (parsed?.iso) {
+          todayIso = parsed.iso.slice(0, 10)
         }
-        localStorage.setItem('hesabpak_selected_date', todayIso)
-        if (typeof today === 'string') {
-          localStorage.setItem('hesabpak_selected_jalali', today)
-        }
-        console.log('Smart date auto-initialized:', { today, todayIso })
-      
+      }
+      localStorage.setItem('hesabpak_selected_date', todayIso)
+      if (typeof today === 'string') {
+        localStorage.setItem('hesabpak_selected_jalali', today)
+      }
+      console.log('Smart date auto-initialized:', { today, todayIso })
     } catch (error) {
       console.error('Failed to initialize smart date:', error)
     } finally {
@@ -142,7 +148,9 @@ export default function App() {
     }
     void syncTime()
     void apiGet<VersionResponse>('/api/version')
-      .then(data => { if (data?.version) setVersion(data.version) })
+      .then((data) => {
+        if (data?.version) setVersion(data.version)
+      })
       .catch(() => {})
   }, [])
 
@@ -164,9 +172,14 @@ export default function App() {
       const ce = e as CustomEvent
       const d = ce.detail || {}
       if (typeof d?.message === 'string') {
-        const duration = Number(d?.duration) || 3000
-        const position = (d?.position as any) || 'bl'
-        setToast({ type: (d.type as any) || 'info', message: String(d.message), duration, position })
+        const duration = Number(d?.duration) || DEFAULT_TOAST_DURATION
+        const position = d?.position || 'bl'
+        setToast({
+          type: d.type || 'info',
+          message: String(d.message),
+          duration,
+          position,
+        })
         const id = setTimeout(() => setToast(null), duration)
         return () => clearTimeout(id)
       }
@@ -187,7 +200,46 @@ export default function App() {
     ;(async () => {
       try {
         const res = await getOrgFeatures()
-        setOrgFeatures(res.features || [])
+        const serverFeatures = res.features || []
+        // Auto-detect features by probing minimal endpoints to avoid 403 storms
+        const detected: string[] = []
+        try {
+          const nowIso = new Date().toISOString()
+          const startIso = new Date(new Date(nowIso).getTime() - 24 * 3600 * 1000).toISOString()
+          const probes: Array<{ feature: string; path: string }> = [
+            { feature: 'invoices', path: '/api/invoices?limit=1' },
+            { feature: 'payments', path: '/api/payments?limit=1' },
+            { feature: 'products', path: '/api/products?limit=1' },
+            { feature: 'persons', path: '/api/persons' },
+            {
+              feature: 'reports',
+              path:
+                `/api/reports/pnl?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(
+                  nowIso,
+                )}&method=FIFO`,
+            },
+          ]
+          const results = await Promise.all(
+            probes.map(async ({ feature, path }) => {
+              try {
+                const res = await fetchWithAuth(path, {
+                  method: 'GET',
+                  headers: { 'X-Date-Format': 'jalali' },
+                })
+                return { feature, ok: res.ok }
+              } catch {
+                return { feature, ok: false }
+              }
+            }),
+          )
+          results.forEach((r) => {
+            if (r.ok) detected.push(r.feature)
+          })
+        } catch {
+          // ignore detection errors
+        }
+        const union = Array.from(new Set([...(serverFeatures || []), ...detected]))
+        setOrgFeatures(union)
       } catch {
         setOrgFeatures([])
       }
@@ -203,7 +255,7 @@ export default function App() {
           setSmartDateInitialized(true)
         }
       }, 3000) // 3 second timeout
-      
+
       return () => clearTimeout(timeout)
     }
   }, [user, smartDateInitialized])
@@ -212,21 +264,33 @@ export default function App() {
     return (
       <>
         {apiError && (
-          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">
+            خطا {apiError.status}: {apiError.message}
+          </div>
         )}
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 text-gray-800 flex items-center justify-center p-6">
+        <div className="min-h-screen bg-[var(--retro-surface-bg)] text-[var(--retro-table-header-text)] flex items-center justify-center p-6">
           <div className="max-w-5xl w-full flex flex-col-reverse md:flex-row items-center justify-between gap-10">
             <div className="md:w-1/2 space-y-4 text-right">
-              <p className="text-sm font-mono text-indigo-700 tracking-wider">HESABPAK CLASSIC CONSOLE</p>
-              <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-gray-900">به سیستم جامع حساب‌پاک خوش آمدید</h1>
-              <p className="text-sm text-gray-700 leading-6">
-                برای دسترسی به داشبورد مرکزی و ابزارهای حسابداری، ابتدا وارد شوید. این محیط بر اساس تم
-                کلاسیک طراحی شده تا با سیستم‌های آرشیوی و کاربران باسابقه هماهنگ بماند.
+              <p className="text-sm font-mono text-[var(--retro-button-bg)] tracking-wider">
+                HESABPAK CLASSIC CONSOLE
               </p>
-              <div className="flex flex-wrap gap-3 text-xs text-indigo-700">
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">SYNCED TIME</span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">RETRO UI MODE</span>
-                <span className="border border-indigo-400 px-3 py-1 uppercase tracking-[0.4em] rounded">SECURE ACCESS</span>
+              <h1 className="text-3xl md:text-4xl font-semibold leading-tight text-[var(--retro-table-header-text)]">
+                به سیستم جامع حساب‌پاک خوش آمدید
+              </h1>
+              <p className="text-sm text-[var(--retro-muted-text)] leading-6">
+                برای دسترسی به داشبورد مرکزی و ابزارهای حسابداری، ابتدا وارد شوید. این محیط بر اساس
+                تم کلاسیک طراحی شده تا با سیستم‌های آرشیوی و کاربران باسابقه هماهنگ بماند.
+              </p>
+              <div className="flex flex-wrap gap-3 text-xs text-[var(--retro-heading-text)]">
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
+                  SYNCED TIME
+                </span>
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
+                  RETRO UI MODE
+                </span>
+                <span className="border border-[var(--retro-border)] px-3 py-1 uppercase tracking-[0.4em] rounded">
+                  SECURE ACCESS
+                </span>
               </div>
             </div>
             <div className="md:w-1/2 w-full">
@@ -234,7 +298,11 @@ export default function App() {
             </div>
           </div>
         </div>
-        {version && <div className="fixed bottom-2 right-2 text-xs text-indigo-600 bg-white px-2 py-1 rounded shadow">v{version}</div>}
+        {version && (
+          <div className="fixed bottom-2 right-2 text-xs text-[var(--retro-table-header-text)] bg-white px-2 py-1 rounded shadow">
+            v{version}
+          </div>
+        )}
       </>
     )
   }
@@ -247,6 +315,10 @@ export default function App() {
     // اگر بک‌اند لیست ندهد، همان ماژول‌های پیش‌فرض را نشان می‌دهیم تا تم کلاسیک حفظ شود.
     // تشخیص سریع کاربر دولوپر از روی JWT
     const isDeveloper = (() => {
+      const developerRoles = ['Admin', 'Developer', 'Developer NFT']
+      if (user && developerRoles.includes(user.role)) {
+        return true
+      }
       try {
         const tok = getAccessToken()
         if (!tok) return false
@@ -258,24 +330,30 @@ export default function App() {
         const p = JSON.parse(payload)
         const sub = String(p.sub || '')
         const role = String(p.role || p['x-role'] || '')
-        return sub === '09123506545' || sub === 'developer' || role === 'Admin'
-      } catch { return false }
+        if (developerRoles.includes(role)) return true
+        return sub === '09123506545' || sub === 'developer'
+      } catch {
+        return false
+      }
     })()
 
-    const accessibleModules = (Array.isArray(userModules) && userModules.length > 0)
-      ? modules.map(m => ({
-          ...m,
-          // اگر آی‌دی ماژول در لیست دسترسی کاربر باشد، نمایش داده شود
-          // در غیر این‌صورت به‌صورت پنهان علامت بزنیم تا AppShell آن را فیلتر کند.
-          hidden: isDeveloper ? false : !userModules.includes(m.id),
-        }))
-      : modules
-    
+    const accessibleModules =
+      Array.isArray(userModules) && userModules.length > 0
+        ? modules.map((m) => ({
+            ...m,
+            // اگر آی‌دی ماژول در لیست دسترسی کاربر باشد، نمایش داده شود
+            // در غیر این‌صورت به‌صورت پنهان علامت بزنیم تا AppShell آن را فیلتر کند.
+            hidden: isDeveloper ? false : !userModules.includes(m.id),
+          }))
+        : modules
+
     return (
       <FYProvider>
         <>
           {apiError && (
-            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+            <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">
+              خطا {apiError.status}: {apiError.message}
+            </div>
           )}
           <AppShell
             modules={accessibleModules.length > 0 ? accessibleModules : modules}
@@ -283,13 +361,18 @@ export default function App() {
             user={user ? { username: user.username, role: user.role } : null}
             onLogout={logout}
             orgFeatures={orgFeatures || undefined}
+            permissions={(permissions || []).map((p) => p.name)}
           />
           {toast && (
-            <div className={`fixed ${toast.position==='bl' ? 'bottom-4 left-4' : toast.position==='br' ? 'bottom-4 right-4' : toast.position==='tl' ? 'top-4 left-4' : 'top-4 right-4'} z-50 px-3 py-2 text-sm border-2 shadow-[4px_4px_0_#111827] ${toast.type==='success' ? 'bg-[#d1fae5] text-[#065f46] border-[#065f46]' : toast.type==='error' ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#7f1d1d]' : toast.type==='warning' ? 'bg-[#fef3c7] text-[#92400e] border-[#92400e]' : 'bg-[#f3f4f6] text-[#374151] border-[#374151]'}`}>
+            <div
+              className={`fixed ${toast.position === 'bl' ? 'bottom-4 left-4' : toast.position === 'br' ? 'bottom-4 right-4' : toast.position === 'tl' ? 'top-4 left-4' : 'top-4 right-4'} z-50 px-3 py-2 text-sm border-2 shadow-[4px_4px_0_#111827] ${toast.type === 'success' ? 'bg-[#d1fae5] text-[#065f46] border-[#065f46]' : toast.type === 'error' ? 'bg-[#fee2e2] text-[#7f1d1d] border-[#7f1d1d]' : toast.type === 'warning' ? 'bg-[#fef3c7] text-[#92400e] border-[#92400e]' : 'bg-[#f3f4f6] text-[#374151] border-[#374151]'}`}
+            >
               {toast.message}
             </div>
           )}
-          {version && <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>}
+          {version && (
+            <div className="fixed bottom-2 right-2 text-xs text-[#f3f2e6]">v{version}</div>
+          )}
         </>
       </FYProvider>
     )
@@ -300,13 +383,15 @@ export default function App() {
     <>
       <FYProvider>
         {apiError && (
-          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">خطا {apiError.status}: {apiError.message}</div>
+          <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 px-4 py-2 border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] shadow-[4px_4px_0_#c35c5c] text-sm">
+            خطا {apiError.status}: {apiError.message}
+          </div>
         )}
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-[var(--retro-surface-bg)] flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--retro-button-bg)] mx-auto mb-2"></div>
             <p>در حال راه‌اندازی سیستم هوشمند...</p>
-            <p className="text-xs text-gray-500 mt-2">چند ثانیه صبر کنید...</p>
+            <p className="text-xs text-[var(--retro-muted-text)] mt-2">چند ثانیه صبر کنید...</p>
           </div>
         </div>
       </FYProvider>

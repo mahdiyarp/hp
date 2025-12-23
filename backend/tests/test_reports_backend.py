@@ -1,7 +1,10 @@
-from fastapi.testclient import TestClient
 import os
 import sys
 from datetime import datetime, timedelta
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Force test DB to sqlite memory to avoid external Postgres dependency
 test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'hp_test.db'))
@@ -19,9 +22,9 @@ from app import models  # ensure models are imported so metadata has tables
 # Ensure tables exist in the test SQLite database
 DB.Base.metadata.create_all(bind=DB.engine)
 
-# Override auth dependency to return a fake user with finance_report permission
-from types import SimpleNamespace
 from app import models
+
+# Override auth dependency to return a fake user with finance_report permission
 fake_perm = models.Permission(id=0, name='finance_report', description='Finance', module='finance')
 fake_role = models.Role(id=1, name='Admin', description='Admin')
 fake_role.permissions = [fake_perm]
@@ -36,7 +39,17 @@ fake_user = SimpleNamespace(
     is_active=True,
     role_obj=fake_role,
 )
-app.dependency_overrides[get_current_user] = lambda: fake_user
+
+
+@pytest.fixture(autouse=True, scope="module")
+def override_user_dependency():
+    prev = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    yield
+    if prev is not None:
+        app.dependency_overrides[get_current_user] = prev
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
 
 client = TestClient(app)
 

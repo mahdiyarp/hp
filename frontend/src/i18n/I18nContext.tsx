@@ -34,7 +34,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         const data = await apiGet<{ language?: LanguageCode }>('/api/users/preferences')
         if (!mounted) return
         const serverLang = data?.language as LanguageCode
-        if (serverLang && (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')) {
+        if (
+          serverLang &&
+          (serverLang === 'fa' || serverLang === 'en' || serverLang === 'ar' || serverLang === 'ku')
+        ) {
           setLanguageState(serverLang)
         }
       } catch {
@@ -86,9 +89,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }
 
   const t = (key: TranslationKey, defaultValue?: string): string => {
-    const dict = translations[language]
+    const dict = translations[language] as Record<TranslationKey, string>
     const value = dict[key]
-    return typeof value === 'string' ? value : (defaultValue || key)
+    return typeof value === 'string' ? value : defaultValue || key
   }
 
   const dir = language === 'ar' || language === 'ku' || language === 'fa' ? 'rtl' : 'ltr'

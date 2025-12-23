@@ -1,0 +1,57 @@
+/* Optional Retro Theme Override
+   Adjust values below to match reference build precisely.
+   This file is loaded by index.html and will override defaults in src/index.css.
+   Keep the font declarations mirrored here so deployments that only ship this file
+   (for hotfixes) still load Yekan correctly. */
+
+@font-face {
+  font-family: 'Yekan';
+  src: url('/fonts/Yekan.woff2') format('woff2'),
+       url('/fonts/Yekan.woff') format('woff'),
+       url('/fonts/Yekan.ttf') format('truetype'),
+       local('Yekan'),
+       local('IranYekan');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  /* Layout (tuned) */
+  --hp-container-max: 72rem; /* match max-w-6xl from reference build */
+  --hp-container-px: 1.5rem; /* px-6 */
+  --hp-container-py: 1.25rem; /* py-5 */
+  --hp-sidebar-width: 288px; /* w-72 */
+
+  /* Retro palette (defaults mirror src/index.css) */
+  --retro-border: #c5bca5;
+  --retro-panel-bg: #faf4df;
+  --retro-shadow: #c5bca5;
+  --retro-table-header-bg: #d9cfb6;
+  --retro-table-header-text: #2e2720;
+  --retro-table-header-border: #b9af96;
+  --retro-button-bg: #154b5f;
+  --retro-button-bg-hover: #123d4c;
+  --retro-button-text: #f6f1df;
+  --retro-button-border: #0e2f3c;
+  --retro-heading-text: #6b5840;
+  --retro-input-bg: #f6f1df;
+  --retro-input-border: #bfb69f;
+  --retro-input-text: #2e2720;
+  --retro-input-placeholder: #6b5840;
+  --retro-input-focus: #154b5f;
+  --retro-badge-border: #b7a77a;
+  --retro-badge-bg: #f6f1df;
+  --retro-surface-bg: #e9e4d8;
+  --retro-muted-text: #6b5840;
+}
+
+body {
+  font-family: var(--hp-font-family);
+  background-color: var(--retro-surface-bg, #e9e4d8);
+}
+
+body * {
+  font-family: var(--hp-font-family) !important;
+}

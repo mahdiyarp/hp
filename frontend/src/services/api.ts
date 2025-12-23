@@ -1,4 +1,5 @@
-import authService from './auth.ts'
+import authService from './auth'
+import { isFrontendOnlyMode, mockApiRequest } from './mockApi'
 
 function appendFyParam(path: string): string {
   try {
@@ -53,7 +54,9 @@ async function parseResponse<T>(res: Response): Promise<T> {
     }
     // Broadcast a global error event for UI toast handling
     try {
-      const evt = new CustomEvent('api-error', { detail: { status: res.status, message: detail, payload } })
+      const evt = new CustomEvent('api-error', {
+        detail: { status: res.status, message: detail, payload },
+      })
       window.dispatchEvent(evt)
     } catch {}
     throw new Error(detail)
@@ -68,20 +71,53 @@ async function parseResponse<T>(res: Response): Promise<T> {
   }
 }
 
+function resolveApiPath(path: string): string {
+  if (path.startsWith('/api')) {
+    try {
+      const base = (import.meta as any)?.env?.VITE_BACKEND_URL
+      if (typeof base === 'string' && base.length > 0) {
+        return base + path
+      }
+    } catch {}
+  }
+  return path
+}
+
 export async function apiRequest<T>(
   path: string,
   method: HttpMethod = 'GET',
   init?: RequestInit,
 ): Promise<T> {
-  const response = await authService.fetchWithAuth(appendFyParam(path), {
+  const withFy = appendFyParam(path)
+  const resolvedWithFy = resolveApiPath(withFy)
+  const baseInit: RequestInit = {
     ...(init || {}),
     method,
-    // Default to Jalali date format in responses
     headers: {
       'X-Date-Format': 'jalali',
       ...(init?.headers || {}),
     },
-  })
+  }
+  if (isFrontendOnlyMode) {
+    return mockApiRequest<T>(withFy, method, baseInit)
+  }
+  let response = await authService.fetchWithAuth(resolvedWithFy, baseInit)
+  // If forbidden and we injected fy_id, retry once without fy filter
+  if (response && response.status === 403 && withFy !== path) {
+    try {
+      const evt = new CustomEvent('toast', {
+        detail: {
+          type: 'warning',
+          message: 'دسترسی سال مالی محدود است؛ تلاش بدون فیلتر...',
+          duration: 2500,
+          position: 'br',
+        },
+      })
+      window.dispatchEvent(evt)
+    } catch {}
+    const resolvedPlain = resolveApiPath(path)
+    response = await authService.fetchWithAuth(resolvedPlain, baseInit)
+  }
   return parseResponse<T>(response)
 }
 
@@ -130,4 +166,3 @@ export async function apiPut<T>(path: string, body?: unknown, init?: RequestInit
 export async function apiDelete<T>(path: string, init?: RequestInit) {
   return apiRequest<T>(path, 'DELETE', init)
 }
-

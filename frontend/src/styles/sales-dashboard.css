@@ -1,0 +1,159 @@
+.sales-trend-bar {
+  width: 14px;
+}
+
+.sales-trend-bar-fill {
+  width: 100%;
+  border-radius: 2px;
+  background-color: #154b5f;
+  transition: height 0.2s ease;
+  min-height: 4px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-0 {
+  height: 4px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-1 {
+  height: 10px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-2 {
+  height: 18px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-3 {
+  height: 26px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-4 {
+  height: 34px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-5 {
+  height: 42px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-6 {
+  height: 50px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-7 {
+  height: 60px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-8 {
+  height: 70px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-9 {
+  height: 80px;
+}
+
+.sales-trend-bar-fill.sales-trend-bar-height-10 {
+  height: 90px;
+}
+
+.dashboard-trend-bar {
+  min-width: 8px;
+}
+
+.dashboard-trend-bar-fill {
+  width: 100%;
+  border-radius: 4px;
+  background-color: #154b5f;
+  transition: height 0.3s ease;
+  min-height: 6%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-0 {
+  height: 6%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-1 {
+  height: 12%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-2 {
+  height: 20%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-3 {
+  height: 30%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-4 {
+  height: 40%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-5 {
+  height: 50%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-6 {
+  height: 60%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-7 {
+  height: 70%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-8 {
+  height: 80%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-9 {
+  height: 90%;
+}
+
+.dashboard-trend-bar-fill.dashboard-trend-bar-height-10 {
+  height: 100%;
+}
+
+.roadmap-progress-fill {
+  transition: width 0.4s ease;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-0 {
+  width: 2%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-1 {
+  width: 10%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-2 {
+  width: 20%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-3 {
+  width: 30%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-4 {
+  width: 40%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-5 {
+  width: 50%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-6 {
+  width: 60%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-7 {
+  width: 70%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-8 {
+  width: 80%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-9 {
+  width: 90%;
+}
+
+.roadmap-progress-fill.roadmap-progress-width-10 {
+  width: 100%;
+}
