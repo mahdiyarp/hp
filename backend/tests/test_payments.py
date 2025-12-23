@@ -1,4 +1,6 @@
 import os
+
+import pytest
 from fastapi.testclient import TestClient
 
 # Ensure DATABASE_URL is set before importing app modules to avoid init errors
@@ -26,7 +28,19 @@ def override_get_db():
         s.close()
 
 
-app.dependency_overrides[db.get_db] = override_get_db
+@pytest.fixture(autouse=True, scope="module")
+def override_db_dependency():
+    prev = app.dependency_overrides.get(db.get_db)
+    app.dependency_overrides[db.get_db] = override_get_db
+    try:
+        yield
+    finally:
+        if prev is not None:
+            app.dependency_overrides[db.get_db] = prev
+        else:
+            app.dependency_overrides.pop(db.get_db, None)
+
+
 client = TestClient(app)
 
 

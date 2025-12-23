@@ -8,6 +8,7 @@ import {
   retroButton,
   retroMuted,
 } from '../../components/retroTheme'
+import ModulePage from '../../components/layout/ModulePage'
 
 type SmsLine = string
 type SmsSendResult = { mobile: string; ok?: boolean; detail?: string }
@@ -38,13 +39,17 @@ export default function SmsPanel() {
     try {
       const res = await apiGet<{ items: string[] }>('/api/sms/lines')
       setLines(res.items || [])
-    } catch {}
+    } catch {
+      setLines([])
+    }
   }
   async function loadHistory() {
     try {
       const res = await apiGet<{ items: any[] }>(`/api/sms/history?limit=100`)
       setHistory(res.items || [])
-    } catch {}
+    } catch {
+      setHistory([])
+    }
   }
   async function loadMetrics() {
     try {
@@ -53,7 +58,9 @@ export default function SmsPanel() {
         points: Array<{ day: string; ok: number; fail: number }>
       }>(`/api/sms/metrics/daily?days=14`)
       setMetrics(res.points || [])
-    } catch {}
+    } catch {
+      setMetrics([])
+    }
   }
 
   async function persistBasic() {
@@ -103,7 +110,8 @@ export default function SmsPanel() {
   }, [])
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <ModulePage eyebrow="SMS Gateway" title="پنل پیامک" description="ارسال، خطوط، تاریخچه و متریک‌ها">
+    <div className="space-y-6 min-h-[50vh]" dir="rtl">
       <section className={`${retroPanelPadded} grid grid-cols-1 md:grid-cols-3 gap-4`}>
         <div className={`${retroPanel} p-4 space-y-2`}>
           <p className={retroHeading}>پیکربندی</p>
@@ -211,5 +219,6 @@ export default function SmsPanel() {
         </div>
       </section>
     </div>
+    </ModulePage>
   )
 }

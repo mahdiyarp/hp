@@ -1,3 +1,5 @@
+@import './styles/retro-forms.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,7 +9,11 @@
 /* Register Yekan using local sources only to avoid OTS errors if webfonts are missing/corrupt */
 @font-face {
   font-family: 'Yekan';
-  src: local('Yekan'), local('IranYekan');
+  src: url('/fonts/Yekan.woff2') format('woff2'),
+       url('/fonts/Yekan.woff') format('woff'),
+       url('/fonts/Yekan.ttf') format('truetype'),
+       local('Yekan'),
+       local('IranYekan');
   font-weight: 100 900;
   font-style: normal;
   font-display: swap;
@@ -111,7 +117,9 @@ html[dir='rtl'] {
 
 /* Base container spacing for consistent rhythm (variable-driven) */
 .hp-container {
+  width: 100%;
   max-width: var(--hp-container-max);
+  box-sizing: border-box;
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--hp-container-px);
@@ -126,20 +134,14 @@ html[dir='rtl'] {
   margin-left: auto;
 }
 
-/* Card panels unified padding and border */
-.hp-card {
-  @apply border-2 border-retro-panelBorder bg-retro-panel shadow-retroPanel rounded-sm p-5;
-}
+/* Card panels - استفاده از تعریف دستی در خطوط 66-72 */
 
 /* Headings unified style */
 .hp-heading {
   @apply text-xs uppercase tracking-widest5 text-retro-muted;
 }
 
-/* Form controls unified style */
-.hp-input {
-  @apply bg-[#f6f1df] border border-[#bfb69f] text-retro-text placeholder:text-retro-muted px-3 py-2 rounded-sm focus:outline-none focus:ring-2 focus:ring-retro-brand focus:border-retro-brand transition font-yekan;
-}
+/* Form controls - استفاده از تعریف دستی در خطوط 84-93 */
 
 /* Buttons unified style */
 .hp-button {

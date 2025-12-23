@@ -1,6 +1,9 @@
-from fastapi.testclient import TestClient
 import os
 import sys
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
 
 # Ensure backend app import works when running from repo root
 backend_pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -19,7 +22,6 @@ from app import models
 DB.Base.metadata.create_all(bind=DB.engine)
 
 # Override auth dependency to return a fake user
-from types import SimpleNamespace
 fake_user = SimpleNamespace(
     id=1,
     username='tester',
@@ -31,7 +33,17 @@ fake_user = SimpleNamespace(
     is_active=True,
     assistant_enabled=True,
 )
-app.dependency_overrides[get_current_user] = lambda: fake_user
+
+
+@pytest.fixture(autouse=True, scope="module")
+def override_user_dependency():
+    prev = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    yield
+    if prev is not None:
+        app.dependency_overrides[get_current_user] = prev
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
 
 client = TestClient(app)
 

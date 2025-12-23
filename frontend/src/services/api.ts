@@ -1,4 +1,5 @@
 import authService from './auth'
+import { isFrontendOnlyMode, mockApiRequest } from './mockApi'
 
 function appendFyParam(path: string): string {
   try {
@@ -96,6 +97,9 @@ export async function apiRequest<T>(
       'X-Date-Format': 'jalali',
       ...(init?.headers || {}),
     },
+  }
+  if (isFrontendOnlyMode) {
+    return mockApiRequest<T>(withFy, method, baseInit)
   }
   let response = await authService.fetchWithAuth(resolvedWithFy, baseInit)
   // If forbidden and we injected fy_id, retry once without fy filter

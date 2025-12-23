@@ -1,16 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { ModuleComponentProps } from '../../components/layout/AppShell'
+import { retroHeading, retroPanelPadded, retroButton, retroInput } from '../../components/retroTheme'
 import {
-  retroHeading,
-  retroPanel,
-  retroPanelPadded,
-  retroButton,
-  retroInput,
-  retroTableHeader,
-} from '../../components/retroTheme'
+  AutoSaveState,
+  DEFAULT_AUTO_SAVE_DELAY_MS,
+  describeAutoSaveState,
+  scheduleAutoSaveIdleReset,
+} from './autoSave'
+import { toast } from '../../utils/toast'
 import { apiGet, apiPost, apiPatch } from '../../services/api'
 import { fetchWithAuth } from '../../services/auth'
-import { toPersianDigits } from '../../utils/num'
 
 export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
   const [pingResult, setPingResult] = useState<string>('')
@@ -23,13 +22,70 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
     otp_template_id: '',
   })
   const [otpTest, setOtpTest] = useState({ mobile: '', code: '' })
-  const [saving, setSaving] = useState(false)
+  const [smsAutoSaveState, setSmsAutoSaveState] = useState<AutoSaveState>('idle')
   const [testing, setTesting] = useState(false)
   // AI Assistant
   const [aiInput, setAiInput] = useState('')
   const [aiReply, setAiReply] = useState<string>('')
   const [aiLoading, setAiLoading] = useState(false)
   const [assistantEnabled, setAssistantEnabled] = useState<boolean>(false)
+  const smsSettingsRef = useRef(smsir)
+  const smsSaveTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    smsSettingsRef.current = smsir
+  }, [smsir])
+
+  useEffect(() => {
+    return () => {
+      if (smsSaveTimer.current) {
+        window.clearTimeout(smsSaveTimer.current)
+      }
+    }
+  }, [])
+
+  const saveSmsIr = useCallback(async () => {
+    if (smsSaveTimer.current) {
+      window.clearTimeout(smsSaveTimer.current)
+      smsSaveTimer.current = null
+    }
+    setSmsAutoSaveState('saving')
+    try {
+      const current = smsSettingsRef.current
+      const payloads = [
+        { key: 'smsir_api_key', value: current.api_key },
+        { key: 'smsir_line_number', value: current.line_number },
+        { key: 'smsir_otp_template_id', value: current.otp_template_id },
+        { key: 'smsir_enabled', value: current.enabled ? 'true' : 'false' },
+      ]
+      for (const p of payloads) {
+        await apiPatch(`/api/admin/settings/${p.key}`, { value: p.value })
+      }
+      setSmsAutoSaveState('saved')
+      scheduleAutoSaveIdleReset(setSmsAutoSaveState)
+    } catch (e) {
+      console.error(e)
+      setSmsAutoSaveState('error')
+    }
+  }, [])
+
+  const scheduleSmsAutoSave = useCallback(() => {
+    setSmsAutoSaveState((prev) => (prev === 'saving' ? prev : 'pending'))
+    if (smsSaveTimer.current) {
+      window.clearTimeout(smsSaveTimer.current)
+    }
+    smsSaveTimer.current = window.setTimeout(() => {
+      void saveSmsIr()
+    }, DEFAULT_AUTO_SAVE_DELAY_MS)
+  }, [saveSmsIr])
+
+  const updateSmsir = useCallback(
+    (patch: Partial<typeof smsir>) => {
+      setSmsir((prev) => ({ ...prev, ...patch }))
+      scheduleSmsAutoSave()
+    },
+    [scheduleSmsAutoSave],
+  )
 
   async function pingApi() {
     try {
@@ -83,39 +139,18 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
     })()
   }, [])
 
-  async function saveSmsIr() {
-    setSaving(true)
-    try {
-      const payloads = [
-        { key: 'smsir_api_key', value: smsir.api_key },
-        { key: 'smsir_line_number', value: smsir.line_number },
-        { key: 'smsir_otp_template_id', value: smsir.otp_template_id },
-        { key: 'smsir_enabled', value: smsir.enabled ? 'true' : 'false' },
-      ]
-      for (const p of payloads) {
-        await apiPatch(`/api/admin/settings/${p.key}`, { value: p.value })
-      }
-      alert('تنظیمات پیامک (sms.ir) ذخیره شد')
-    } catch (e) {
-      console.error(e)
-      alert('ذخیره تنظیمات پیامک ناموفق بود')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function testOtpSend() {
     setTesting(true)
     try {
       if (!otpTest.mobile.trim() || !otpTest.code.trim()) {
-        alert('لطفاً موبایل و کد را وارد کنید')
+        toast.warning('لطفاً موبایل و کد را وارد کنید')
         return
       }
       const res = await apiPost('/api/smsir/test-otp', { ...otpTest })
-      alert(`نتیجه ارسال: ${JSON.stringify(res)}`)
+      toast.success(`نتیجه ارسال: ${JSON.stringify(res)}`)
     } catch (e) {
       console.error(e)
-      alert('ارسال کد با خطا مواجه شد')
+      toast.error('ارسال کد با خطا مواجه شد')
     } finally {
       setTesting(false)
     }
@@ -177,7 +212,7 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
               <input
                 className={`${retroInput} w-full`}
                 value={smsir.api_key}
-                onChange={(e) => setSmsir({ ...smsir, api_key: e.target.value })}
+                onChange={(e) => updateSmsir({ api_key: e.target.value })}
                 placeholder="کلید دسترسی"
               />
             </div>
@@ -186,7 +221,7 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
               <input
                 className={`${retroInput} w-full`}
                 value={smsir.line_number}
-                onChange={(e) => setSmsir({ ...smsir, line_number: e.target.value })}
+                onChange={(e) => updateSmsir({ line_number: e.target.value })}
                 placeholder="شماره خط ارسال"
               />
             </div>
@@ -195,7 +230,7 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
               <input
                 className={`${retroInput} w-full`}
                 value={smsir.otp_template_id}
-                onChange={(e) => setSmsir({ ...smsir, otp_template_id: e.target.value })}
+                onChange={(e) => updateSmsir({ otp_template_id: e.target.value })}
                 placeholder="شناسه الگو OTP"
               />
             </div>
@@ -204,17 +239,13 @@ export default function DeveloperModule({ smartDate }: ModuleComponentProps) {
                 <input
                   type="checkbox"
                   checked={smsir.enabled}
-                  onChange={(e) => setSmsir({ ...smsir, enabled: e.target.checked })}
+                  onChange={(e) => updateSmsir({ enabled: e.target.checked })}
                 />{' '}
                 فعال‌سازی
               </label>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button className={`${retroButton}`} disabled={saving} onClick={saveSmsIr}>
-              {saving ? 'در حال ذخیره...' : 'ذخیره'}
-            </button>
-          </div>
+          <span className="text-xs text-[#7a6b4f]">{describeAutoSaveState(smsAutoSaveState)}</span>
 
           <div className="mt-3">
             <p className={retroHeading}>تست ارسال OTP</p>

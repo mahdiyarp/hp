@@ -22,12 +22,14 @@
     "test:smoke": "vitest run src/smoke/navigation.test.tsx",
     "pretest:e2e": "node scripts/test-setup.cjs",
     "test:e2e": "playwright test",
+    "shot:dashboard": "node scripts/capture-dashboard.mjs",
     "prepare": "husky install"
   },
   "dependencies": {
     "@majidh1/jalalidatepicker": "^0.9.5",
     "chart.js": "^4.4.2",
     "express": "^4.18.2",
+    "grapesjs": "^0.21.5",
     "jalaali-js": "^1.1.0",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",

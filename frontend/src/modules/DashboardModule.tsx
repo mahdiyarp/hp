@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { apiGet, apiPost, apiPatch } from '../services/api'
+import { toast } from '../utils/toast'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 function AuditStatusCard() {
   const [latest, setLatest] = useState<{ ts: string; merkle_root: string; count: number } | null>(
     null,
@@ -97,6 +99,7 @@ import {
 } from '../components/retroTheme'
 import { useI18n } from '../i18n/I18nContext'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
+import '../styles/sales-dashboard.css'
 
 interface FinancialYear {
   id: number
@@ -211,6 +214,7 @@ export default function DashboardModule({
   onNavigate,
 }: ModuleComponentProps) {
   const { t } = useI18n()
+  const confirmDialog = useConfirmDialog()
   const [viewMode, setViewMode] = useState<'summary' | 'widgets'>('summary')
   // محدودیت نمایش برای جداول «فاکتورهای اخیر» و «محصولات اخیر»
   const [invoiceLimit, setInvoiceLimit] = useState<number>(() => {
@@ -437,6 +441,16 @@ export default function DashboardModule({
   }, [financialData])
 
   const maxTrend = useMemo(() => trend.reduce((acc, cur) => Math.max(acc, cur.value), 0), [trend])
+  const getTrendBarHeightClass = (value: number) => {
+    if (maxTrend <= 0 || value <= 0) return 'dashboard-trend-bar-height-0'
+    const bucket = Math.min(10, Math.max(1, Math.round((value / maxTrend) * 10)))
+    return `dashboard-trend-bar-height-${bucket}`
+  }
+  const getRoadmapProgressWidthClass = (percent: number) => {
+    if (percent <= 0) return 'roadmap-progress-width-0'
+    const bucket = Math.min(10, Math.max(1, Math.round(percent / 10)))
+    return `roadmap-progress-width-${bucket}`
+  }
 
   const handleSuggestion = (label: string | null) => {
     if (!label) return
@@ -456,11 +470,19 @@ export default function DashboardModule({
         detail: { direction, party_name: '', amount: '', reference: '', note: '' },
       }),
     )
-    window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
+    if (onNavigate) {
+      onNavigate('finance')
+    } else {
+      window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'finance' } }))
+    }
   }
 
   const openRoadmapModule = () => {
-    window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'roadmap' } }))
+    if (onNavigate) {
+      onNavigate('roadmap')
+    } else {
+      window.dispatchEvent(new CustomEvent('switch-module', { detail: { module: 'roadmap' } }))
+    }
   }
 
   const roadmapStats = useMemo(() => {
@@ -470,6 +492,7 @@ export default function DashboardModule({
     const done = checklist.filter((item) => item.done).length
     return { done, total: checklist.length, percent: Math.round((done / checklist.length) * 100) }
   }, [roadmapSummary])
+  const roadmapProgressClass = getRoadmapProgressWidthClass(roadmapStats.percent)
 
   const roadmapHighlights = useMemo(() => {
     if (!roadmapSummary) return []
@@ -496,15 +519,15 @@ export default function DashboardModule({
   const sendCheckReminder = async (check: CheckDue) => {
     const mobile = findMobileByName(check.party_name)
     if (!mobile) {
-      alert('شماره موبایل برای این طرف حساب یافت نشد.')
+      toast.warning('شماره موبایل برای این طرف حساب یافت نشد')
       return
     }
     const msg = `یادآوری سررسید چک:\nشماره: ${check.payment_number || check.id}\nمبلغ: ${formatNumberFa(check.amount)} ریال\nسررسید: ${check.due_date ? isoToJalali(check.due_date) : ''}`
     try {
       await apiPost('/api/sms/send', { to: mobile, message: msg })
-      alert('یادآور پیامک ارسال شد')
+      toast.success('یادآور پیامک ارسال شد')
     } catch (e: any) {
-      alert(`ارسال پیامک ناموفق بود: ${e?.message || ''}`)
+      toast.error(`ارسال پیامک ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -513,9 +536,9 @@ export default function DashboardModule({
       await apiPatch(`/api/payments/${check.id}`, { status: 'approved' })
       // refresh checks list
       await loadDashboardData()
-      alert('چک تایید شد')
+      toast.success('چک تایید شد')
     } catch (e: any) {
-      alert(`تایید چک ناموفق بود: ${e?.message || ''}`)
+      toast.error(`تایید چک ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -545,7 +568,7 @@ export default function DashboardModule({
       setNewWidget({ type: 'payments', title: '' })
       await reloadWidgets()
     } catch (e: any) {
-      alert(`ایجاد ویجت ناموفق بود: ${e?.message || ''}`)
+      toast.error(`ایجاد ویجت ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -554,17 +577,22 @@ export default function DashboardModule({
       await apiPatch(`/api/dashboard/widgets/${w.id}`, { enabled: !w.enabled })
       await reloadWidgets()
     } catch (e: any) {
-      alert(`به‌روزرسانی ویجت ناموفق بود: ${e?.message || ''}`)
+      toast.error(`به‌روزرسانی ویجت ناموفق بود: ${e?.message || ''}`)
     }
   }
 
   const removeWidget = async (w: DashboardWidget) => {
-    if (!confirm('این ویجت حذف شود؟')) return
+    const confirmed = await confirmDialog({
+      message: 'این ویجت حذف شود؟',
+      confirmText: 'حذف',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await apiPost(`/api/dashboard/widgets/${w.id}`, undefined, { method: 'DELETE' } as any)
       await reloadWidgets()
     } catch (e: any) {
-      alert(`حذف ویجت ناموفق بود: ${e?.message || ''}`)
+      toast.error(`حذف ویجت ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -597,7 +625,7 @@ export default function DashboardModule({
       await apiPost('/api/dashboard/widgets/reorder', payload)
       await reloadWidgets()
     } catch (e: any) {
-      alert(`تغییر ترتیب ناموفق بود: ${e?.message || ''}`)
+      toast.error(`تغییر ترتیب ناموفق بود: ${e?.message || ''}`)
     }
   }
 
@@ -616,9 +644,8 @@ export default function DashboardModule({
   // کنترل‌های نمای تنظیم‌پذیر و تعداد آیتم‌ها حذف شدند.
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-8">
-        <AuditStatusCard />
+    <div className="space-y-8">
+      <AuditStatusCard />
         {error && (
           <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
             {error}
@@ -873,13 +900,11 @@ export default function DashboardModule({
             {trend.length > 0 ? (
               <div className="h-48 flex items-end gap-1">
                 {trend.map((point) => {
-                  const ratio = maxTrend > 0 ? point.value / maxTrend : 0
-                  const barHeight = Math.max(6, ratio * 100)
+                  const heightClass = getTrendBarHeightClass(point.value)
                   return (
-                    <div key={point.label} className="flex-1 flex flex-col items-center gap-2">
+                    <div key={point.label} className="dashboard-trend-bar flex-1 flex flex-col items-center gap-2">
                       <div
-                        className={`w-full bg-[#154b5f] transition-all duration-300`}
-                        style={{ height: `${barHeight}%` }}
+                        className={`dashboard-trend-bar-fill ${heightClass}`}
                         title={`${point.label} : ${formatNumberFa(point.value)} ریال`}
                       ></div>
                       <span className="text-[10px] text-[#7a6b4f]">{point.label}</span>
@@ -990,10 +1015,7 @@ export default function DashboardModule({
                   )}
                 </div>
                 <div className="h-3 bg-[#e0d8c1] rounded-full overflow-hidden border border-[#bfb69f]">
-                  <div
-                    className="h-full bg-[#154b5f] transition-all duration-500"
-                    style={{ width: `${roadmapStats.percent}%` }}
-                  ></div>
+                  <div className={`roadmap-progress-fill ${roadmapProgressClass} h-full bg-[#154b5f]`}></div>
                 </div>
                 <p className="text-xs text-[#4b3d2d] leading-6">
                   ماژول‌های توسعه‌دهندگان، امنیت و ساختار سازمانی در این نسخه به صورت مرحله‌ای دنبال
@@ -1053,8 +1075,8 @@ export default function DashboardModule({
           </section>
         )}
 
-        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <div className={retroPanelPadded}>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <section className={retroPanelPadded}>
             <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className={retroHeading}>{t('latest_invoices')}</p>
@@ -1117,9 +1139,9 @@ export default function DashboardModule({
                 رفتن به ماژول فروش
               </button>
             </div>
-          </div>
+          </section>
 
-          <div className={retroPanelPadded}>
+          <section className={retroPanelPadded}>
             <header className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className={retroHeading}>{t('inventory_snapshot')}</p>
@@ -1175,8 +1197,8 @@ export default function DashboardModule({
                 مدیریت موجودی
               </button>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className={retroPanelPadded}>
@@ -1343,6 +1365,5 @@ export default function DashboardModule({
           </section>
         )}
       </div>
-    </div>
   )
 }

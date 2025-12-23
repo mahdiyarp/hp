@@ -8,6 +8,7 @@ import {
   retroPanelPadded,
 } from '../components/retroTheme'
 import { apiGet, apiPatch, apiPut } from '../services/api'
+import { toast } from '../utils/toast'
 import FiscalYearPanel from '../components/settings/FiscalYearPanel'
 import SmsSettingsPanel from '../components/settings/SmsSettingsPanel'
 import SmartAssistantSettingsPanel from '../components/settings/SmartAssistantSettingsPanel'
@@ -54,10 +55,6 @@ const debounce = (fn: () => void, delay: number) => {
 export default function SettingsModule({ smartDate }: ModuleComponentProps) {
   const [activeTab, setActiveTab] = useState('general')
   const [busy, setBusy] = useState(false)
-  const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'error' | null }>({
-    text: '',
-    tone: null,
-  })
   const [settings, setSettings] = useState<SettingsPayload>({
     theme: 'system',
     rtl: true,
@@ -77,11 +74,6 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
   const [fiscalYears, setFiscalYears] = useState<{ id: number; title: string }[]>([])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const showToast = (text: string, tone: 'ok' | 'error') => {
-    setToast({ text, tone })
-    setTimeout(() => setToast({ text: '', tone: null }), 2500)
-  }
-
   const loadSettings = async () => {
     setBusy(true)
     try {
@@ -94,7 +86,7 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
         // ignore fiscal list errors
       }
     } catch (err: any) {
-      showToast(err?.message || 'Settings load failed', 'error')
+      toast.error(err?.message || 'Settings load failed')
     } finally {
       setBusy(false)
     }
@@ -119,9 +111,9 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
     }
     try {
       await apiPut('/api/settings', settings)
-      if (show) showToast('Settings saved', 'ok')
+      if (show) toast.success('Settings saved')
     } catch (err: any) {
-      showToast(err?.message || 'Save failed', 'error')
+      toast.error(err?.message || 'Save failed')
     }
   }
 
@@ -160,17 +152,6 @@ export default function SettingsModule({ smartDate }: ModuleComponentProps) {
         </div>
       </header>
 
-      {toast.text && (
-        <div
-          className={`px-4 py-3 rounded-md border ${
-            toast.tone === 'ok'
-              ? 'bg-[#e6f9ef] border-[#9ac8a5] text-[#0f5132]'
-              : 'bg-[#ffe6e6] border-[#f2b1b1] text-[#8b1d1d]'
-          }`}
-        >
-          {toast.text}
-        </div>
-      )}
       {activeTab === 'neurochainx' && (
         <div className="mt-4">
           <NeuroChainXPanel />

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ModuleComponentProps } from '../../components/layout/AppShell'
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '../../services/api'
 import {
@@ -10,6 +10,14 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../../components/retroTheme'
+import {
+  AutoSaveState,
+  DEFAULT_AUTO_SAVE_DELAY_MS,
+  describeAutoSaveState,
+  scheduleAutoSaveIdleReset,
+} from './autoSave'
+import { toast } from '../../utils/toast'
+import { useConfirmDialog } from '../../context/ConfirmDialogContext'
 
 interface User {
   id: number
@@ -76,6 +84,19 @@ interface UserSmsSettingsPayload {
   }
 }
 
+const createUserSmsDefaults = (): UserSmsSettingsPayload => ({
+  enable_notifications: true,
+  notifications: {
+    invoice_finalize: true,
+    payment_received: true,
+    cheque_due_reminder: true,
+    fiscal_year_close: false,
+  },
+  schedule: { daily_reminder_hour: 9, timezone: 'Asia/Tehran' },
+})
+
+const AUTO_SAVE_DELAY_MS = DEFAULT_AUTO_SAVE_DELAY_MS
+
 export default function AccessControlModule({}: ModuleComponentProps) {
   const [users, setUsers] = useState<User[]>([])
   const [userSortKey, setUserSortKey] = useState<
@@ -128,10 +149,117 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   const [savingUserSmsId, setSavingUserSmsId] = useState<number | null>(null)
   const [activityPage, setActivityPage] = useState(1)
   const [activityPageSize, setActivityPageSize] = useState(10)
+  const [userPermAutoSave, setUserPermAutoSave] = useState<Record<number, AutoSaveState>>({})
+  const [userSmsAutoSave, setUserSmsAutoSave] = useState<Record<number, AutoSaveState>>({})
+  const [smsSettingsStatus, setSmsSettingsStatus] = useState<AutoSaveState>('idle')
+  const userPermsRef = useRef(userPerms)
+  const userSmsRef = useRef(userSms)
+  const smsSettingsRef = useRef(smsSettings)
+  const permSaveTimers = useRef<Record<number, number>>({})
+  const smsPrefSaveTimers = useRef<Record<number, number>>({})
+  const smsSettingsTimer = useRef<number | null>(null)
+  const confirmDialog = useConfirmDialog()
 
   useEffect(() => {
     void load()
   }, [])
+
+  useEffect(() => {
+    userPermsRef.current = userPerms
+  }, [userPerms])
+
+  useEffect(() => {
+    userSmsRef.current = userSms
+  }, [userSms])
+
+
+  useEffect(() => {
+    smsSettingsRef.current = smsSettings
+  }, [smsSettings])
+
+  useEffect(() => {
+    return () => {
+      Object.values(permSaveTimers.current).forEach((timerId) => window.clearTimeout(timerId))
+      Object.values(smsPrefSaveTimers.current).forEach((timerId) => window.clearTimeout(timerId))
+      if (smsSettingsTimer.current) window.clearTimeout(smsSettingsTimer.current)
+    }
+  }, [])
+
+  const scheduleUserPermAutoSave = useCallback((userId: number) => {
+    if (!userId) return
+    setUserPermAutoSave((prev) => ({ ...prev, [userId]: 'pending' }))
+    if (permSaveTimers.current[userId]) {
+      window.clearTimeout(permSaveTimers.current[userId])
+    }
+    permSaveTimers.current[userId] = window.setTimeout(() => {
+      void saveUserPerms(userId)
+    }, AUTO_SAVE_DELAY_MS)
+  }, [])
+
+  const scheduleUserSmsAutoSave = useCallback((userId: number) => {
+    if (!userId) return
+    setUserSmsAutoSave((prev) => ({ ...prev, [userId]: 'pending' }))
+    if (smsPrefSaveTimers.current[userId]) {
+      window.clearTimeout(smsPrefSaveTimers.current[userId])
+    }
+    smsPrefSaveTimers.current[userId] = window.setTimeout(() => {
+      void saveUserSms(userId)
+    }, AUTO_SAVE_DELAY_MS)
+  }, [])
+
+  const scheduleSmsSettingsSave = useCallback(() => {
+    setSmsSettingsStatus((prev) => (prev === 'saving' ? prev : 'pending'))
+    if (smsSettingsTimer.current) {
+      window.clearTimeout(smsSettingsTimer.current)
+    }
+    smsSettingsTimer.current = window.setTimeout(() => {
+      void saveSmsSettings()
+    }, AUTO_SAVE_DELAY_MS)
+  }, [])
+
+  const updateUserPermFlag = useCallback(
+    (userId: number, permId: number, value: boolean) => {
+      setUserPerms((prev) => ({
+        ...prev,
+        [userId]: { ...(prev[userId] ?? {}), [permId]: value },
+      }))
+      scheduleUserPermAutoSave(userId)
+    },
+    [scheduleUserPermAutoSave],
+  )
+
+  const updateUserSmsPref = useCallback(
+    (userId: number, updater: (prev: UserSmsSettingsPayload) => UserSmsSettingsPayload) => {
+      setUserSms((prev) => {
+        const defaults = createUserSmsDefaults()
+        const baseValue = prev[userId]
+        const base = {
+          ...defaults,
+          ...baseValue,
+          notifications: {
+            ...defaults.notifications,
+            ...(baseValue?.notifications ?? {}),
+          },
+          schedule: {
+            ...defaults.schedule,
+            ...(baseValue?.schedule ?? {}),
+          },
+        }
+        const next = updater(base)
+        return { ...prev, [userId]: next }
+      })
+      scheduleUserSmsAutoSave(userId)
+    },
+    [scheduleUserSmsAutoSave],
+  )
+
+  const updateSmsSettings = useCallback(
+    (updater: (prev: SmsSettingsPayload) => SmsSettingsPayload) => {
+      setSmsSettings((prev) => updater({ ...prev }))
+      scheduleSmsSettingsSave()
+    },
+    [scheduleSmsSettingsSave],
+  )
 
   async function load() {
     setLoading(true)
@@ -151,7 +279,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
           try {
             const parsed = JSON.parse(String(smsKey))
             if (parsed && typeof parsed === 'object') {
-              setSmsSettings({ ...smsSettings, ...parsed })
+              setSmsSettings((prev) => ({ ...prev, ...parsed }))
             }
           } catch (_) {}
         }
@@ -233,28 +361,41 @@ export default function AccessControlModule({}: ModuleComponentProps) {
 
   async function createOrUpdateRole() {
     const payload = { name: roleForm.name.trim(), description: roleForm.description?.trim() ?? '' }
-    if (!payload.name) return alert('نام نقش الزامی است')
+    if (!payload.name) {
+      toast.warning('نام نقش الزامی است')
+      return
+    }
     try {
       if (roleForm.id) {
         const updated = await apiPatch<Role>(`/api/roles/${roleForm.id}`, payload)
         setRoles((rs) => rs.map((r) => (r.id === updated.id ? updated : r)))
+        toast.success('نقش بروزرسانی شد')
       } else {
         const created = await apiPost<Role>('/api/roles', payload)
         setRoles((rs) => [created, ...rs])
+        toast.success('نقش ایجاد شد')
       }
       setRoleForm({ name: '', description: '' })
     } catch (e) {
-      alert('ثبت نقش ناموفق بود')
+      toast.error('ثبت نقش ناموفق بود')
     }
   }
 
-  async function deleteRole(id: number) {
-    if (!confirm('حذف این نقش؟')) return
+  async function deleteRole(role: Role) {
+    const ok = await confirmDialog({
+      title: 'حذف نقش',
+      message: `نقش «${role.name}» حذف شود؟`,
+      confirmText: 'حذف',
+      cancelText: 'بازگشت',
+      tone: 'danger',
+    })
+    if (!ok) return
     try {
-      await apiDelete(`/api/roles/${id}`)
-      setRoles((rs) => rs.filter((r) => r.id !== id))
+      await apiDelete(`/api/roles/${role.id}`)
+      setRoles((rs) => rs.filter((r) => r.id !== role.id))
+      toast.success('نقش حذف شد')
     } catch (e) {
-      alert('حذف نقش ناموفق بود')
+      toast.error('حذف نقش ناموفق بود')
     }
   }
 
@@ -265,18 +406,23 @@ export default function AccessControlModule({}: ModuleComponentProps) {
       email: (userForm.email ?? '').trim() || null,
       role_id: userForm.role_id ?? null,
     }
-    if (!payload.username) return alert('نام کاربری الزامی است')
+    if (!payload.username) {
+      toast.warning('نام کاربری الزامی است')
+      return
+    }
     try {
       if (userForm.id) {
         const updated = await apiPatch<User>(`/api/users/${userForm.id}`, payload)
         setUsers((us) => us.map((u) => (u.id === updated.id ? updated : u)))
+        toast.success('کاربر بروزرسانی شد')
       } else {
         const created = await apiPost<User>('/api/users', payload)
         setUsers((us) => [created, ...us])
+        toast.success('کاربر ایجاد شد')
       }
       setUserForm({ username: '', full_name: '', email: '', role_id: null })
     } catch (e) {
-      alert('ثبت کاربر ناموفق بود')
+      toast.error('ثبت کاربر ناموفق بود')
     }
   }
 
@@ -288,32 +434,47 @@ export default function AccessControlModule({}: ModuleComponentProps) {
   }
 
   async function saveUserPerms(userId: number) {
+    if (permSaveTimers.current[userId]) {
+      window.clearTimeout(permSaveTimers.current[userId])
+      delete permSaveTimers.current[userId]
+    }
     setSavingUserPermId(userId)
+    setUserPermAutoSave((prev) => ({ ...prev, [userId]: 'saving' }))
     try {
-      await apiPut(`/api/users/${userId}/permissions`, userPerms[userId] ?? {})
+      const payload = userPermsRef.current[userId] ?? {}
+      await apiPut(`/api/users/${userId}/permissions`, payload)
+      setUserPermAutoSave((prev) => ({ ...prev, [userId]: 'saved' }))
+      window.setTimeout(() => {
+        setUserPermAutoSave((prev) => ({ ...prev, [userId]: 'idle' }))
+      }, 2000)
     } catch (e) {
+      setUserPermAutoSave((prev) => ({ ...prev, [userId]: 'error' }))
     } finally {
-      setSavingUserPermId(null)
+      setSavingUserPermId((prev) => (prev === userId ? null : prev))
     }
   }
 
   async function saveSmsSettings() {
-    setSavingSms(true)
+    if (smsSettingsTimer.current) {
+      window.clearTimeout(smsSettingsTimer.current)
+      smsSettingsTimer.current = null
+    }
+    setSmsSettingsStatus('saving')
     try {
-      // Store sms.ir keys individually so backend picks them up
+      const current = smsSettingsRef.current
       const kv: Record<string, string> = {}
-      if (smsSettings.api_key) kv['smsir_api_key'] = String(smsSettings.api_key)
-      if (smsSettings.sender) kv['smsir_line_number'] = String(smsSettings.sender)
-      if ((smsSettings as any).otp_template_id)
-        kv['smsir_otp_template_id'] = String((smsSettings as any).otp_template_id)
-      kv['smsir_enabled'] = String((smsSettings.provider ?? '').toLowerCase() === 'sms.ir')
+      if (current.api_key) kv['smsir_api_key'] = String(current.api_key)
+      if (current.sender) kv['smsir_line_number'] = String(current.sender)
+      if ((current as any).otp_template_id)
+        kv['smsir_otp_template_id'] = String((current as any).otp_template_id)
+      kv['smsir_enabled'] = String((current.provider ?? '').toLowerCase() === 'sms.ir')
       for (const [key, value] of Object.entries(kv)) {
         await apiPut(`/api/admin/settings/${key}`, { value })
       }
+      setSmsSettingsStatus('saved')
+      scheduleAutoSaveIdleReset(setSmsSettingsStatus)
     } catch (e) {
-      // ignore
-    } finally {
-      setSavingSms(false)
+      setSmsSettingsStatus('error')
     }
   }
 
@@ -326,18 +487,18 @@ export default function AccessControlModule({}: ModuleComponentProps) {
       ) {
         const res = await apiPost<any>('/api/smsir/test-otp', { mobile: testSmsTo, code: '123456' })
         const msg = res?.detail ? 'ارسال OTP (sms.ir) انجام شد' : 'ارسال OTP انجام شد'
-        alert(msg)
+        toast.success(msg)
       } else {
         // برای درگاه‌های عمومی یا زمانی که sms.ir تنظیم نشده، از تست عمومی استفاده کن
         const res = await apiPost<{ sent?: boolean; detail?: string }>('/api/sms/test', {
           mobile: testSmsTo,
           message: testSmsText,
         })
-        alert(res?.detail || 'پیام تستی ارسال شد')
+        toast.success(res?.detail || 'پیام تستی ارسال شد')
       }
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : 'ارسال پیام تستی ناموفق بود.'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setSavingSms(false)
     }
@@ -351,23 +512,37 @@ export default function AccessControlModule({}: ModuleComponentProps) {
         mobile: testSmsTo,
         message: testSmsText,
       })
-      alert(res?.detail || (res?.sent ? 'پیام ارسال شد' : 'ارسال ناموفق بود'))
+      const fallback = res?.detail || (res?.sent ? 'پیام ارسال شد' : 'ارسال ناموفق بود')
+      if (res?.sent === false) {
+        toast.error(fallback)
+      } else {
+        toast.success(fallback)
+      }
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : 'ارسال عمومی پیامک ناموفق بود.'
-      alert(msg)
+      toast.error(msg)
     } finally {
       setSavingSms(false)
     }
   }
 
   async function saveUserSms(userId: number) {
+    if (smsPrefSaveTimers.current[userId]) {
+      window.clearTimeout(smsPrefSaveTimers.current[userId])
+      delete smsPrefSaveTimers.current[userId]
+    }
     setSavingUserSmsId(userId)
+    setUserSmsAutoSave((prev) => ({ ...prev, [userId]: 'saving' }))
     try {
-      await apiPut(`/api/users/${userId}/preferences/sms`, userSms[userId] ?? {})
+      await apiPut(`/api/users/${userId}/preferences/sms`, userSmsRef.current[userId] ?? {})
+      setUserSmsAutoSave((prev) => ({ ...prev, [userId]: 'saved' }))
+      window.setTimeout(() => {
+        setUserSmsAutoSave((prev) => ({ ...prev, [userId]: 'idle' }))
+      }, 2000)
     } catch (e) {
-      // ignore
+      setUserSmsAutoSave((prev) => ({ ...prev, [userId]: 'error' }))
     } finally {
-      setSavingUserSmsId(null)
+      setSavingUserSmsId((prev) => (prev === userId ? null : prev))
     }
   }
 
@@ -449,7 +624,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   >
                     ویرایش
                   </button>
-                  <button className={retroButton} onClick={() => deleteRole(r.id)}>
+                  <button className={retroButton} onClick={() => deleteRole(r)}>
                     حذف
                   </button>
                 </td>
@@ -559,9 +734,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                     role_id: userForm.role_id ?? undefined,
                   }
                   const res = await apiPost('/api/admin/users/invite', payload)
-                  alert('دعوت ارسال شد')
+                  toast.success('دعوت ارسال شد')
                 } catch (e) {
-                  alert('ارسال دعوت ناموفق بود')
+                  toast.error('ارسال دعوت ناموفق بود')
                 }
               }}
             >
@@ -658,7 +833,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
               </th>
               <th>اعلان‌های پیامک</th>
               <th>تخصیص مجوزها</th>
-              <th>ذخیره</th>
+              <th>وضعیت ذخیره‌سازی</th>
               <th>ویرایش</th>
             </tr>
           </thead>
@@ -705,16 +880,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   <td>{u.is_active ? 'فعال' : 'غیرفعال'}</td>
                   <td>
                     {(() => {
-                      const pref = userSms[u.id] ?? {
-                        enable_notifications: true,
-                        notifications: {
-                          invoice_finalize: true,
-                          payment_received: true,
-                          cheque_due_reminder: true,
-                          fiscal_year_close: false,
-                        },
-                        schedule: { daily_reminder_hour: 9, timezone: 'Asia/Tehran' },
-                      }
+                      const pref = userSms[u.id] ?? createUserSmsDefaults()
                       return (
                         <div className="grid grid-cols-2 gap-2">
                           <label className="flex items-center gap-2">
@@ -723,9 +889,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               type="checkbox"
                               checked={!!pref.enable_notifications}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: { ...pref, enable_notifications: e.target.checked },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  enable_notifications: e.target.checked,
                                 }))
                               }
                             />
@@ -737,14 +903,11 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               type="checkbox"
                               checked={!!pref.notifications?.invoice_finalize}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    notifications: {
-                                      ...pref.notifications,
-                                      invoice_finalize: e.target.checked,
-                                    },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  notifications: {
+                                    ...prev.notifications,
+                                    invoice_finalize: e.target.checked,
                                   },
                                 }))
                               }
@@ -757,14 +920,11 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               type="checkbox"
                               checked={!!pref.notifications?.payment_received}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    notifications: {
-                                      ...pref.notifications,
-                                      payment_received: e.target.checked,
-                                    },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  notifications: {
+                                    ...prev.notifications,
+                                    payment_received: e.target.checked,
                                   },
                                 }))
                               }
@@ -777,14 +937,11 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               type="checkbox"
                               checked={!!pref.notifications?.cheque_due_reminder}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    notifications: {
-                                      ...pref.notifications,
-                                      cheque_due_reminder: e.target.checked,
-                                    },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  notifications: {
+                                    ...prev.notifications,
+                                    cheque_due_reminder: e.target.checked,
                                   },
                                 }))
                               }
@@ -797,14 +954,11 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               type="checkbox"
                               checked={!!pref.notifications?.fiscal_year_close}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    notifications: {
-                                      ...pref.notifications,
-                                      fiscal_year_close: e.target.checked,
-                                    },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  notifications: {
+                                    ...prev.notifications,
+                                    fiscal_year_close: e.target.checked,
                                   },
                                 }))
                               }
@@ -819,14 +973,11 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               max={23}
                               value={pref.schedule?.daily_reminder_hour ?? 9}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    schedule: {
-                                      ...pref.schedule,
-                                      daily_reminder_hour: Number(e.target.value),
-                                    },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  schedule: {
+                                    ...prev.schedule,
+                                    daily_reminder_hour: Number(e.target.value),
                                   },
                                 }))
                               }
@@ -835,23 +986,18 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               className="input"
                               value={pref.schedule?.timezone ?? 'Asia/Tehran'}
                               onChange={(e) =>
-                                setUserSms((s) => ({
-                                  ...s,
-                                  [u.id]: {
-                                    ...pref,
-                                    schedule: { ...pref.schedule, timezone: e.target.value },
-                                  },
+                                updateUserSmsPref(u.id, (prev) => ({
+                                  ...prev,
+                                  schedule: { ...prev.schedule, timezone: e.target.value },
                                 }))
                               }
                             />
                           </div>
-                          <button
-                            className={retroButton}
-                            onClick={() => saveUserSms(u.id)}
-                            disabled={savingUserSmsId === u.id}
-                          >
-                            {savingUserSmsId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
-                          </button>
+                          <div className="col-span-2 text-xs text-[#7a6b4f]">
+                            {describeAutoSaveState(userSmsAutoSave[u.id] ?? 'idle', {
+                              forceSaving: savingUserSmsId === u.id,
+                            })}
+                          </div>
                         </div>
                       )
                     })()}
@@ -867,12 +1013,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                               <input
                                 type="checkbox"
                                 checked={current}
-                                onChange={(e) =>
-                                  setUserPerms((prev) => ({
-                                    ...prev,
-                                    [u.id]: { ...(prev[u.id] ?? {}), [p.id]: e.target.checked },
-                                  }))
-                                }
+                                onChange={(e) => updateUserPermFlag(u.id, p.id, e.target.checked)}
                               />
                               {p.name}
                             </label>
@@ -881,14 +1022,10 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                       </div>
                     </details>
                   </td>
-                  <td>
-                    <button
-                      className={`${retroButton}`}
-                      onClick={() => saveUserPerms(u.id)}
-                      disabled={savingUserPermId === u.id}
-                    >
-                      {savingUserPermId === u.id ? 'در حال ذخیره…' : 'ذخیره'}
-                    </button>
+                  <td className="text-xs text-[#7a6b4f]">
+                    {describeAutoSaveState(userPermAutoSave[u.id] ?? 'idle', {
+                      forceSaving: savingUserPermId === u.id,
+                    })}
                   </td>
                   <td>
                     <button
@@ -1085,7 +1222,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
               <select
                 className="input w-full"
                 value={smsSettings.provider}
-                onChange={(e) => setSmsSettings((s) => ({ ...s, provider: e.target.value }))}
+                onChange={(e) => updateSmsSettings((s) => ({ ...s, provider: e.target.value }))}
               >
                 <option value="sms.ir">sms.ir</option>
                 <option value="ippanel">IPPanel</option>
@@ -1094,13 +1231,13 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                 className="input w-full"
                 placeholder="API Key"
                 value={smsSettings.api_key ?? ''}
-                onChange={(e) => setSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
+                onChange={(e) => updateSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
               />
               <input
                 className="input w-full"
                 placeholder="شماره ارسال کننده"
                 value={smsSettings.sender ?? ''}
-                onChange={(e) => setSmsSettings((s) => ({ ...s, sender: e.target.value }))}
+                onChange={(e) => updateSmsSettings((s) => ({ ...s, sender: e.target.value }))}
               />
             </div>
           </div>
@@ -1112,7 +1249,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   type="checkbox"
                   checked={!!smsSettings.enable_notifications}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({ ...s, enable_notifications: e.target.checked }))
+                    updateSmsSettings((s) => ({ ...s, enable_notifications: e.target.checked }))
                   }
                 />
                 فعال‌سازی اعلان‌ها
@@ -1122,9 +1259,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   type="checkbox"
                   checked={!!smsSettings.notifications?.invoice_finalize}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({
+                    updateSmsSettings((s) => ({
                       ...s,
-                      notifications: { ...s.notifications, invoice_finalize: e.target.checked },
+                      notifications: { ...(s.notifications ?? {}), invoice_finalize: e.target.checked },
                     }))
                   }
                 />
@@ -1135,9 +1272,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   type="checkbox"
                   checked={!!smsSettings.notifications?.payment_received}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({
+                    updateSmsSettings((s) => ({
                       ...s,
-                      notifications: { ...s.notifications, payment_received: e.target.checked },
+                      notifications: { ...(s.notifications ?? {}), payment_received: e.target.checked },
                     }))
                   }
                 />
@@ -1148,9 +1285,12 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   type="checkbox"
                   checked={!!smsSettings.notifications?.cheque_due_reminder}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({
+                    updateSmsSettings((s) => ({
                       ...s,
-                      notifications: { ...s.notifications, cheque_due_reminder: e.target.checked },
+                      notifications: {
+                        ...(s.notifications ?? {}),
+                        cheque_due_reminder: e.target.checked,
+                      },
                     }))
                   }
                 />
@@ -1161,9 +1301,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   type="checkbox"
                   checked={!!smsSettings.notifications?.fiscal_year_close}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({
+                    updateSmsSettings((s) => ({
                       ...s,
-                      notifications: { ...s.notifications, fiscal_year_close: e.target.checked },
+                      notifications: { ...(s.notifications ?? {}), fiscal_year_close: e.target.checked },
                     }))
                   }
                 />
@@ -1183,9 +1323,12 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                 max={23}
                 value={smsSettings.schedule?.daily_reminder_hour ?? 9}
                 onChange={(e) =>
-                  setSmsSettings((s) => ({
+                  updateSmsSettings((s) => ({
                     ...s,
-                    schedule: { ...s.schedule, daily_reminder_hour: Number(e.target.value) },
+                    schedule: {
+                      ...(s.schedule ?? {}),
+                      daily_reminder_hour: Number(e.target.value),
+                    },
                   }))
                 }
                 placeholder="ساعت یادآور روزانه (0-23)"
@@ -1194,9 +1337,9 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                 className="input w-full"
                 value={smsSettings.schedule?.timezone ?? 'Asia/Tehran'}
                 onChange={(e) =>
-                  setSmsSettings((s) => ({
+                  updateSmsSettings((s) => ({
                     ...s,
-                    schedule: { ...s.schedule, timezone: e.target.value },
+                    schedule: { ...(s.schedule ?? {}), timezone: e.target.value },
                   }))
                 }
                 placeholder="منطقه زمانی"
@@ -1210,7 +1353,7 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                 <select
                   className="input w-full"
                   value={smsSettings.provider ?? ''}
-                  onChange={(e) => setSmsSettings((s) => ({ ...s, provider: e.target.value }))}
+                  onChange={(e) => updateSmsSettings((s) => ({ ...s, provider: e.target.value }))}
                 >
                   <option value="">انتخاب درگاه…</option>
                   <option value="sms.ir">SMS.ir</option>
@@ -1220,26 +1363,26 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                   className="input w-full"
                   placeholder="شماره خط ارسال (line_number)"
                   value={smsSettings.sender ?? ''}
-                  onChange={(e) => setSmsSettings((s) => ({ ...s, sender: e.target.value }))}
+                  onChange={(e) => updateSmsSettings((s) => ({ ...s, sender: e.target.value }))}
                 />
                 <input
                   className="input w-full"
                   placeholder="API Key"
                   value={smsSettings.api_key ?? ''}
-                  onChange={(e) => setSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
+                  onChange={(e) => updateSmsSettings((s) => ({ ...s, api_key: e.target.value }))}
                 />
                 <input
                   className="input w-full"
                   placeholder="Secret Key"
                   value={smsSettings.secret_key ?? ''}
-                  onChange={(e) => setSmsSettings((s) => ({ ...s, secret_key: e.target.value }))}
+                  onChange={(e) => updateSmsSettings((s) => ({ ...s, secret_key: e.target.value }))}
                 />
                 <input
                   className="input w-full"
                   placeholder="OTP Template ID (sms.ir)"
                   value={(smsSettings as any).otp_template_id ?? ''}
                   onChange={(e) =>
-                    setSmsSettings((s) => ({ ...s, otp_template_id: e.target.value }))
+                    updateSmsSettings((s) => ({ ...s, otp_template_id: e.target.value }))
                   }
                 />
               </div>
@@ -1255,16 +1398,18 @@ export default function AccessControlModule({}: ModuleComponentProps) {
                 value={testSmsTo}
                 onChange={(e) => setTestSmsTo(e.target.value)}
               />
-              <div className="flex gap-2">
-                <button className={retroButton} onClick={saveSmsSettings} disabled={savingSms}>
-                  {savingSms ? 'در حال ذخیره…' : 'ذخیره تنظیمات'}
-                </button>
-                <button className={retroButton} onClick={sendTestSms} disabled={savingSms}>
-                  {savingSms ? 'در حال ارسال…' : 'ارسال OTP تستی'}
-                </button>
-                <button className={retroButton} onClick={sendGenericSms} disabled={savingSms}>
-                  {savingSms ? 'در حال ارسال…' : 'ارسال متن دلخواه'}
-                </button>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-[#7a6b4f]">
+                  {describeAutoSaveState(smsSettingsStatus)}
+                </span>
+                <div className="flex gap-2">
+                  <button className={retroButton} onClick={sendTestSms} disabled={savingSms}>
+                    {savingSms ? 'در حال ارسال…' : 'ارسال OTP تستی'}
+                  </button>
+                  <button className={retroButton} onClick={sendGenericSms} disabled={savingSms}>
+                    {savingSms ? 'در حال ارسال…' : 'ارسال متن دلخواه'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

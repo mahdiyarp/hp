@@ -1,5 +1,17 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import authService, { clearTokens, getAccessToken, getRefreshToken } from '../services/auth'
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import authService, {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from '../services/auth'
+import { modules as moduleDefinitions } from '../modules'
+import {
+  DEMO_MODULE_IDS,
+  DEMO_PERMISSIONS,
+  DEMO_USER,
+  isFrontendOnlyMode,
+} from '../services/mockApi'
 
 type User = { id: number; username: string; role: string; otp_enabled: boolean }
 
@@ -39,45 +51,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [modules, setModules] = useState<string[]>([])
   const [permissions, setPermissions] = useState<Permission[]>([])
 
+  const developerRoles = new Set(['Developer', 'Developer NFT'])
+  const allModuleIds = useMemo(() => moduleDefinitions.map((m) => m.id), [])
+
+  const withDeveloperModules = (roleName: string | null | undefined, list: string[]) => {
+    if (roleName && developerRoles.has(roleName)) {
+      return Array.from(new Set([...list, ...allModuleIds]))
+    }
+    return list
+  }
+
   useEffect(() => {
+    if (isFrontendOnlyMode) {
+      const demoAccess = `${DEMO_USER.username}-access`
+      const demoRefresh = `${DEMO_USER.username}-refresh`
+      if (!getAccessToken()) {
+        setTokens(demoAccess, demoRefresh)
+      }
+      setUser({ ...DEMO_USER })
+      setModules([...DEMO_MODULE_IDS])
+      setPermissions(
+        DEMO_PERMISSIONS.map((name, idx) => ({
+          id: 8000 + idx,
+          name,
+          description: `مجوز ${name}`,
+          module: 'demo',
+        })),
+      )
+      try {
+        localStorage.setItem('hesabpak_user_id', String(DEMO_USER.id))
+      } catch {}
+      return
+    }
     // try to fetch /api/auth/me
     async function load() {
       // Gate network calls until توکن داریم
       const hasAnyToken = !!getAccessToken() || !!getRefreshToken()
       if (!hasAnyToken) return
       try {
-        const res = await authService.fetchWithAuth('/api/auth/me')
-        if (!res.ok) {
-          // If unauthorized but we have a token, retry once shortly
-          if (res.status === 401 && getAccessToken()) {
+        let meResp = await authService.fetchWithAuth('/api/auth/me')
+        if (!meResp.ok) {
+          if (meResp.status === 401 && getAccessToken()) {
             await new Promise((r) => setTimeout(r, 300))
-            const retry = await authService.fetchWithAuth('/api/auth/me')
-            if (!retry.ok) return
-            const data = await retry.json()
-            setUser({
-              id: data.id,
-              username: data.username,
-              role: data.role,
-              otp_enabled: data.otp_enabled,
-            })
-            try {
-              localStorage.setItem('hesabpak_user_id', String(data.id))
-            } catch {}
+            meResp = await authService.fetchWithAuth('/api/auth/me')
+            if (!meResp.ok) return
           } else {
             return
           }
-        } else {
-          const data = await res.json()
-          setUser({
-            id: data.id,
-            username: data.username,
-            role: data.role,
-            otp_enabled: data.otp_enabled,
-          })
-          try {
-            localStorage.setItem('hesabpak_user_id', String(data.id))
-          } catch {}
         }
+        const data = await meResp.json()
+        setUser({
+          id: data.id,
+          username: data.username,
+          role: data.role,
+          otp_enabled: data.otp_enabled,
+        })
+        try {
+          localStorage.setItem('hesabpak_user_id', String(data.id))
+        } catch {}
 
         // Fetch user's modules and permissions with light retry
         const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
@@ -90,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (modsRes2.ok) {
           const mods = await modsRes2.json()
           const finalMods = Array.isArray(mods) ? mods : []
-          setModules(finalMods)
+          setModules(withDeveloperModules(data?.role, finalMods))
           try {
             console.debug('[Auth] loaded user role/modules', { modules: finalMods })
           } catch {}
@@ -140,6 +171,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   const login = async (u: string, p: string, otp?: string) => {
+    if (isFrontendOnlyMode) {
+      const demoAccess = `${DEMO_USER.username}-access`
+      const demoRefresh = `${DEMO_USER.username}-refresh`
+      setTokens(demoAccess, demoRefresh)
+      setUser({ ...DEMO_USER })
+      setModules([...DEMO_MODULE_IDS])
+      setPermissions(
+        DEMO_PERMISSIONS.map((name, idx) => ({
+          id: 8100 + idx,
+          name,
+          description: `مجوز ${name}`,
+          module: 'demo',
+        })),
+      )
+      return { otpRequired: false }
+    }
     const result = await authService.login(u, p, otp)
     if ('otpRequired' in result && result.otpRequired) {
       return { otpRequired: true }
@@ -158,7 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (modsRes.ok) {
         const mods = await modsRes.json()
         const finalMods = Array.isArray(mods) ? mods : []
-        setModules(finalMods)
+        setModules(withDeveloperModules(d.role, finalMods))
         try {
           console.debug('[Auth] post-login user role/modules', { role: d.role, modules: finalMods })
         } catch (e) {}
@@ -174,6 +221,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const loginPhone = async (mobile: string, otpCode?: string, sessionId?: string) => {
+    if (isFrontendOnlyMode) {
+      const demoAccess = `${DEMO_USER.username}-access`
+      const demoRefresh = `${DEMO_USER.username}-refresh`
+      setTokens(demoAccess, demoRefresh)
+      setUser({ ...DEMO_USER })
+      setModules([...DEMO_MODULE_IDS])
+      setPermissions(
+        DEMO_PERMISSIONS.map((name, idx) => ({
+          id: 8200 + idx,
+          name,
+          description: `مجوز ${name}`,
+          module: 'demo',
+        })),
+      )
+      return { needsOtp: false }
+    }
     if (!otpCode) {
       await authService.loginByPhoneRequest(mobile)
       return { needsOtp: true }
@@ -186,7 +249,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const modsRes = await authService.fetchWithAuth('/api/current-user/modules')
       if (modsRes.ok) {
         const mods = await modsRes.json()
-        setModules(Array.isArray(mods) ? mods : [])
+        const finalMods = Array.isArray(mods) ? mods : []
+        setModules(withDeveloperModules(d.role, finalMods))
       }
       const permsRes = await authService.fetchWithAuth('/api/current-user/permissions')
       if (permsRes.ok) {
@@ -198,6 +262,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   const logout = () => {
+    if (isFrontendOnlyMode) {
+      clearTokens()
+      setUser(null)
+      setModules([])
+      setPermissions([])
+      return
+    }
     authService
       .fetchWithAuth('/api/auth/logout', { method: 'POST' })
       .catch(() => null)

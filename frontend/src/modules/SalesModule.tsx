@@ -27,6 +27,8 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import '../styles/sales-dashboard.css'
+import { toast } from '../utils/toast'
 
 interface Payment {
   id: number
@@ -204,6 +206,15 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
   const [salesTrendSeries, setSalesTrendSeries] = useState<Array<{ day: string; total: number }>>(
     [],
   )
+  const salesTrendMax = useMemo(() => {
+    if (!salesTrendSeries.length) return 0
+    return salesTrendSeries.reduce((maxValue, point) => Math.max(maxValue, point.total), 0)
+  }, [salesTrendSeries])
+  const getTrendHeightClass = (value: number) => {
+    if (salesTrendMax <= 0 || value <= 0) return 'sales-trend-bar-height-0'
+    const bucket = Math.min(10, Math.max(1, Math.round((value / salesTrendMax) * 10)))
+    return `sales-trend-bar-height-${bucket}`
+  }
   const [salesKpiLoading, setSalesKpiLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -268,6 +279,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
     const [q, setQ] = useState('')
     const [items, setItems] = useState<Array<{ id: string; name: string; mobile?: string }>>([])
     const [loading, setLoading] = useState(false)
+    const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+    const [quickName, setQuickName] = useState('')
+    const [quickMobile, setQuickMobile] = useState('')
+    const [quickBusy, setQuickBusy] = useState(false)
+    const [quickError, setQuickError] = useState<string | null>(null)
     async function search(s: string) {
       setLoading(true)
       try {
@@ -282,6 +298,35 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
     useEffect(() => {
       search('')
     }, [])
+
+    const submitQuickCreate = async () => {
+      const trimmedName = quickName.trim()
+      if (!trimmedName) {
+        setQuickError('نام طرف حساب لازم است')
+        return
+      }
+      setQuickBusy(true)
+      setQuickError(null)
+      try {
+        const payload = {
+          name: trimmedName,
+          mobile: quickMobile.trim() || undefined,
+          kind: 'customer',
+        }
+        const p = await apiPost('/api/people/quick-create', payload)
+        onSelect(p as any)
+        toast.success('طرف‌حساب جدید ساخته شد')
+        setQuickName('')
+        setQuickMobile('')
+        setQuickCreateOpen(false)
+      } catch (err: any) {
+        const message = err?.message || 'ایجاد سریع ناموفق بود'
+        setQuickError(message)
+        toast.error(message)
+      } finally {
+        setQuickBusy(false)
+      }
+    }
     return (
       <div className="space-y-2">
         <div className="flex gap-2">
@@ -307,18 +352,10 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
           </button>
           <button
             className={retroButton}
-            onClick={async () => {
-              const name = prompt('نام طرف‌حساب؟')
-              if (!name) return
-              const mobile = prompt('شماره موبایل (اختیاری)؟') || undefined
-              try {
-                const p = await apiPost('/api/people/quick-create', {
-                  name,
-                  mobile,
-                  kind: 'customer',
-                })
-                onSelect(p as any)
-              } catch {}
+            type="button"
+            onClick={() => {
+              setQuickCreateOpen((prev) => !prev)
+              setQuickError(null)
             }}
           >
             ایجاد سریع
@@ -342,6 +379,56 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
             نمایه‌های پابلیک
           </button>
         </div>
+        {quickCreateOpen && (
+          <div className="border border-dashed border-[#c5bca5] bg-[#fdfaf1] rounded p-3 space-y-2 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className={`${retroMuted} text-[11px]`}>نام طرف حساب *</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  placeholder="مثلاً فروشگاه یاس"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={`${retroMuted} text-[11px]`}>شماره موبایل (اختیاری)</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={quickMobile}
+                  onChange={(e) => setQuickMobile(e.target.value)}
+                  placeholder="0912xxxxxxx"
+                  inputMode="tel"
+                />
+              </div>
+            </div>
+            {quickError && <p className="text-xs text-red-700">{quickError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`${retroButton} ${quickBusy ? 'opacity-60' : ''}`}
+                onClick={submitQuickCreate}
+                disabled={quickBusy}
+              >
+                {quickBusy ? 'در حال ایجاد...' : 'ثبت سریع'}
+              </button>
+              <button
+                type="button"
+                className={`${retroButton} !bg-[#bfb69f] text-[#2e2720]`}
+                onClick={() => {
+                  setQuickCreateOpen(false)
+                  setQuickName('')
+                  setQuickMobile('')
+                  setQuickError(null)
+                }}
+                disabled={quickBusy}
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
+        )}
         <div className="border rounded p-2 max-h-40 overflow-auto">
           {loading ? (
             <div className="text-xs">در حال جستجو…</div>
@@ -1225,17 +1312,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                 {salesTrendSeries.length > 0 ? (
                   <div className="flex items-end gap-1 mt-3 h-24">
                     {salesTrendSeries.map((pt) => {
-                      const max = Math.max(...salesTrendSeries.map((p) => p.total), 1)
-                      const h = Math.round((pt.total / max) * 90)
+                      const heightClass = getTrendHeightClass(pt.total)
                       return (
-                        <div
-                          key={pt.day}
-                          className="flex flex-col items-center"
-                          style={{ width: '14px' }}
-                        >
+                        <div key={pt.day} className="sales-trend-bar flex flex-col items-center">
                           <div
-                            style={{ height: `${h}px` }}
-                            className="w-full bg-[#154b5f] rounded-sm"
+                            className={`sales-trend-bar-fill ${heightClass}`}
                             title={`${pt.day}: ${formatNumberFa(pt.total)}`}
                           ></div>
                           <div className="text-[8px] mt-1 rotate-[-45deg] origin-top-left text-[#7a6b4f]">
@@ -1312,6 +1393,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
               </div>
               {saleOrderItems.map((it, idx) => {
                 const rowSubtotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
+                const rowIdBase = `sale-order-item-${idx}`
+                const descriptionId = `${rowIdBase}-description`
+                const quantityId = `${rowIdBase}-quantity`
+                const unitId = `${rowIdBase}-unit`
+                const unitPriceId = `${rowIdBase}-unit-price`
                 return (
                   <div
                     key={idx}
@@ -1319,8 +1405,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                   >
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div className="space-y-2">
-                        <label className={retroHeading}>شرح *</label>
+                        <label className={retroHeading} htmlFor={descriptionId}>
+                          شرح *
+                        </label>
                         <input
+                          id={descriptionId}
                           value={it.description}
                           onChange={(e) => updateSaleOrderItem(idx, 'description', e.target.value)}
                           className={`${retroInput} w-full`}
@@ -1329,8 +1418,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className={retroHeading}>تعداد *</label>
+                        <label className={retroHeading} htmlFor={quantityId}>
+                          تعداد *
+                        </label>
                         <input
+                          id={quantityId}
                           type="number"
                           min={1}
                           value={it.quantity}
@@ -1340,8 +1432,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className={retroHeading}>واحد</label>
+                        <label className={retroHeading} htmlFor={unitId}>
+                          واحد
+                        </label>
                         <input
+                          id={unitId}
                           value={it.unit}
                           onChange={(e) => updateSaleOrderItem(idx, 'unit', e.target.value)}
                           className={`${retroInput} w-full`}
@@ -1349,8 +1444,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className={retroHeading}>قیمت واحد (ریال) *</label>
+                        <label className={retroHeading} htmlFor={unitPriceId}>
+                          قیمت واحد (ریال) *
+                        </label>
                         <input
+                          id={unitPriceId}
                           type="number"
                           min={1}
                           value={it.unit_price}
@@ -1379,7 +1477,7 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
             </div>
             <div className="border-2 border-[#154b5f] bg-[#e8f2f7] px-4 py-3 rounded text-center space-y-1">
               <p className={retroHeading}>جمع تقریبی سفارش</p>
-              <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+              <p className="text-2xl font-bold font-[Yekan]">
                 {formatNumberFa(saleOrderSubtotal)}
               </p>
             </div>
@@ -1447,8 +1545,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
           <form className="space-y-4" onSubmit={submitInvoice}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className={retroHeading}>طرف حساب *</label>
+                <label className={retroHeading} htmlFor="invoice_party_name">
+                  طرف حساب *
+                </label>
                 <input
+                  id="invoice_party_name"
                   value={invoiceForm.party_name}
                   onChange={(e) => {
                     const value = e.target.value
@@ -1476,8 +1577,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                 </div>
               </div>
               <div className="space-y-2">
-                <label className={retroHeading}>نوع فاکتور</label>
+                <label className={retroHeading} htmlFor="invoice_type_select">
+                  نوع فاکتور
+                </label>
                 <select
+                  id="invoice_type_select"
                   value={invoiceForm.invoice_type}
                   onChange={(e) => {
                     const nextType = e.target.value as InvoiceFormState['invoice_type']
@@ -1533,6 +1637,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                       : availableInventory + item.quantity
                     : null
                 const suggestedPrice = getSuggestedPrice(selectedProduct, invoiceForm.invoice_type)
+                const rowIdBase = `invoice-item-${idx}`
+                const descriptionId = `${rowIdBase}-description`
+                const quantityId = `${rowIdBase}-quantity`
+                const unitId = `${rowIdBase}-unit`
+                const unitPriceId = `${rowIdBase}-unit-price`
 
                 return (
                   <div
@@ -1541,8 +1650,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                   >
                     <div className="grid grid-cols-1 md:grid-cols-[2fr_0.7fr_0.8fr_1fr_1fr_auto] gap-3 items-end">
                       <div className="space-y-2">
-                        <label className={retroHeading}>شرح کالا *</label>
+                        <label className={retroHeading} htmlFor={descriptionId}>
+                          شرح کالا *
+                        </label>
                         <input
+                          id={descriptionId}
                           value={item.description}
                           onChange={(e) => {
                             const value = e.target.value
@@ -1675,8 +1787,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                       </div>
 
                       <div className="space-y-2">
-                        <label className={retroHeading}>تعداد *</label>
+                        <label className={retroHeading} htmlFor={quantityId}>
+                          تعداد *
+                        </label>
                         <input
+                          id={quantityId}
                           type="number"
                           min={1}
                           value={item.quantity}
@@ -1695,8 +1810,11 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                       </div>
 
                       <div className="space-y-2">
-                        <label className={retroHeading}>واحد</label>
+                        <label className={retroHeading} htmlFor={unitId}>
+                          واحد
+                        </label>
                         <input
+                          id={unitId}
                           value={item.unit}
                           onChange={(e) => updateItem(idx, 'unit', e.target.value)}
                           className={`${retroInput} w-full`}
@@ -1705,15 +1823,17 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                       </div>
 
                       <div className="space-y-2">
-                        <label className={retroHeading}>قیمت واحد (ریال) *</label>
+                        <label className={retroHeading} htmlFor={unitPriceId}>
+                          قیمت واحد (ریال) *
+                        </label>
                         <div className="space-y-1">
                           <input
+                            id={unitPriceId}
                             type="number"
                             min={1}
                             value={item.unit_price}
                             onChange={(e) => updateItem(idx, 'unit_price', e.target.value)}
                             className={`${retroInput} w-full font-[Yekan] text-center text-lg`}
-                            style={{ fontFamily: 'Yekan' }}
                           />
                           {item.unit_price > 0 && (
                             <div className="text-xs text-[#7a6b4f] bg-[#f6f1df] px-2 py-1 rounded text-center">
@@ -1738,7 +1858,6 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
                         <div className="space-y-1">
                           <div
                             className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-3 py-2 rounded font-bold text-center font-[Yekan]"
-                            style={{ fontFamily: 'Yekan' }}
                           >
                             {formatNumberFa(itemSubtotal)}
                           </div>
@@ -1768,7 +1887,7 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
 
             <div className="border-2 border-[#1f2e3b] bg-[#f6f1df] px-4 py-3 rounded text-center space-y-1">
               <p className={retroHeading}>جمع کل فاکتور</p>
-              <p className="text-2xl font-bold font-[Yekan]" style={{ fontFamily: 'Yekan' }}>
+              <p className="text-2xl font-bold font-[Yekan]">
                 {formatNumberFa(computedSubtotal || 0)}
               </p>
               <p className="text-xs text-[#1f2e3b] italic">
@@ -1846,6 +1965,7 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
           <div className="space-y-2">
             <label className={retroHeading}>فیلتر وضعیت</label>
             <select
+              aria-label="فیلتر وضعیت فاکتور"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className={`${retroInput} w-full`}
@@ -1859,6 +1979,7 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
           <div className="space-y-2">
             <label className={retroHeading}>نوع سند</label>
             <select
+              aria-label="نوع سند فاکتور"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
               className={`${retroInput} w-full`}
@@ -1871,6 +1992,7 @@ export default function SalesModule({ smartDate, sync, onNavigate }: ModuleCompo
           <div className="space-y-2">
             <label className={retroHeading}>تعداد نمایشی</label>
             <select
+              aria-label="تعداد فاکتورهای نمایشی"
               value={invoiceListLimit}
               onChange={(e) => setInvoiceListLimit(parseInt(e.target.value))}
               className={`${retroInput} w-full`}

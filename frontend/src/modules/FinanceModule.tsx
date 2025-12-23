@@ -14,6 +14,7 @@ import {
   retroMuted,
 } from '../components/retroTheme'
 import Alert from '../components/Alert'
+import { toast } from '../utils/toast'
 
 interface Payment {
   id: number
@@ -162,6 +163,11 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     const [q, setQ] = useState('')
     const [items, setItems] = useState<Array<{ id: string; name: string; mobile?: string }>>([])
     const [loading, setLoading] = useState(false)
+    const [quickCreateOpen, setQuickCreateOpen] = useState(false)
+    const [quickName, setQuickName] = useState('')
+    const [quickMobile, setQuickMobile] = useState('')
+    const [quickBusy, setQuickBusy] = useState(false)
+    const [quickError, setQuickError] = useState<string | null>(null)
     async function search(s: string) {
       setLoading(true)
       try {
@@ -176,6 +182,36 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
     useEffect(() => {
       search('')
     }, [])
+
+    const submitQuickCreate = async () => {
+      const trimmedName = quickName.trim()
+      if (!trimmedName) {
+        setQuickError('نام طرف حساب لازم است')
+        return
+      }
+      setQuickBusy(true)
+      setQuickError(null)
+      try {
+        const payload = {
+          name: trimmedName,
+          mobile: quickMobile.trim() || undefined,
+          kind: 'customer',
+        }
+        const p = await apiPost('/api/people/quick-create', payload)
+        onSelect(p as any)
+        toast.success('طرف‌حساب جدید ساخته شد')
+        setQuickName('')
+        setQuickMobile('')
+        setQuickCreateOpen(false)
+      } catch (err: any) {
+        const message = err?.message || 'ایجاد سریع ناموفق بود'
+        setQuickError(message)
+        toast.error(message)
+      } finally {
+        setQuickBusy(false)
+      }
+    }
+
     return (
       <div className="space-y-2">
         <div className="flex gap-2">
@@ -201,18 +237,10 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
           </button>
           <button
             className={retroButton}
-            onClick={async () => {
-              const name = prompt('نام طرف‌حساب؟')
-              if (!name) return
-              const mobile = prompt('شماره موبایل (اختیاری)؟') || undefined
-              try {
-                const p = await apiPost('/api/people/quick-create', {
-                  name,
-                  mobile,
-                  kind: 'customer',
-                })
-                onSelect(p as any)
-              } catch {}
+            type="button"
+            onClick={() => {
+              setQuickCreateOpen((prev) => !prev)
+              setQuickError(null)
             }}
           >
             ایجاد سریع
@@ -236,6 +264,56 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
             نمایه‌های پابلیک
           </button>
         </div>
+        {quickCreateOpen && (
+          <div className="border border-dashed border-[#c5bca5] bg-[#fdfaf1] rounded p-3 space-y-2 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className={`${retroMuted} text-[11px]`}>نام طرف حساب *</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  placeholder="مثلاً فروشگاه یاس"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className={`${retroMuted} text-[11px]`}>شماره موبایل (اختیاری)</label>
+                <input
+                  className={`${retroInput} w-full`}
+                  value={quickMobile}
+                  onChange={(e) => setQuickMobile(e.target.value)}
+                  placeholder="0912xxxxxxx"
+                  inputMode="tel"
+                />
+              </div>
+            </div>
+            {quickError && <p className="text-xs text-red-700">{quickError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={`${retroButton} ${quickBusy ? 'opacity-60' : ''}`}
+                onClick={submitQuickCreate}
+                disabled={quickBusy}
+              >
+                {quickBusy ? 'در حال ایجاد...' : 'ثبت سریع'}
+              </button>
+              <button
+                type="button"
+                className={`${retroButton} !bg-[#bfb69f] text-[#2e2720]`}
+                onClick={() => {
+                  setQuickCreateOpen(false)
+                  setQuickName('')
+                  setQuickMobile('')
+                  setQuickError(null)
+                }}
+                disabled={quickBusy}
+              >
+                انصراف
+              </button>
+            </div>
+          </div>
+        )}
         <div className="border rounded p-2 max-h-32 overflow-auto">
           {loading ? (
             <div className="text-xs">در حال جستجو…</div>
@@ -351,7 +429,9 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       setChecksDue(checksData)
     } catch (err) {
       console.error(err)
-      setError('امکان بارگذاری پرداخت‌ها وجود ندارد.')
+      const message = 'امکان بارگذاری پرداخت‌ها وجود ندارد.'
+      setError(message)
+      toast.error(message, { id: 'finance-load-error' })
     } finally {
       if (showSpinner) setLoading(false)
     }
@@ -513,12 +593,16 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!paymentForm.party_name.trim()) {
-      setFormError('نام طرف حساب را وارد کنید.')
+      const message = 'نام طرف حساب را وارد کنید.'
+      setFormError(message)
+      toast.warning(message, { id: 'finance-validation-party' })
       return
     }
     const amountValue = Number(paymentForm.amount.replace(/,/g, ''))
     if (!amountValue || amountValue <= 0) {
-      setFormError('مبلغ معتبر نیست.')
+      const message = 'مبلغ معتبر نیست.'
+      setFormError(message)
+      toast.warning(message, { id: 'finance-validation-amount' })
       return
     }
     setCreating(true)
@@ -553,14 +637,15 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
       await loadData(false)
       resetForm()
       setAuditNote('')
-      setFormSuccess('تراکنش با موفقیت ثبت شد.')
+      const successMessage = 'تراکنش با موفقیت ثبت شد.'
+      setFormSuccess(successMessage)
+      toast.success(successMessage, { id: 'finance-payment-success' })
       setShowForm(false)
     } catch (err) {
-      if (err instanceof Error) {
-        setFormError(err.message)
-      } else {
-        setFormError('ثبت تراکنش موفق نبود.')
-      }
+      const message =
+        err instanceof Error && err.message ? err.message : 'ثبت تراکنش موفق نبود.'
+      setFormError(message)
+      toast.error(message, { id: 'finance-payment-error' })
     } finally {
       setCreating(false)
     }
@@ -1330,16 +1415,16 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                       await apiPatch(`/api/admin/settings/payment_methods`, {
                         value: JSON.stringify(paymentMethods),
                       })
-                      alert('روش‌ها در تنظیمات سیستم ذخیره شد')
+                      toast.success('روش‌ها در تنظیمات سیستم ذخیره شد')
                     } catch (e) {
                       try {
                         await apiPost(`/api/admin/settings`, {
                           key: 'payment_methods',
                           value: JSON.stringify(paymentMethods),
                         })
-                        alert('روش‌ها به‌عنوان تنظیم جدید ذخیره شد')
+                        toast.success('روش‌ها به‌عنوان تنظیم جدید ذخیره شد')
                       } catch {
-                        alert('ذخیره در تنظیمات سیستم ناموفق بود')
+                        toast.error('ذخیره در تنظیمات سیستم ناموفق بود')
                       }
                     }
                   }}
@@ -1362,11 +1447,11 @@ export default function FinanceModule({ smartDate }: ModuleComponentProps) {
                           try {
                             localStorage.setItem('hesabpak_payment_methods', JSON.stringify(arr))
                           } catch {}
-                          alert('روش‌ها از تنظیمات سیستم بارگذاری شد')
+                          toast.success('روش‌ها از تنظیمات سیستم بارگذاری شد')
                         }
                       }
                     } catch {
-                      alert('بارگذاری از تنظیمات سیستم ناموفق بود')
+                      toast.error('بارگذاری از تنظیمات سیستم ناموفق بود')
                     }
                   }}
                 >

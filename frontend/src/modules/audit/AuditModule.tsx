@@ -7,6 +7,7 @@ import {
   retroInput,
   retroLabel,
 } from '../../components/retroTheme'
+import ModulePage from '../../components/layout/ModulePage'
 
 type MerkleBatch = {
   ts: string
@@ -110,7 +111,8 @@ export default function AuditModule() {
   }, [])
 
   return (
-    <div className="p-4">
+    <ModulePage eyebrow="Blockchain Audit" title="ممیزی و مرکل" description="نمایش وضعیت زنجیره و ساخت Batch Merkle">
+    <div className="p-4 min-h-[50vh]">
       <div className={`${retroPanelPadded} space-y-4`}>
         <div className="border-2 border-[#111827] bg-[#f9fafb] px-4 py-3 shadow-[4px_4px_0_#111827]">
           <div className="flex items-center justify-between">
@@ -252,5 +254,6 @@ export default function AuditModule() {
         )}
       </div>
     </div>
+    </ModulePage>
   )
 }

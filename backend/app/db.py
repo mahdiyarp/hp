@@ -47,24 +47,29 @@ def get_db():
         db.close()
 
 
+_TEST_ENGINE = None
+
+
 def create_test_engine():
-    """Helper for tests: return a singleton in-memory sqlite engine shared across test requests.
-    Uses StaticPool to keep a single connection so each new Session sees prior data.
-    """
-    # Create a fresh in-memory engine per call to ensure isolation between tests
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-    engine = create_engine(
-        'sqlite://',
-        connect_args={'check_same_thread': False},
-        poolclass=StaticPool,
-    )
-    return engine
+    """Return a shared in-memory sqlite engine for tests using StaticPool."""
+    global _TEST_ENGINE
+    if _TEST_ENGINE is None:
+        from sqlalchemy import create_engine
+        from sqlalchemy.pool import StaticPool
+        _TEST_ENGINE = create_engine(
+            'sqlite://',
+            connect_args={'check_same_thread': False},
+            poolclass=StaticPool,
+        )
+    return _TEST_ENGINE
 
 
-def create_test_session(engine):
-    """Create a session bound to provided engine and create tables for tests."""
+def create_test_session(engine, *, reset_schema: bool = True):
+    """Create a clean test session bound to the provided engine."""
     from sqlalchemy.orm import sessionmaker
+
+    if reset_schema:
+        Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     return Session()

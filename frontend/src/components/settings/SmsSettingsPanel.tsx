@@ -1,8 +1,15 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { apiGet, apiPost, apiPut } from '../../services/api'
+import { toast } from '../../utils/toast'
 
 import { retroBadge, retroButton, retroHeading, retroInput, retroPanelPadded } from '../retroTheme'
+import {
+  AutoSaveState,
+  DEFAULT_AUTO_SAVE_DELAY_MS,
+  describeAutoSaveState,
+  scheduleAutoSaveIdleReset,
+} from '../../modules/settings/autoSave'
 
 type SmsSettings = {
   provider?: string
@@ -33,69 +40,99 @@ export default function SmsSettingsPanel() {
     api_key_masked: null,
   })
 
-  const [toast, setToast] = useState<string>('')
-
   const [testNumber, setTestNumber] = useState('')
 
   const [busy, setBusy] = useState(false)
 
   const [apiKeyInput, setApiKeyInput] = useState('')
+  const [autoSaveState, setAutoSaveState] = useState<AutoSaveState>('idle')
+  const saveTimer = useRef<number | null>(null)
+  const settingsRef = useRef(settings)
+  const apiKeyRef = useRef(apiKeyInput)
 
-  const load = async () => {
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
+
+  useEffect(() => {
+    apiKeyRef.current = apiKeyInput
+  }, [apiKeyInput])
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current)
+      }
+    }
+  }, [])
+
+  const load = useCallback(async () => {
     try {
       const data = await apiGet<SmsSettings>('/api/settings/sms')
 
       if (data) setSettings((prev) => ({ ...prev, ...data }))
     } catch (err: any) {
-      setToast(
-        err?.message ||
-          'ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¹ط·آ¢ط¢آ©',
-      )
+      toast.error(err?.message || 'خطا در دریافت تنظیمات پیامک')
     }
-  }
-
-  useEffect(() => {
-    load()
   }, [])
 
-  const showToast = (txt: string) => {
-    setToast(txt)
+  useEffect(() => {
+    void load()
+  }, [load])
 
-    setTimeout(() => setToast(''), 2500)
-  }
-
-  const save = async () => {
-    setBusy(true)
-
+  const persistSettings = useCallback(async () => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    setAutoSaveState('saving')
     try {
       await apiPut('/api/settings/sms', {
-        ...settings,
-
-        api_key: apiKeyInput || undefined,
+        ...settingsRef.current,
+        api_key: apiKeyRef.current || undefined,
       })
-
-      setApiKeyInput('')
-
-      showToast(
-        'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.',
-      )
-
+      if (apiKeyRef.current) {
+        setApiKeyInput('')
+        apiKeyRef.current = ''
+      }
+      setAutoSaveState('saved')
+      scheduleAutoSaveIdleReset(setAutoSaveState)
       await load()
     } catch (err: any) {
-      showToast(
-        err?.message ||
-          'ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€ک ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
-      )
-    } finally {
-      setBusy(false)
+      setAutoSaveState('error')
+      toast.error(err?.message || 'ثبت تنظیمات ناموفق بود')
     }
-  }
+  }, [load])
+
+  const scheduleAutoSave = useCallback(() => {
+    setAutoSaveState((prev) => (prev === 'saving' ? prev : 'pending'))
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+    }
+    saveTimer.current = window.setTimeout(() => {
+      void persistSettings()
+    }, DEFAULT_AUTO_SAVE_DELAY_MS)
+  }, [persistSettings])
+
+  const updateSettingsField = useCallback(
+    (updater: (prev: SmsSettings) => SmsSettings) => {
+      setSettings((prev) => updater(prev))
+      scheduleAutoSave()
+    },
+    [scheduleAutoSave],
+  )
+
+  const updateApiKey = useCallback(
+    (value: string) => {
+      setApiKeyInput(value)
+      scheduleAutoSave()
+    },
+    [scheduleAutoSave],
+  )
 
   const sendTest = async () => {
     if (!testNumber) {
-      showToast(
-        'ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯.',
-      )
+      toast.warning('شماره را وارد کنید.')
 
       return
     }
@@ -106,17 +143,12 @@ export default function SmsSettingsPanel() {
       await apiPost('/api/settings/sms/test', {
         to: testNumber,
         message:
-          'ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¹ط·آ¢ط¢آ© ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ²ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦',
+          'پیامک آزمایشی سیستم',
       })
 
-      showToast(
-        'ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¹ط·آ¢ط¢آ© ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.',
-      )
+      toast.success('پیامک تست ارسال شد.')
     } catch (err: any) {
-      showToast(
-        err?.message ||
-          'ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€ک ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
-      )
+      toast.error(err?.message || 'ارسال تست ناموفق بود')
     } finally {
       setBusy(false)
     }
@@ -129,60 +161,62 @@ export default function SmsSettingsPanel() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className={retroHeading}>
-            ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾
-            ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¹ط·آ¢ط¢آ©
+            تنظیمات
+            پیامک
             (IPPanel)
           </p>
 
           <p className="text-sm text-[#4b4339]">
-            ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
-            ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢
-            ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·
-            ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¥أ¢â‚¬â„¢
-            ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ 
-            ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ 
-            ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
+            ارسال
+            پیامک،
+            خط
+            ارسال،
+            و
+            توکن
+            دسترسی
           </p>
         </div>
 
-        {toast && (
-          <span className={`${retroBadge} bg-[#fff4e0] border-[#f2c890] text-[#7c4a03]`}>
-            {toast}
-          </span>
-        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-3 bg-white border border-[#e0d4b8] p-3 rounded-lg">
         <label className="text-sm text-[#4b4339] space-y-1">
-          ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·
-          ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
+          خط
+          ارسال
           <input
             className={retroInput}
             value={settings.default_sender || ''}
-            onChange={(e) => setSettings({ ...settings, default_sender: e.target.value })}
-          />
-        </label>
-
-        <label className="text-sm text-[#4b4339] space-y-1">
-          ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’
-          ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±
-          ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±
-          <input
-            type="number"
-            className={retroInput}
-            value={settings.low_credit_threshold ?? 0}
             onChange={(e) =>
-              setSettings({ ...settings, low_credit_threshold: Number(e.target.value) })
+              updateSettingsField((prev) => ({ ...prev, default_sender: e.target.value }))
             }
           />
         </label>
 
         <label className="text-sm text-[#4b4339] space-y-1">
-          ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ URL
+          آستانه
+          هشدار
+          اعتبار
+          <input
+            type="number"
+            className={retroInput}
+            value={settings.low_credit_threshold ?? 0}
+            onChange={(e) =>
+              updateSettingsField((prev) => ({
+                ...prev,
+                low_credit_threshold: Number(e.target.value),
+              }))
+            }
+          />
+        </label>
+
+        <label className="text-sm text-[#4b4339] space-y-1">
+          پایه URL
           <input
             className={retroInput}
             value={settings.base_url || ''}
-            onChange={(e) => setSettings({ ...settings, base_url: e.target.value })}
+            onChange={(e) =>
+              updateSettingsField((prev) => ({ ...prev, base_url: e.target.value }))
+            }
           />
         </label>
 
@@ -191,46 +225,47 @@ export default function SmsSettingsPanel() {
             <input
               type="checkbox"
               checked={!!settings.enabled}
-              onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })}
+              onChange={(e) =>
+                updateSettingsField((prev) => ({ ...prev, enabled: e.target.checked }))
+              }
             />
-            ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ¹ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
+            فعال
           </label>
 
           <span className={retroBadge}>
             {settings.api_key_masked
-              ? `ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ : ${settings.api_key_masked}`
-              : 'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’'}
+              ? `توکن: ${settings.api_key_masked}`
+              : 'توکن ثبت نشده'}
           </span>
         </div>
 
         <label className="text-sm text-[#4b4339] space-y-1 md:col-span-2">
-          ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  / API Key
+          توکن / API Key
           <input
             className={retroInput}
             type="password"
             placeholder="*******"
             value={apiKeyInput}
-            onChange={(e) => setApiKeyInput(e.target.value)}
+            onChange={(e) => updateApiKey(e.target.value)}
           />
         </label>
       </div>
 
-      <div className="flex items-center gap-3">
-        <button className={retroButton} onClick={save} disabled={busy}>
-          ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’
-        </button>
-
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-[#4b4339]">
+          {describeAutoSaveState(autoSaveState)}
+        </span>
         <div className="flex items-center gap-2">
           <input
             className={retroInput}
-            placeholder="ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾"
+            placeholder="شماره تست"
             value={testNumber}
             onChange={(e) => setTestNumber(e.target.value)}
           />
 
           <button className={retroButton} onClick={sendTest} disabled={busy}>
-            ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
-            ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾
+            ارسال
+            تست
           </button>
         </div>
       </div>

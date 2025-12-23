@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
 
 // Mock API layer to avoid network during App bootstrap
 vi.mock('../services/api', () => {
@@ -75,7 +76,11 @@ import App from '../App'
 describe('Smoke: navigation to #settings-users', () => {
   it('renders Users module when hash is set', async () => {
     window.location.hash = '#settings-users'
-    render(<App />)
+    render(
+      <ConfirmDialogTestWrapper>
+        <App />
+      </ConfirmDialogTestWrapper>,
+    )
     await waitFor(() => {
       // UsersModule top heading
       expect(screen.getByText(/کاربران و دسترسی‌ها/)).toBeInTheDocument()

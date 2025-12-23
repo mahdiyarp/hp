@@ -62,24 +62,39 @@ def test_pnl_defaults_to_active_fy_when_no_dates():
             pass
 
     user = make_finance_user_with_prefs(fy.id)
+    prev = app.dependency_overrides.get(get_current_user)
     app.dependency_overrides[get_current_user] = lambda: user
 
-    client = TestClient(app)
-    r = client.get('/api/reports/pnl?method=FIFO')
-    assert r.status_code == 200
-    data = r.json()
-    assert 'sales' in data and 'cogs' in data and 'gross_profit' in data
+    try:
+        client = TestClient(app)
+        r = client.get('/api/reports/pnl?method=FIFO')
+        assert r.status_code == 200
+        data = r.json()
+        assert 'sales' in data and 'cogs' in data and 'gross_profit' in data
+    finally:
+        if prev is not None:
+            app.dependency_overrides[get_current_user] = prev
+        else:
+            app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_error_payload_shape_http_and_validation():
     client = TestClient(app)
 
-    # HTTPException from /api/search (missing q)
-    r = client.post('/api/search', json={})
-    assert r.status_code == 400
-    j = r.json()
-    assert 'detail' in j and 'code' in j and 'path' in j
-    assert j['code'] == 400
+    prev_user = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1, username='tester', role='Admin')
+    try:
+        # HTTPException from /api/search (missing q)
+        r = client.post('/api/search', json={})
+        assert r.status_code == 400
+        j = r.json()
+        assert 'detail' in j and 'code' in j and 'path' in j
+        assert j['code'] == 400
+    finally:
+        if prev_user is not None:
+            app.dependency_overrides[get_current_user] = prev_user
+        else:
+            app.dependency_overrides.pop(get_current_user, None)
 
     # Validation error from /api/auth/login-phone (requires body with phone)
     r2 = client.post('/api/auth/login-phone', json={})

@@ -176,6 +176,12 @@ $token = ($tokenResp.Content | ConvertFrom-Json).access_token
 Invoke-WebRequest -Uri "http://localhost:3000/api/current-user/modules" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing
 ```
 
+### وضعیت تست‌ها و بیلد (آذر ۱۴۰۴)
+
+- `npm --prefix frontend run test` → ✅ (Vitest همهٔ ۲۰ فایل را عبور داد؛ شامل ماژول‌های Settings، People و DevConsole)
+- `npm --prefix frontend run build` → ✅ (PageBuilder با `grapesjs@0.21.5` بسته شد، هشدار اندازه برای باندل‌های بزرگ پابرجاست)
+- `python -m pytest backend/tests` → ❌ چند سناریو هنوز خطا دارند: [tests/test_dashboard_endpoints.py](backend/tests/test_dashboard_endpoints.py#L120-L212)، [tests/test_endpoints.py](backend/tests/test_endpoints.py#L30-L55)، [tests/test_fiscal_year_module.py](backend/tests/test_fiscal_year_module.py#L40-L110)، [tests/test_invoice_finalize_integration.py](backend/tests/test_invoice_finalize_integration.py#L1-L40)، [tests/test_phone_login_normalization.py](backend/tests/test_phone_login_normalization.py#L10-L90) و [tests/test_sms_settings_api.py](backend/tests/test_sms_settings_api.py#L250-L300). نتیجهٔ فعلی: 12 شکست از 98 تست.
+
 ### Environment Flags
 
 - `DEV_FEATURES_ENABLED` (default: off): Enables dev-only endpoints like `/api/auth/login-dev` and `/api/dev/assistant/*`. Accepts `true|1|dev|yes`.

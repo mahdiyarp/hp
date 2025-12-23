@@ -2,13 +2,49 @@
 
 This file documents how the frontend image is built and served in this repository.
 
+## Auto-Save Helper (Settings)
+
+- همین فایل شامل `scheduleAutoSaveIdleReset` (بازگشت به حالت «idle» با تأخیر ۲٫۵ ثانیه) است تا پیام وضعیت پس از ذخیره پاک‌سازی شود.
+
+## Toast Messaging
+
+- تمام پیام‌های موفق/هشدار/خطا باید از هلسپر مشترک `frontend/src/utils/toast.ts` استفاده کنند؛ `toast.success|error|warning|info` یک رویداد سراسری dispatch می‌کند و AppShell آن را به توست رترو تبدیل می‌کند.
+- برای جلوگیری از پیام‌های خالی، تابع `emitToast` متن را trim می‌کند؛ در صورت خطای API متن fallback مناسب بدهید (مثلاً `toast.error('ذخیره ناموفق بود')`).
+- پیش‌فرض نمایش ۳٫۵ ثانیه است (`DEFAULT_TOAST_DURATION`) و ارسال پشت‌سرهم همان پیام تا ۱٫۵ ثانیه بی‌اثر می‌شود (`DEFAULT_TOAST_DEDUPE_MS`). در صورت نیاز می‌توانید `duration`, `dedupeMs` یا `id` اختصاصی پاس دهید تا کنترل کامل‌تری روی پیام داشته باشید.
+- ماژول‌های Dashboard، Access Control، Finance، People، Roadmap، Developer و Banks همگی نمونهٔ پیاده‌سازی هستند؛ در صورت اضافه‌کردن feature جدید، همان الگو را دنبال کنید تا alert بلاک‌کننده به UI برنگردد.
+
+## Retro Confirm Dialog
+
+- برای همهٔ اقدام‌های مخرب از هلسپر جدید `useConfirmDialog()` استفاده کنید (فایل: `frontend/src/context/ConfirmDialogContext.tsx`). این Provider در `main.tsx` دور کل اپ پیچیده شده و یک مودال رترو با دکمه‌های استاندارد نمایش می‌دهد.
+- نمونهٔ استفاده:
+
+```tsx
+const confirm = useConfirmDialog()
+const ok = await confirm({
+  message: 'این رکورد حذف شود؟',
+  confirmText: 'حذف',
+  tone: 'danger',
+})
+if (!ok) return
+```
+
+- People، System، Dashboard، PageBuilder و داشبورد قابل‌تنظیم به این مودال مهاجرت کرده‌اند؛ برای ماژول‌های جدید یا Confirm های باقیمانده از همین الگو پیروی کنید.
+
 ## Settings → Users
 
 - مسیر دسترسی: از منو یا میان‌بر در هدر به `#settings-users`.
 - تم کلاسیک و RTL حفظ شده است؛ هیچ تغییری در سبک کلی اعمال نشده.
 - ماژول واحد: مسیر `frontend/src/modules/settings/UsersModule.tsx`.
 - سرویس‌های مرتبط: `frontend/src/services/auth.ts`, `frontend/src/services/api`.
-- تست‌ها: فایل `frontend/tests/users.module.test.tsx` شامل رندر اولیه و بارگذاری داده.
+- تست‌ها: `frontend/src/modules/settings/__tests__/UsersModule.*` رفتار ذخیرهٔ خودکار را با تایمر جعلی پوشش می‌دهند.
+- سیاست ذخیره‌سازی: نقش‌ها، سایدبار، پیامک سازمانی و مجوزها همگی بدون دکمهٔ دستی ثبت می‌شوند و متن وضعیت مشترک دارند.
+
+## Settings → Access Control / System / Developer / SMS
+
+- Access Control (`frontend/src/modules/settings/AccessControlModule.tsx`): ویرایش نقش‌ها، مجوزها و تنظیمات پیامکی کاربر/سازمان همگی به کمک autoSave انجام می‌شود؛ هیچ دکمهٔ «ذخیره» باقی نمانده است.
+- System (`frontend/src/modules/SystemModule.tsx`): ترجیح مکان سایدبار و جدول کلید/مقدار سیستم با همان دیبونس ذخیره می‌شوند؛ برای هر ردیف پیام وضعیت اختصاصی نمایش داده می‌شود.
+- Developer (sms.ir) و پنل IPPanel اکنون از همان تأخیر ۷۰۰ms استفاده می‌کنند تا تجربهٔ کاربر یکسان باشد (قبلاً ۸۰۰ms بود).
+- APIهای درگیر: `/api/admin/settings/*`, `/api/users/preferences/*`, `/api/settings/sms`.
 
 ## Smoke tests
 
@@ -91,6 +127,17 @@ BACKEND_URL=http://localhost:8000 npm run dev
 ```
 
 The Vite dev server runs on port 3000 by default (configured in `vite.config.ts`). It proxies `/api` to the backend address.
+
+## Frontend-only demo mode
+
+If reviewers only have access to the static frontend, enable the built-in mock backend:
+
+```bash
+# frontend/.env.local
+VITE_FRONTEND_ONLY=true
+```
+
+When this flag is set, `frontend/src/services/mockApi.ts` intercepts every `apiGet/apiPost/...` call and returns realistic demo data (version info, Dashboard cards, developer analytics, SMS history, settings، roadmap و ...). همچنین AuthContext به‌صورت خودکار کاربر توسعه‌دهندهٔ دمو را وارد می‌کند تا تمام ماژول‌ها بدون نیاز به بک‌اند قابل بازدید باشند. در محیط‌های واقعی مقدار را unset بگذارید تا درخواست‌ها به سرور ارسال شود.
 
 ## Healthchecks & readiness
 
@@ -218,3 +265,4 @@ node scripts/extract-css-vars.cjs frontend/public/theme-override.css --json
 
 - کلاس کمکی `hp-container-right` برای راست‌محور کردن کانتینر افزوده شده و در هدر/بدنه اعمال می‌شود.
 - فایل‌ها: `frontend/src/index.css` و `frontend/src/components/layout/AppShell.tsx`.
+- فاوآیکون جدید (`public/favicon.svg`) یک ایموجی «bp» است؛ حفره‌های حروف به‌صورت چشمان هوشمند کار می‌کنند و قوس بالا/پایین به ترتیب ابرو و دهان پویا را می‌سازند. اگر مرورگری SVG را پشتیبانی نکند، آیکون `.ico` قبلی همچنان به عنوان fallback در `index.html` باقی مانده است.

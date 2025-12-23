@@ -12,6 +12,8 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import { toast } from '../utils/toast'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 
 type KindFilter = 'all' | 'customer' | 'supplier' | 'other'
 type SortField = 'name' | 'debit' | 'credit' | 'balance' | 'created_at'
@@ -82,8 +84,26 @@ type PersonWithBalance = Person & {
   balance: number
 }
 
+const GROUP_FILTER_KEYS = {
+  l1: 'hp_people_group_l1',
+  l2: 'hp_people_group_l2',
+  l3: 'hp_people_group_l3',
+} as const
+
+const UNGROUPED_KEY = '__ungrouped__'
+
+function readFilterFromStorage(key: string) {
+  if (typeof window === 'undefined') return ''
+  try {
+    return localStorage.getItem(key) || ''
+  } catch {
+    return ''
+  }
+}
+
 export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentProps) {
   const { user } = useAuth()
+  const confirmDialog = useConfirmDialog()
   const canEdit = !!user && ['Admin', 'Accountant', 'Manager'].includes(user.role)
   const [people, setPeople] = useState<Person[]>([])
   const [balances, setBalances] = useState<PersonBalance[]>([])
@@ -156,9 +176,9 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       return {}
     }
   })
-  const [groupL1Filter, setGroupL1Filter] = useState<string>('')
-  const [groupL2Filter, setGroupL2Filter] = useState<string>('')
-  const [groupL3Filter, setGroupL3Filter] = useState<string>('')
+  const [groupL1Filter, setGroupL1Filter] = useState<string>(() => readFilterFromStorage(GROUP_FILTER_KEYS.l1))
+  const [groupL2Filter, setGroupL2Filter] = useState<string>(() => readFilterFromStorage(GROUP_FILTER_KEYS.l2))
+  const [groupL3Filter, setGroupL3Filter] = useState<string>(() => readFilterFromStorage(GROUP_FILTER_KEYS.l3))
   const emptyForm = {
     name: '',
     kind: 'customer',
@@ -253,6 +273,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
     } catch (err) {
       console.error(err)
       setError('امکان دریافت طرف‌های حساب وجود ندارد.')
+      toast.error('امکان دریافت طرف‌های حساب وجود ندارد')
     } finally {
       setLoading(false)
     }
@@ -264,6 +285,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       setBalances(data.balances)
     } catch (err) {
       console.error('Failed to load balances:', err)
+      toast.error('دریافت مانده طرف‌های حساب ناموفق بود')
     }
   }
 
@@ -286,6 +308,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       setHistoryOpen({ personId: p.id, items: items || [] })
     } catch {
       setHistoryOpen({ personId: p.id, items: [] })
+      toast.error('امکان دریافت تاریخچه وجود ندارد')
     } finally {
       setHistoryLoading(false)
     }
@@ -304,6 +327,24 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
     } catch {}
   }, [pageSize])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(GROUP_FILTER_KEYS.l1, groupL1Filter)
+    } catch {}
+  }, [groupL1Filter])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GROUP_FILTER_KEYS.l2, groupL2Filter)
+    } catch {}
+  }, [groupL2Filter])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GROUP_FILTER_KEYS.l3, groupL3Filter)
+    } catch {}
+  }, [groupL3Filter])
+
   const loadPersonLedger = async (person: PersonWithBalance) => {
     setSelectedPerson(person)
     setLoadingLedger(true)
@@ -317,6 +358,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
     } catch (err) {
       console.error('Failed to load ledger:', err)
       setError('خطا در دریافت گردش حساب')
+      toast.error('خطا در دریافت گردش حساب')
     } finally {
       setLoadingLedger(false)
     }
@@ -336,6 +378,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
     } catch (e) {
       console.error('Failed to load activities', e)
       setActError('بارگذاری یادداشت‌ها ممکن نشد')
+      toast.error('بارگذاری یادداشت‌ها ممکن نشد')
     } finally {
       setLoadingActivities(false)
     }
@@ -366,6 +409,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
     link.download = `گردش-حساب-${ledgerData.person.name}-${new Date().toISOString().split('T')[0]}.csv`
     link.click()
     URL.revokeObjectURL(url)
+    toast.success('فایل گردش حساب آماده شد')
   }
 
   const handleFormChange = (field: keyof typeof emptyForm, value: string) => {
@@ -431,6 +475,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
         }))
         setEditingPerson(null)
         setFormSuccess('مخاطب با موفقیت ویرایش شد.')
+        toast.success('مخاطب بروزرسانی شد')
       } else {
         const created = await apiPost<Person>('/api/persons', payload)
         setPeople((prev) => [created, ...prev])
@@ -444,6 +489,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
           },
         }))
         setFormSuccess('مخاطب با موفقیت ثبت شد.')
+        toast.success('مخاطب ثبت شد')
       }
       setPersonForm(emptyForm)
       setAuditNote('')
@@ -456,6 +502,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       } else {
         setFormError('ثبت مخاطب با خطا همراه بود.')
       }
+      toast.error('ذخیره مخاطب ناموفق بود')
     } finally {
       setCreating(false)
     }
@@ -493,9 +540,18 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       // hierarchical person-group filters
       if (groupL1Filter || groupL2Filter || groupL3Filter) {
         const g = personGroups[p.id] || {}
-        if (groupL1Filter && (g.l1 || '') !== groupL1Filter) return false
-        if (groupL2Filter && (g.l2 || '') !== groupL2Filter) return false
-        if (groupL3Filter && (g.l3 || '') !== groupL3Filter) return false
+        const normalizedL1 = (g.l1 || '').trim()
+        if (groupL1Filter) {
+          if (groupL1Filter === UNGROUPED_KEY) {
+            if (normalizedL1) return false
+          } else if (normalizedL1 !== groupL1Filter) {
+            return false
+          }
+        }
+        if (groupL1Filter !== UNGROUPED_KEY) {
+          if (groupL2Filter && (g.l2 || '').trim() !== groupL2Filter) return false
+          if (groupL3Filter && (g.l3 || '').trim() !== groupL3Filter) return false
+        }
       }
       if (kindFilter !== 'all') {
         const kind = p.kind ?? 'other'
@@ -572,6 +628,72 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
       }, {}),
     }
   }, [personGroups])
+
+  const balanceTotals = useMemo(() => {
+    return peopleWithBalances.reduce(
+      (acc, person) => {
+        const debit = Number(person.debit) || 0
+        const credit = Number(person.credit) || 0
+        const balance = Number(person.balance) || 0
+        acc.totalDebit += debit
+        acc.totalCredit += credit
+        if (balance > 0) acc.totalReceivable += balance
+        if (balance < 0) acc.totalPayable += Math.abs(balance)
+        acc.netBalance += balance
+        return acc
+      },
+      {
+        totalDebit: 0,
+        totalCredit: 0,
+        totalReceivable: 0,
+        totalPayable: 0,
+        netBalance: 0,
+      },
+    )
+  }, [peopleWithBalances])
+
+  const storeStats = useMemo(() => {
+    const agg = new Map<
+      string,
+      { label: string; count: number; receivable: number; payable: number; net: number }
+    >()
+    peopleWithBalances.forEach((person) => {
+      const rawKey = (personGroups[person.id]?.l1 || '').trim()
+      const key = rawKey || UNGROUPED_KEY
+      if (!agg.has(key)) {
+        agg.set(key, {
+          label: rawKey || 'بدون برچسب',
+          count: 0,
+          receivable: 0,
+          payable: 0,
+          net: 0,
+        })
+      }
+      const slot = agg.get(key)!
+      slot.count += 1
+      const balance = Number(person.balance) || 0
+      if (balance > 0) slot.receivable += balance
+      if (balance < 0) slot.payable += Math.abs(balance)
+      slot.net += balance
+    })
+    return Array.from(agg.entries())
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count
+        return b.receivable - a.receivable
+      })
+  }, [peopleWithBalances, personGroups])
+
+  const hasUngroupedStore = useMemo(
+    () => storeStats.some((s) => s.key === UNGROUPED_KEY),
+    [storeStats],
+  )
+
+  const childL1ForOptions = groupL1Filter === UNGROUPED_KEY ? '' : groupL1Filter
+  const selectedPathLabel =
+    groupL1Filter === UNGROUPED_KEY
+      ? 'بدون برچسب'
+      : [groupL1Filter, groupL2Filter, groupL3Filter].filter(Boolean).join('/') || '—'
 
   if (loading) {
     return (
@@ -651,10 +773,11 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 text-sm">
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>تعداد طرف حساب</p>
             <p className="text-lg font-semibold">{formatNumberFa(people.length)}</p>
+            <p className="text-[11px] text-[#7a6b4f]">در دیتابیس فعال</p>
           </div>
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>گروه‌های سطح ۱ یکتا</p>
@@ -666,6 +789,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                 }, new Set<string>()).size,
               )}
             </p>
+            <p className="text-[11px] text-[#7a6b4f]">برچسب فروشگاه یا واحد</p>
           </div>
           <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
             <p className={retroHeading}>دارای گروه</p>
@@ -674,8 +798,89 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                 Object.values(personGroups).filter((g) => g.l1 || g.l2 || g.l3).length,
               )}
             </p>
+            <p className="text-[11px] text-[#7a6b4f]">بر اساس سه سطح سلسله‌مراتب</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#fff1e1] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>مانده‌های بدهکار</p>
+            <p className="text-lg font-semibold text-red-700">
+              {formatNumberFa(balanceTotals.totalReceivable || 0)}
+            </p>
+            <p className="text-[11px] text-[#7a2f2f]">نیاز به وصول</p>
+          </div>
+          <div className="border border-[#bfb69f] bg-[#e9f6e1] px-4 py-3 shadow-inner space-y-1">
+            <p className={retroHeading}>مانده‌های بستانکار</p>
+            <p className="text-lg font-semibold text-green-700">
+              {formatNumberFa(balanceTotals.totalPayable || 0)}
+            </p>
+            <p className="text-[11px] text-[#2f5b2f]">قابل پرداخت / پیش‌دریافت</p>
           </div>
         </div>
+
+        {storeStats.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className={`${retroHeading} text-[#1f2e3b]`}>نمای فروشگاه / گروه سطح ۱</p>
+              <span className="text-[11px] text-[#7a6b4f]">با کلیک هر کارت، فهرست فیلتر می‌شود.</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {storeStats.map((store) => {
+                const isActive = groupL1Filter === store.key
+                const receivableBadge = formatNumberFa(store.receivable || 0)
+                const payableBadge = formatNumberFa(store.payable || 0)
+                const netBadge = formatNumberFa(Math.abs(store.net) || 0)
+                return (
+                  <button
+                    type="button"
+                    key={store.key}
+                    className={`text-right border-2 px-4 py-3 rounded-sm shadow-[3px_3px_0_var(--retro-border)] transition-colors ${
+                      isActive ? 'bg-[#1f2e3b] text-[#f5f1e6]' : 'bg-[#f6f1df] text-[#1f1207]'
+                    }`}
+                    onClick={() => {
+                      if (isActive) {
+                        setGroupL1Filter('')
+                        setGroupL2Filter('')
+                        setGroupL3Filter('')
+                      } else {
+                        setGroupL1Filter(store.key)
+                        setGroupL2Filter('')
+                        setGroupL3Filter('')
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold">{store.label}</p>
+                        <p className="text-[11px] text-inherit">
+                          {formatNumberFa(store.count)} مخاطب | خالص {store.net >= 0 ? 'بده' : 'بستان'}{' '}
+                          {netBadge}
+                        </p>
+                      </div>
+                      <span className="text-[10px] border px-2 py-1 rounded-sm">
+                        {isActive ? 'فعال' : 'نمایش'}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                      <div>
+                        <p className="text-[#7a6b4f]">بدهکار</p>
+                        <p className="font-semibold text-red-700">{receivableBadge}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#7a6b4f]">بستانکار</p>
+                        <p className="font-semibold text-green-700">{payableBadge}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#7a6b4f]">Net</p>
+                        <p className={`font-semibold ${store.net >= 0 ? 'text-red-700' : 'text-green-700'}`}>
+                          {store.net === 0 ? '۰' : `${store.net > 0 ? '+' : '-'}${netBadge}`}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {showForm && (
@@ -999,6 +1204,9 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                 className={`${retroInput} w-full`}
               >
                 <option value="">سطح ۱: همه</option>
+                {hasUngroupedStore && (
+                  <option value={UNGROUPED_KEY}>بدون برچسب</option>
+                )}
                 {groupLevels.l1.map((g) => (
                   <option key={`pl1-${g}`} value={g}>
                     {g}
@@ -1014,10 +1222,10 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                   setGroupL3Filter('')
                 }}
                 className={`${retroInput} w-full`}
-                disabled={!groupL1Filter}
+                disabled={!childL1ForOptions}
               >
                 <option value="">سطح ۲: همه</option>
-                {(groupLevels.l2map[groupL1Filter || ''] || []).map((g) => (
+                {(groupLevels.l2map[childL1ForOptions || ''] || []).map((g) => (
                   <option key={`pl2-${g}`} value={g}>
                     {g}
                   </option>
@@ -1029,10 +1237,10 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                 value={groupL3Filter}
                 onChange={(e) => setGroupL3Filter(e.target.value)}
                 className={`${retroInput} w-full`}
-                disabled={!groupL1Filter || !groupL2Filter}
+                disabled={!childL1ForOptions || !groupL2Filter}
               >
                 <option value="">سطح ۳: همه</option>
-                {(groupLevels.l3map[`${groupL1Filter}/${groupL2Filter}`] || []).map((g) => (
+                {(groupLevels.l3map[`${childL1ForOptions}/${groupL2Filter}`] || []).map((g) => (
                   <option key={`pl3-${g}`} value={g}>
                     {g}
                   </option>
@@ -1041,8 +1249,7 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
             </div>
           </div>
           <div className="text-[11px] text-[#7a6b4f]">
-            مسیر انتخاب‌شده:{' '}
-            {[groupL1Filter, groupL2Filter, groupL3Filter].filter(Boolean).join('/') || '—'}
+            مسیر انتخاب‌شده: {selectedPathLabel}
           </div>
         </div>
 
@@ -1187,9 +1394,20 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                           className="underline text-red-700 hover:text-red-900"
                           onClick={async (e) => {
                             e.stopPropagation()
-                            if (!confirm('حذف این مخاطب؟')) return
-                            await apiDelete(`/api/persons/${person.id}`)
-                            setPeople((prev) => prev.filter((p) => p.id !== person.id))
+                            const confirmed = await confirmDialog({
+                              message: 'حذف این مخاطب؟',
+                              confirmText: 'حذف',
+                              tone: 'danger',
+                            })
+                            if (!confirmed) return
+                            try {
+                              await apiDelete(`/api/persons/${person.id}`)
+                              setPeople((prev) => prev.filter((p) => p.id !== person.id))
+                              toast.success('مخاطب حذف شد')
+                            } catch (err) {
+                              console.error('Failed to delete person', err)
+                              toast.error('حذف مخاطب انجام نشد')
+                            }
                           }}
                         >
                           حذف
@@ -1428,10 +1646,11 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                                           }>(`/api/exports/invoice/${entry.invoice!.id}?format=pdf`)
                                           if (resp && resp.download_url) {
                                             window.open(resp.download_url, '_blank')
+                                            toast.success('فاکتور در پنجره جدید باز شد')
                                           }
                                         } catch (err) {
                                           console.error('Failed to export invoice', err)
-                                          alert('صدور فایل فاکتور ممکن نشد')
+                                          toast.error('صدور فایل فاکتور ممکن نشد')
                                         }
                                       }}
                                     >
@@ -1486,8 +1705,9 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                                   prev ? [created as any, ...prev] : [created as any],
                                 )
                                 setNewActivity('')
+                                toast.success('فعالیت ثبت شد')
                               } catch (e) {
-                                alert('ثبت یادداشت ممکن نشد')
+                                toast.error('ثبت یادداشت ممکن نشد')
                               }
                             }}
                           >
@@ -1523,7 +1743,12 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                                   className="text-red-700 hover:text-red-900"
                                   onClick={async () => {
                                     if (!selectedPerson) return
-                                    if (!confirm('حذف این یادداشت؟')) return
+                                    const confirmed = await confirmDialog({
+                                      message: 'حذف این یادداشت؟',
+                                      confirmText: 'حذف',
+                                      tone: 'danger',
+                                    })
+                                    if (!confirmed) return
                                     try {
                                       await apiDelete(
                                         `/api/persons/${selectedPerson.id}/activities/${a.id}`,
@@ -1531,8 +1756,9 @@ export default function PeopleModule({ smartDate, onNavigate }: ModuleComponentP
                                       setActivities((prev) =>
                                         prev ? prev.filter((x) => x.id !== a.id) : prev,
                                       )
+                                      toast.success('یادداشت حذف شد')
                                     } catch (e) {
-                                      alert('حذف ممکن نشد')
+                                      toast.error('حذف ممکن نشد')
                                     }
                                   }}
                                 >

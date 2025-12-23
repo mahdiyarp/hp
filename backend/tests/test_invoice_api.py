@@ -69,9 +69,26 @@ class DummyUser(models.User):
 def override_user():
     return DummyUser()
 
+@pytest.fixture(autouse=True)
+def _override_dependencies():
+    Base.metadata.drop_all(bind=_engine)
+    Base.metadata.create_all(bind=_engine)
 
-app.dependency_overrides[db.get_db] = override_get_db
-app.dependency_overrides[get_current_user] = override_user
+    prev_db = app.dependency_overrides.get(db.get_db)
+    prev_user = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[db.get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_user
+    try:
+        yield
+    finally:
+        if prev_db is not None:
+            app.dependency_overrides[db.get_db] = prev_db
+        else:
+            app.dependency_overrides.pop(db.get_db, None)
+        if prev_user is not None:
+            app.dependency_overrides[get_current_user] = prev_user
+        else:
+            app.dependency_overrides.pop(get_current_user, None)
 
 client = TestClient(app, raise_server_exceptions=False)
 

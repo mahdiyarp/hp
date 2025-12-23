@@ -24,7 +24,6 @@ export default function SidebarMenu({
   const { user } = useAuth()
   const [order, setOrder] = useState<string[]>([])
   const [expandedSettings, setExpandedSettings] = useState(true)
-  const collapsed = false
 
   useEffect(() => {
     let cancelled = false
@@ -107,6 +106,11 @@ export default function SidebarMenu({
     return all
   }, [modules, user])
 
+  // گروه توسعه‌دهنده: تمام ماژول‌های dev زیر یک والد نمایش داده شوند
+  const devChildIds = ['developer', 'dev-assistant', 'sms-panel', 'papi-panel', 'audit']
+  const devChildren = settingsChildren.filter((m) => devChildIds.includes(m.id))
+  const settingsNonDev = settingsChildren.filter((m) => !devChildIds.includes(m.id))
+
   const nonSettings = useMemo(() => {
     return order
       .filter((id) => !settingsChildren.some((s) => s.id === id))
@@ -138,27 +142,9 @@ export default function SidebarMenu({
   }
 
   return (
-    <nav className={`flex-1 overflow-y-auto px-2 py-4 space-y-2`}>
+    <nav className={`flex-1 overflow-y-auto px-2 py-1 space-y-2`}>
       {nonSettings.map((mod) => {
         const isActive = mod.id === activeModuleId
-        if (collapsed) {
-          return (
-            <div key={mod.id} className="p-1">
-              <button
-                title={mod.label}
-                className={`w-full text-center block rounded-sm px-2 py-2 text-sm border-0 bg-transparent text-[#d4d8dc] hover:bg-[#0f1720] ${isActive ? 'bg-[#d7caa4] text-[var(--retro-table-header-text)]' : ''} transition-colors duration-150`}
-                onClick={() => onNavigate(mod.id)}
-              >
-                <span
-                  className={`${retroHeading} block text-[11px] transition-opacity duration-200`}
-                >
-                  {(mod.badge ?? mod.label[0] ?? '•').slice(0, 3)}
-                </span>
-              </button>
-            </div>
-          )
-        }
-
         const base =
           'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
         const activeClass =
@@ -193,11 +179,10 @@ export default function SidebarMenu({
 
       {settingsChildren.length > 0 && (
         <div className="pt-3 border-t border-[#2d3b45]">
-          {!collapsed && (
-            <button
-              className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
-              onClick={() => setExpandedSettings((s) => !s)}
-            >
+          <button
+            className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
+            onClick={() => setExpandedSettings((s) => !s)}
+          >
               <div className="flex justify-between items-center">
                 <div>
                   <p className={`${retroHeading} text-[11px]`}>تنظیمات</p>
@@ -206,11 +191,10 @@ export default function SidebarMenu({
                 <div className="text-sm text-[#aeb4b9]">{expandedSettings ? '–' : '+'}</div>
               </div>
             </button>
-          )}
 
-          {expandedSettings && !collapsed && (
+          {expandedSettings && (
             <div className="mt-3 space-y-2">
-              {settingsChildren.map((s) => (
+              {settingsNonDev.map((s) => (
                 <div
                   key={s.id}
                   draggable
@@ -228,6 +212,36 @@ export default function SidebarMenu({
                   </button>
                 </div>
               ))}
+
+              {devChildren.length > 0 && (
+                <div className="border border-[#2d3b45] rounded-sm">
+                  <button
+                    className={`w-full text-right px-4 py-3 text-sm text-[#d4d8dc] hover:bg-[#0f1720] border-b border-[#2d3b45]`}
+                    onClick={() => onNavigate('developer')}
+                  >
+                    <span className={`${retroHeading} block text-[11px]`}>DEV</span>
+                    <span className="text-sm font-semibold">کنسول توسعه‌دهنده</span>
+                    <span className="block text-[11px] mt-1 text-[#aeb4b9]">
+                      پنل کامل دیباگ و ابزارها
+                    </span>
+                  </button>
+                  <div className="divide-y divide-[#2d3b45]">
+                    {devChildren
+                      .filter((c) => c.id !== 'developer')
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          className={`w-full text-right px-4 py-2 text-sm text-[#d4d8dc] hover:bg-[#0f1720]`}
+                          onClick={() => onNavigate(c.id)}
+                        >
+                          <span className={`${retroHeading} block text-[11px]`}>{c.badge ?? 'DEV'}</span>
+                          <span className="text-sm font-semibold">{c.label}</span>
+                          <span className="block text-[11px] mt-1 text-[#aeb4b9]">{c.description}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

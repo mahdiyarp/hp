@@ -1,14 +1,28 @@
 /* Optional Retro Theme Override
    Adjust values below to match reference build precisely.
    This file is loaded by index.html and will override defaults in src/index.css.
-*/
+   Keep the font declarations mirrored here so deployments that only ship this file
+   (for hotfixes) still load Yekan correctly. */
+
+@font-face {
+  font-family: 'Yekan';
+  src: url('/fonts/Yekan.woff2') format('woff2'),
+       url('/fonts/Yekan.woff') format('woff'),
+       url('/fonts/Yekan.ttf') format('truetype'),
+       local('Yekan'),
+       local('IranYekan');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
+  --hp-font-family: 'Yekan', 'IranYekan', 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   /* Layout (tuned) */
-  --hp-container-max: 68rem; /* tighter container for parity */
-  --hp-container-px: 1.25rem; /* slightly reduced horizontal padding */
-  --hp-container-py: 1.25rem;
-  --hp-sidebar-width: 300px; /* wider sidebar to avoid internal scroll */
+  --hp-container-max: 72rem; /* match max-w-6xl from reference build */
+  --hp-container-px: 1.5rem; /* px-6 */
+  --hp-container-py: 1.25rem; /* py-5 */
+  --hp-sidebar-width: 288px; /* w-72 */
 
   /* Retro palette (defaults mirror src/index.css) */
   --retro-border: #c5bca5;
@@ -31,4 +45,13 @@
   --retro-badge-bg: #f6f1df;
   --retro-surface-bg: #e9e4d8;
   --retro-muted-text: #6b5840;
+}
+
+body {
+  font-family: var(--hp-font-family);
+  background-color: var(--retro-surface-bg, #e9e4d8);
+}
+
+body * {
+  font-family: var(--hp-font-family) !important;
 }

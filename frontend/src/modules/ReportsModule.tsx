@@ -122,11 +122,9 @@ export default function ReportsModule({ smartDate }: ModuleComponentProps) {
     // Dynamically load chart libraries; ignore failures in environments missing chart deps
     ;(async () => {
       try {
-        const chartAutoLib = 'chart.js/auto'
-        const chartAuto = await import(/* @vite-ignore */ chartAutoLib)
+        await import('chart.js/auto')
         // chart.js/auto pre-registers all necessary elements
-        const rcLib = 'react-chartjs-2'
-        const rc = await import(/* @vite-ignore */ rcLib)
+        const rc = await import('react-chartjs-2')
         Bar = rc.Bar
         Doughnut = rc.Doughnut
         setChartsReady(true)

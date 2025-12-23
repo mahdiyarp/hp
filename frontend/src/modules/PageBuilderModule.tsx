@@ -19,6 +19,7 @@ import {
   savePageBuilderTemplate,
   PageBuilderTemplate,
 } from '../services/pageBuilder'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 
 const DEFAULT_HTML = `<section style="padding:32px;background:#fdfdf7;">
 
@@ -40,6 +41,7 @@ const DEFAULT_HTML = `<section style="padding:32px;background:#fdfdf7;">
 const DEFAULT_CSS = `body { font-family: var(--app-font, 'Yekan', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif); background: #fff; } section { border-radius: 12px; }`
 
 export default function PageBuilderModule() {
+  const confirmDialog = useConfirmDialog()
   const canvasRef = useRef<HTMLDivElement | null>(null)
 
   const editorRef = useRef<any>(null)
@@ -229,9 +231,12 @@ export default function PageBuilderModule() {
   }
 
   const handleDelete = async (template: PageBuilderTemplate) => {
-    const confirmed = window.confirm(
-      'ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ² ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ¢ط¢آ¨ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ  ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¹ط·â€؛',
-    )
+    const confirmed = await confirmDialog({
+      message:
+        'این قالب حذف شود؟ اطلاعات ذخیره شده قابل بازگشت نیست.',
+      confirmText: 'حذف قالب',
+      tone: 'danger',
+    })
 
     if (!confirmed) return
 

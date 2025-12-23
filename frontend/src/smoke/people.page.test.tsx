@@ -1,5 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
+import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
 
 // Mock API layer used by PeopleModule
 vi.mock('../services/api', () => {
@@ -34,13 +35,15 @@ describe('Smoke: People module basic render', () => {
   it('renders heading and empty state without errors', async () => {
     const smartDate = { isoDate: '2025-12-18', jalali: '1404-09-27' }
     render(
-      <PeopleModule
-        smartDate={smartDate as any}
-        onSmartDateChange={() => {}}
-        sync={null as any}
-        user={{ username: 'admin', role: 'Admin' } as any}
-        onNavigate={() => {}}
-      />,
+      <ConfirmDialogTestWrapper>
+        <PeopleModule
+          smartDate={smartDate as any}
+          onSmartDateChange={() => {}}
+          sync={null as any}
+          user={{ username: 'admin', role: 'Admin' } as any}
+          onNavigate={() => {}}
+        />
+      </ConfirmDialogTestWrapper>,
     )
     await waitFor(() => {
       expect(screen.getByText(/مدیریت طرف‌های حساب/)).toBeInTheDocument()

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { apiPost } from '../../services/api'
+import { toast } from '../../utils/toast'
 import {
   retroBadge,
   retroButton,
@@ -7,6 +8,8 @@ import {
   retroMuted,
   retroPanel,
 } from '../../components/retroTheme'
+import ModulePage from '../../components/layout/ModulePage'
+import { useConfirmDialog } from '../../context/ConfirmDialogContext'
 
 interface AssistantReply {
   ok?: boolean
@@ -45,6 +48,7 @@ export default function AssistantModule() {
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>(() => loadHistory())
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const confirmDialog = useConfirmDialog()
 
   useEffect(() => {
     // probe by sending a dummy help if needed? Prefer reading enable state by attempting toggle=false
@@ -64,7 +68,7 @@ export default function AssistantModule() {
       await apiPost('/api/assistant/toggle', { enabled: next })
       setEnabled(next)
     } catch (e: any) {
-      alert(e?.message || 'تغییر وضعیت دستیار ناموفق بود')
+      toast.error(e?.message || 'تغییر وضعیت دستیار ناموفق بود')
     } finally {
       setBusy(false)
     }
@@ -104,16 +108,25 @@ export default function AssistantModule() {
     }
   }
 
-  function clearHistory() {
-    if (!window.confirm('پاک کردن تاریخچه؟')) return
+  async function clearHistory() {
+    const ok = await confirmDialog({
+      title: 'پاک‌سازی تاریخچه',
+      message: 'تمام مکالمات ذخیره‌شده حذف شود؟',
+      confirmText: 'پاک کردن',
+      cancelText: 'بازگشت',
+      tone: 'danger',
+    })
+    if (!ok) return
     setHistory([])
     saveHistory([])
+    toast.success('تاریخچه پاک شد')
   }
 
   const sorted = useMemo(() => [...history].sort((a, b) => a.ts - b.ts), [history])
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <ModulePage eyebrow="Dev Assistant" title="دستیار توسعه‌دهنده" description="دستیار متنی برای دستورات سریع">
+    <div className="space-y-4 min-h-[50vh]" dir="rtl">
       <section className={`${retroPanel} p-4`}>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -149,7 +162,7 @@ export default function AssistantModule() {
           <button className={retroButton} disabled={busy} onClick={send}>
             {busy ? 'در حال ارسال…' : 'ارسال'}
           </button>
-          <button className={retroButton} onClick={clearHistory}>
+          <button className={retroButton} onClick={() => void clearHistory()}>
             پاک‌سازی تاریخچه
           </button>
         </div>
@@ -191,5 +204,6 @@ export default function AssistantModule() {
         )}
       </section>
     </div>
+    </ModulePage>
   )
 }

@@ -17,6 +17,7 @@ try {
 import { AuthProvider } from './context/AuthContext'
 import { I18nProvider } from './i18n/I18nContext'
 import { ThemeProvider } from './context/theme'
+import { ConfirmDialogProvider } from './context/ConfirmDialogContext'
 import { getAccessToken, loginDeveloper } from './services/auth'
 // Backward-compat global shims to avoid legacy bundle errors
 import * as authMod from './services/auth'
@@ -67,7 +68,9 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <I18nProvider>
         <ThemeProvider>
-          <App />
+          <ConfirmDialogProvider>
+            <App />
+          </ConfirmDialogProvider>
         </ThemeProvider>
       </I18nProvider>
     </AuthProvider>

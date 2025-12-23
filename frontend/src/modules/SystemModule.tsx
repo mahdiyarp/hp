@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { ModuleComponentProps, SmartDateState } from '../components/layout/AppShell'
 import SmartDatePicker from '../components/SmartDatePicker'
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '../services/api'
 import { isoToJalali } from '../utils/num'
+import { toast } from '../utils/toast'
 import authService from '../services/auth'
 import {
   retroBadge,
@@ -13,6 +14,14 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
+import ModulePage from '../components/layout/ModulePage'
+import {
+  AutoSaveState,
+  DEFAULT_AUTO_SAVE_DELAY_MS,
+  describeAutoSaveState,
+  scheduleAutoSaveIdleReset,
+} from './settings/autoSave'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 
 interface Backup {
   id: number
@@ -66,7 +75,17 @@ interface BlockchainEntry {
   previous_hash: string | null
 }
 
+function groupSettingsByCategory(settings: SystemSetting[]): Record<string, SystemSetting[]> {
+  return settings.reduce((acc, setting) => {
+    const cat = setting.category || 'other'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(setting)
+    return acc
+  }, {} as Record<string, SystemSetting[]>)
+}
+
 export default function SystemModule({ smartDate, onSmartDateChange, sync }: ModuleComponentProps) {
+  const confirmDialog = useConfirmDialog()
   const [backups, setBackups] = useState<Backup[]>([])
   const [integrations, setIntegrations] = useState<Integration[]>([])
   const [activities, setActivities] = useState<ActivityLog[]>([])
@@ -87,9 +106,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   )
   const [selectedCategory, setSelectedCategory] = useState<string>('general')
   const [sidebarSide, setSidebarSide] = useState<string>('')
-  const [savingSidebarSide, setSavingSidebarSide] = useState(false)
+  const [sidebarSideStatus, setSidebarSideStatus] = useState<AutoSaveState>('idle')
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState<string>('')
+  const [settingAutoSave, setSettingAutoSave] = useState<Record<string, AutoSaveState>>({})
+  const sidebarSideTimer = useRef<number | null>(null)
+  const settingTimers = useRef<Record<string, number>>({})
 
   // Financial Year state
   type FinancialYear = {
@@ -138,6 +160,15 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     loadData()
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (sidebarSideTimer.current) {
+        window.clearTimeout(sidebarSideTimer.current)
+      }
+      Object.values(settingTimers.current).forEach((timerId) => window.clearTimeout(timerId))
+    }
+  }, [])
+
   async function loadData() {
     setLoading(true)
     setError(null)
@@ -176,13 +207,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         }
         setAllSettings(settings)
         // Group by category
-        const grouped: { [key: string]: SystemSetting[] } = {}
-        settings.forEach((s) => {
-          const cat = s.category || 'other'
-          if (!grouped[cat]) grouped[cat] = []
-          grouped[cat].push(s)
-        })
-        setSettingsByCategory(grouped)
+        setSettingsByCategory(groupSettingsByCategory(settings))
       } catch (err) {
         console.error(err)
         warn.push('تنظیمات سیستم قابل دریافت نیست.')
@@ -226,6 +251,60 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     }
   }
 
+  function cancelSettingEdit(key: string) {
+    if (settingTimers.current[key]) {
+      window.clearTimeout(settingTimers.current[key])
+      delete settingTimers.current[key]
+    }
+    setEditingKey(null)
+    setEditValue('')
+    setSettingAutoSave((prev) => ({ ...prev, [key]: 'idle' }))
+  }
+
+  function updateSettingValueLocally(key: string, value: string | null) {
+    setAllSettings((prev) => {
+      const next = prev.map((setting) =>
+        setting.key === key ? { ...setting, value } : setting,
+      )
+      setSettingsByCategory(groupSettingsByCategory(next))
+      return next
+    })
+  }
+
+  function scheduleSettingAutoSave(key: string, value: string) {
+    setEditValue(value)
+    setSettingAutoSave((prev) => {
+      const current = prev[key]
+      if (current === 'saving') return prev
+      return { ...prev, [key]: 'pending' }
+    })
+    if (settingTimers.current[key]) {
+      window.clearTimeout(settingTimers.current[key])
+    }
+    settingTimers.current[key] = window.setTimeout(async () => {
+      setSettingAutoSave((prev) => ({ ...prev, [key]: 'saving' }))
+      try {
+        await apiPatch(`/api/admin/settings/${key}`, { value })
+        setSettingAutoSave((prev) => ({ ...prev, [key]: 'saved' }))
+        updateSettingValueLocally(key, value)
+        setEditingKey((prev) => (prev === key ? null : prev))
+        setEditValue('')
+        window.setTimeout(() => {
+          setSettingAutoSave((prev) => ({ ...prev, [key]: 'idle' }))
+        }, 2000)
+      } catch (err) {
+        console.error(err)
+        setSettingAutoSave((prev) => ({ ...prev, [key]: 'error' }))
+        setError('به‌روزرسانی تنظیم موفق نبود.')
+      } finally {
+        if (settingTimers.current[key]) {
+          window.clearTimeout(settingTimers.current[key])
+          delete settingTimers.current[key]
+        }
+      }
+    }, DEFAULT_AUTO_SAVE_DELAY_MS)
+  }
+
   // ===== Payment Methods =====
   async function loadPaymentMethods() {
     setPmLoading(true)
@@ -237,7 +316,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         localStorage.setItem('hesabpak_payment_methods', JSON.stringify(list || []))
       } catch {}
     } catch (err: any) {
-      setPmError(err?.message || 'بارگذاری روش‌های پرداخت ناموفق بود')
+      setPmError('روش‌های پرداخت در دسترس نیست (API 404/خطای دسترسی). داده کش‌شده نمایش داده شد.')
       try {
         const raw = localStorage.getItem('hesabpak_payment_methods')
         if (raw) setMethods(JSON.parse(raw))
@@ -257,7 +336,10 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
         is_cheque: !!draftPm.is_cheque,
         order: draftPm.order ?? 100,
       }
-      if (!payload.key || !payload.name) return alert('کلید و نام لازم است')
+      if (!payload.key || !payload.name) {
+        toast.warning('کلید و نام لازم است')
+        return
+      }
       await apiPost('/api/payment-methods', payload)
       setDraftPm({ enabled: true, order: 100 })
       await loadPaymentMethods()
@@ -286,7 +368,12 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   }
 
   async function deletePaymentMethod(id: number) {
-    if (!confirm('حذف روش پرداخت؟')) return
+    const confirmed = await confirmDialog({
+      message: 'حذف روش پرداخت؟',
+      confirmText: 'حذف',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await apiDelete(`/api/payment-methods/${id}`)
       await loadPaymentMethods()
@@ -337,7 +424,10 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   async function downloadProof() {
     try {
       const id = selectedEntryId
-      if (!id) return alert('ابتدا یک رکورد را انتخاب کنید')
+      if (!id) {
+        toast.warning('ابتدا یک رکورد را انتخاب کنید')
+        return
+      }
       const res = await authService.fetchWithAuth(`/api/blockchain/entries/${id}/proof`)
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -390,7 +480,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       } catch {}
     }
     if (!name || !startRaw) {
-      alert('نام و تاریخ شروع ضروری است')
+      toast.warning('نام و تاریخ شروع ضروری است')
       return
     }
     setSavingFY(true)
@@ -399,7 +489,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       const startParsed = parseJalaliInput(startRaw)
       const endParsed = newFY.end_date ? parseJalaliInput(newFY.end_date) : null
       if (!startParsed) {
-        alert('فرمت تاریخ شروع نامعتبر است')
+        toast.warning('فرمت تاریخ شروع نامعتبر است')
         setSavingFY(false)
         return
       }
@@ -415,10 +505,10 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       await apiPost('/api/financial-years', payload)
       await loadData()
       setNewFY({ name: '', start_date: '' })
-      alert('سال مالی ایجاد شد')
+      toast.success('سال مالی ایجاد شد')
     } catch (err) {
       console.error(err)
-      alert('ایجاد سال مالی با خطا مواجه شد')
+      toast.error('ایجاد سال مالی با خطا مواجه شد')
     } finally {
       setSavingFY(false)
     }
@@ -428,22 +518,27 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
     try {
       await apiPatch(`/api/financial-years/${fid}`, patch)
       await loadData()
-      alert('سال مالی بروزرسانی شد')
+      toast.success('سال مالی بروزرسانی شد')
     } catch (err) {
       console.error(err)
-      alert('بروزرسانی ناموفق بود')
+      toast.error('بروزرسانی ناموفق بود')
     }
   }
 
   async function deleteFY(fid: number) {
-    if (!confirm('حذف سال مالی؟')) return
+    const confirmed = await confirmDialog({
+      message: 'حذف سال مالی؟',
+      confirmText: 'حذف',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await apiDelete(`/api/financial-years/${fid}`)
       await loadData()
-      alert('حذف شد')
+      toast.success('سال مالی حذف شد')
     } catch (err) {
       console.error(err)
-      alert('حذف ناموفق بود')
+      toast.error('حذف ناموفق بود')
     }
   }
 
@@ -459,7 +554,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error(err)
-      alert('دانلود ناموفق بود')
+      toast.error('دانلود ناموفق بود')
     }
   }
 
@@ -481,26 +576,49 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
       }, 100)
     } catch (err) {
       console.error(err)
-      alert('تنظیم سال فعال ناموفق بود')
+      toast.error('تنظیم سال فعال ناموفق بود')
     }
   }
 
-  async function saveSidebarSide() {
-    if (!sidebarSide) return
-    setSavingSidebarSide(true)
+  const saveSidebarSide = useCallback(async (nextSide: string) => {
+    if (!nextSide) {
+      setSidebarSideStatus('idle')
+      return
+    }
+    setSidebarSideStatus('saving')
     try {
-      await apiPost('/api/users/preferences/sidebar-side', { side: sidebarSide })
+      await apiPost('/api/users/preferences/sidebar-side', { side: nextSide })
       try {
-        localStorage.setItem('hesabpak_sidebar_side_v1', sidebarSide)
+        localStorage.setItem('hesabpak_sidebar_side_v1', nextSide)
       } catch (e) {}
-      alert('تنظیم ذخیره شد')
+      setSidebarSideStatus('saved')
+      scheduleAutoSaveIdleReset(setSidebarSideStatus, 2000)
     } catch (err) {
       console.error(err)
+      setSidebarSideStatus('error')
       setError('ذخیره تنظیم منوی کناری موفق نبود.')
-    } finally {
-      setSavingSidebarSide(false)
     }
-  }
+  }, [])
+
+  const scheduleSidebarSideSave = useCallback(
+    (nextValue: string) => {
+      setSidebarSide(nextValue)
+      if (sidebarSideTimer.current) {
+        window.clearTimeout(sidebarSideTimer.current)
+        sidebarSideTimer.current = null
+      }
+      if (!nextValue) {
+        setSidebarSideStatus('idle')
+        return
+      }
+      setSidebarSideStatus('pending')
+      sidebarSideTimer.current = window.setTimeout(() => {
+        sidebarSideTimer.current = null
+        void saveSidebarSide(nextValue)
+      }, DEFAULT_AUTO_SAVE_DELAY_MS)
+    },
+    [saveSidebarSide],
+  )
 
   async function createManualBackup() {
     setCreatingBackup(true)
@@ -519,20 +637,13 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
 
   // SMS utility functions removed
 
-  async function updateSetting(key: string, newValue: string) {
-    try {
-      await apiPatch(`/api/admin/settings/${key}`, { value: newValue })
-      setEditingKey(null)
-      setEditValue('')
-      await loadData()
-    } catch (err) {
-      console.error(err)
-      setError('به‌روزرسانی تنظیم موفق نبود.')
-    }
-  }
-
   async function deleteSetting(key: string) {
-    if (!window.confirm('آیا مطمئن هستید؟')) return
+    const confirmed = await confirmDialog({
+      message: 'آیا مطمئن هستید؟',
+      confirmText: 'حذف',
+      tone: 'danger',
+    })
+    if (!confirmed) return
     try {
       await apiDelete(`/api/admin/settings/${key}`)
       await loadData()
@@ -558,7 +669,11 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
   }
 
   return (
-    <div className="space-y-8">
+    <ModulePage
+      eyebrow="System Settings"
+      title="تنظیمات سیستم"
+      description={`تاریخ مرجع: ${smartDate.jalali ?? '—'} (ISO ${smartDate.isoDate ?? '—'})`}
+    >
       {error && (
         <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
           {error}
@@ -1165,18 +1280,15 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
               <select
                 className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de] text-sm"
                 value={sidebarSide}
-                onChange={(e) => setSidebarSide(e.target.value)}
+                onChange={(e) => scheduleSidebarSideSave(e.target.value)}
               >
                 <option value="">پیشفرض (راست)</option>
                 <option value="right">راست</option>
                 <option value="left">چپ</option>
               </select>
-              <button
-                className={`${retroButton} ${savingSidebarSide ? 'opacity-50 pointer-events-none' : ''}`}
-                onClick={saveSidebarSide}
-              >
-                ذخیره
-              </button>
+              <span className="text-xs text-[#7a6b4f]">
+                {describeAutoSaveState(sidebarSideStatus)}
+              </span>
             </div>
           </div>
 
@@ -1221,10 +1333,9 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                             type={setting.is_secret ? 'password' : 'text'}
                             className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
                             value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
+                            onChange={(e) => scheduleSettingAutoSave(setting.key, e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') updateSetting(setting.key, editValue)
-                              if (e.key === 'Escape') setEditingKey(null)
+                              if (e.key === 'Escape') cancelSettingEdit(setting.key)
                             }}
                           />
                         ) : (
@@ -1236,24 +1347,19 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                       <td className="px-3 py-2 text-xs text-[#7a6b4f]">
                         {setting.description || '-'}
                       </td>
-                      <td className="px-3 py-2 text-center space-x-2">
+                      <td className="px-3 py-2 text-center space-y-1">
+                        <div className="text-[11px] text-[#7a6b4f]">
+                          {describeAutoSaveState(settingAutoSave[setting.key] ?? 'idle')}
+                        </div>
                         {editingKey === setting.key ? (
-                          <>
-                            <button
-                              className="text-green-600 hover:text-green-800 text-xs"
-                              onClick={() => updateSetting(setting.key, editValue)}
-                            >
-                              ✓
-                            </button>
-                            <button
-                              className="text-red-600 hover:text-red-800 text-xs"
-                              onClick={() => setEditingKey(null)}
-                            >
-                              ✗
-                            </button>
-                          </>
+                          <button
+                            className="text-red-600 hover:text-red-800 text-xs"
+                            onClick={() => cancelSettingEdit(setting.key)}
+                          >
+                            لغو
+                          </button>
                         ) : (
-                          <>
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               className="text-[var(--retro-heading-text)] hover:text-[var(--retro-button-bg)] text-xs"
                               onClick={() => {
@@ -1269,7 +1375,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                             >
                               حذف
                             </button>
-                          </>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1282,6 +1388,6 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           </div>
         </div>
       </section>
-    </div>
+    </ModulePage>
   )
 }

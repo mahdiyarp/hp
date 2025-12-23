@@ -101,22 +101,37 @@ def create_user(session: Session, user: schemas.UserCreate):
     existing = get_user_by_username(session, user.username)
     if existing:
         raise ValueError('Username already exists')
-    
-    # If role_id not specified, get Viewer role (ID should be 5 based on migration)
+    # Resolve desired role either by id or by provided role name
     role_id = user.role_id
-    if not role_id:
+    role_name = user.role
+    role_obj = None
+    if role_id:
+        role_obj = session.query(models.Role).filter(models.Role.id == role_id).first()
+        if not role_obj:
+            raise ValueError('Role not found')
+    elif user.role:
+        role_obj = session.query(models.Role).filter(func.lower(models.Role.name) == user.role.lower()).first()
+        if not role_obj:
+            raise ValueError('Role not found')
+    if role_obj:
+        role_id = role_obj.id
+        role_name = role_obj.name
+    else:
         viewer_role = session.query(models.Role).filter(models.Role.name == 'Viewer').first()
         if viewer_role:
             role_id = viewer_role.id
+            role_name = viewer_role.name
         else:
             role_id = 5  # Default fallback
-    
+            role_name = 'Viewer'
+
     db_user = models.User(
         username=username_norm,
         email=user.email,
         full_name=user.full_name,
+        mobile=user.mobile,
         hashed_password=get_password_hash(user.password),
-        role='User',  # Legacy field, not used with role_id
+        role=role_name or 'User',  # Legacy field for compatibility
         role_id=role_id,
         is_active=True,
     )
@@ -2898,12 +2913,15 @@ def finalize_sale_order(session: Session, so_id: int, client_time: Optional[date
                 product_id=i.product_id,
             ) for i in items
         ]
+        # Convert datetime to ISO string for InvoiceCreate
+        ct = client_time or so.client_time
+        client_time_str = ct.isoformat() if ct and hasattr(ct, 'isoformat') else ct
         inv_payload = schemas.InvoiceCreate(
             invoice_type='sale',
             mode='manual',
             party_id=so.party_id,
             party_name=so.party_name,
-            client_time=client_time or so.client_time,
+            client_time=client_time_str,
             items=inv_items,
             note=so.note,
         )

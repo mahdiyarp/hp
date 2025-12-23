@@ -26,7 +26,7 @@ export default function SmartAssistantWidget() {
   const [busy, setBusy] = useState(false)
 
   const sendChat = async () => {
-    if (!message) return
+    if (!message.trim()) return
 
     setBusy(true)
 
@@ -38,10 +38,7 @@ export default function SmartAssistantWidget() {
 
       setReply(res?.reply || '')
     } catch (err: any) {
-      setReply(
-        err?.message ||
-          'ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ®',
-      )
+      setReply(err?.message || 'ارسال پیام با خطا مواجه شد. لطفاً دوباره تلاش کنید.')
     } finally {
       setBusy(false)
     }
@@ -63,10 +60,7 @@ export default function SmartAssistantWidget() {
 
       setAnalysis(res || null)
     } catch (err: any) {
-      setReply(
-        err?.message ||
-          'ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
-      )
+      setReply(err?.message || 'بارگذاری یا تحلیل سند انجام نشد. لطفاً دوباره تلاش کنید.')
     } finally {
       setBusy(false)
     }
@@ -79,32 +73,25 @@ export default function SmartAssistantWidget() {
     >
       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
         <p className={retroHeading}>
-          ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±
-          ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯
-          ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢
+          دستیار هوشمند حساب‌پاک آماده است تا پرسش‌های حسابداری و درخواست‌های ثبت سند را پاسخ
+          دهد. می‌توانید پیام خود را بنویسید یا در ادامه فایل دلخواه را برای تحلیل ارسال کنید.
         </p>
 
-        {reply && (
-          <span className={retroBadge}>
-            ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ®
-            ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾
-            ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯
-          </span>
-        )}
+        {reply && <span className={retroBadge}>پاسخ جدید از دستیار دریافت شد</span>}
       </div>
 
       <div className="space-y-2">
         <div className="flex gap-2 flex-wrap">
           <input
             className={retroInput}
-            placeholder="ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع† ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¢ط¢آ¦"
+            placeholder="سؤال یا دستور خود را بنویسید (مثلاً خلاصه فاکتور یا نحوه ثبت سند)"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && sendChat()}
           />
 
           <button className={retroButton} onClick={sendChat} disabled={busy}>
-            ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
+            ارسال پیام
           </button>
         </div>
 
@@ -116,52 +103,31 @@ export default function SmartAssistantWidget() {
           <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
 
           <button className={retroButton} onClick={uploadDoc} disabled={busy || !file}>
-            ط·آ·ط¢آ·ط·آ¢ط¢آ¢ط·آ·ط¢آ¸ط·آ¢ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯
-            ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ 
-            ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†
-            ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯
+            بارگذاری و تحلیل سند
           </button>
         </div>
 
         {analysis && (
           <div className="bg-white border border-[#e0d4b8] p-3 rounded-lg space-y-2 text-sm text-[#2f281f]">
             <div className="flex gap-2 flex-wrap">
-              <span className={retroBadge}>
-                ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¹
-                ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯: {analysis.doc_type || '-'}
-              </span>
+              <span className={retroBadge}>نوع سند تشخیص داده‌شده: {analysis.doc_type || '-'}</span>
 
-              <span className={retroBadge}>
-                ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آµ
-                ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†:{' '}
-                {analysis.party?.name || '-'}
-              </span>
+              <span className={retroBadge}>طرف حساب / مشتری: {analysis.party?.name || '-'}</span>
 
-              <span className={retroBadge}>
-                ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط›
-                ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†: {analysis.totals?.grand_total ?? 0}
-              </span>
+              <span className={retroBadge}>جمع کل گزارش‌شده: {analysis.totals?.grand_total ?? 0}</span>
             </div>
 
             {analysis.suggested_journal && analysis.suggested_journal.length > 0 && (
               <table className="w-full text-xs border border-[#e0d4b8]">
                 <thead className="bg-[#efe8d8]">
                   <tr>
-                    <th className="px-2 py-1 text-right">
-                      ط·آ·ط¢آ·ط·آ¢ط¢آ­ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ¨
-                    </th>
+                    <th className="px-2 py-1 text-right">حساب پیشنهادی</th>
 
-                    <th className="px-2 py-1 text-right">
-                      ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±
-                    </th>
+                    <th className="px-2 py-1 text-right">مبلغ بدهکار</th>
 
-                    <th className="px-2 py-1 text-right">
-                      ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±
-                    </th>
+                    <th className="px-2 py-1 text-right">مبلغ بستانکار</th>
 
-                    <th className="px-2 py-1 text-right">
-                      ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¶ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ­
-                    </th>
+                    <th className="px-2 py-1 text-right">دلیل ثبت</th>
                   </tr>
                 </thead>
 

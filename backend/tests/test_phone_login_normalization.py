@@ -1,5 +1,7 @@
 import os
 import sys
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -23,8 +25,27 @@ def override_get_db():
     finally:
         session.close()
 
+@pytest.fixture(autouse=True)
+def _override_dependencies():
+    Base.metadata.drop_all(bind=_engine)
+    Base.metadata.create_all(bind=_engine)
 
-app.dependency_overrides[db.get_db] = override_get_db
+    prev_db = app.dependency_overrides.get(db.get_db)
+    app.dependency_overrides[db.get_db] = override_get_db
+    original_flag = os.environ.get('DEMO_ALLOW_OTP_NO_SMS')
+    try:
+        yield
+    finally:
+        if original_flag is None:
+            os.environ.pop('DEMO_ALLOW_OTP_NO_SMS', None)
+        else:
+            os.environ['DEMO_ALLOW_OTP_NO_SMS'] = original_flag
+        if prev_db is not None:
+            app.dependency_overrides[db.get_db] = prev_db
+        else:
+            app.dependency_overrides.pop(db.get_db, None)
+
+
 client = TestClient(app, raise_server_exceptions=False)
 
 

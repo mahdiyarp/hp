@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 
 import { apiGet, apiPost, apiPut } from '../../services/api'
+import { toast } from '../../utils/toast'
 
 import { retroBadge, retroButton, retroHeading, retroInput, retroPanelPadded } from '../retroTheme'
 
@@ -53,8 +54,6 @@ export default function SmartAssistantSettingsPanel() {
 
   const [apiKeyInput, setApiKeyInput] = useState('')
 
-  const [toast, setToast] = useState<string>('')
-
   const [health, setHealth] = useState<{ status: string; message?: string } | null>(null)
 
   const [testQuestion, setTestQuestion] = useState(
@@ -71,7 +70,7 @@ export default function SmartAssistantSettingsPanel() {
 
       if (data) setSettings((prev) => ({ ...prev, ...data }))
     } catch (err: any) {
-      setToast(
+      toast.error(
         err?.message ||
           'ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط¢آ·ط·آ¢ط¢آ·ط·آ·ط¢آ·ط·آ¢ط¢آ§ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ±',
       )
@@ -83,12 +82,6 @@ export default function SmartAssistantSettingsPanel() {
 
     loadHealth()
   }, [])
-
-  const showToast = (txt: string) => {
-    setToast(txt)
-
-    setTimeout(() => setToast(''), 2500)
-  }
 
   const loadHealth = async () => {
     try {
@@ -112,7 +105,7 @@ export default function SmartAssistantSettingsPanel() {
 
       setApiKeyInput('')
 
-      showToast(
+      toast.success(
         'ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¢ط¢آ³ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¢ط¢آ± ط·آ·ط¢آ·ط·آ¢ط¢آ°ط·آ·ط¢آ·ط·آ¢ط¢آ®ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ±ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط·إ’ ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ·ط·آ¢ط¢آ¯.',
       )
 
@@ -120,7 +113,7 @@ export default function SmartAssistantSettingsPanel() {
 
       await loadHealth()
     } catch (err: any) {
-      showToast(
+      toast.error(
         err?.message ||
           'ط·آ·ط¢آ·ط·آ¢ط¢آ«ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ·ط·آ¹ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ¸ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ·ط·آ¹ط¢آ¾ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ ط·آ·ط¢آ·ط·آ¢ط¢آ§ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¢آ¦ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ¸ط·آ¸ط¢آ¾ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬ط¹â€ک ط·آ·ط¢آ·ط·آ¢ط¢آ¨ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯',
       )
@@ -169,11 +162,6 @@ export default function SmartAssistantSettingsPanel() {
           </p>
         </div>
 
-        {toast && (
-          <span className={`${retroBadge} bg-[#fff4e0] border-[#f2c890] text-[#7c4a03]`}>
-            {toast}
-          </span>
-        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-3 bg-white border border-[#e0d4b8] p-3 rounded-lg">

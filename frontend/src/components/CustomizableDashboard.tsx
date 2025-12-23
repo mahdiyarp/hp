@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import GridLayout from 'react-grid-layout'
 import { apiGet, apiPost, apiDelete } from '../services/api'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 
 interface Widget {
   id: number
@@ -39,6 +40,7 @@ const WIDGET_TYPES = [
 export default function CustomizableDashboard({ isDragEnabled = true }: DashboardProps) {
   const [widgets, setWidgets] = useState<Widget[]>([])
   const [layout, setLayout] = useState<LayoutItem[]>([])
+  const confirmDialog = useConfirmDialog()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditMode, setIsEditMode] = useState(false)
@@ -88,7 +90,12 @@ export default function CustomizableDashboard({ isDragEnabled = true }: Dashboar
   }
 
   async function removeWidget(widgetId: number) {
-    if (!window.confirm('آیا این widget را حذف می‌کنید؟')) return
+    const confirmed = await confirmDialog({
+      message: 'آیا این widget را حذف می‌کنید؟',
+      confirmText: 'حذف',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       await apiDelete(`/api/dashboard/widgets/${widgetId}`)

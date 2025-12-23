@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, ROOT)
 
 from app import db, crud, models, schemas
-from app.security import get_password_hash
+from app.security import get_password_hash, verify_password
 from sqlalchemy import text
 
 
@@ -79,48 +79,94 @@ def seed():
     session = db.SessionLocal()
     try:
         print("[SEED] Starting demo data seeding", flush=True)
-        
-        # Create admin user if doesn't exist
-        print("[SEED] Checking for admin user", flush=True)
+
+        def ensure_role(name: str, description: str) -> models.Role:
+            role = session.query(models.Role).filter(models.Role.name == name).first()
+            if not role:
+                print(f"[SEED] Creating role {name}", flush=True)
+                role = models.Role(name=name, description=description)
+                session.add(role)
+                session.commit()
+                session.refresh(role)
+            return role
+
+        def grant_all_permissions(role):
+            if not role:
+                return
+            session.refresh(role)
+            perms = session.query(models.Permission).all()
+            if not perms:
+                return
+            existing = {p.id for p in role.permissions}
+            changed = False
+            for perm in perms:
+                if perm.id not in existing:
+                    role.permissions.append(perm)
+                    changed = True
+            if changed:
+                session.commit()
+                session.refresh(role)
+                print(f"[SEED] Granted {len(perms)} permissions to role {role.name}", flush=True)
+
+        print("[SEED] Checking for legacy admin user", flush=True)
         admin = session.query(models.User).filter(models.User.username == 'admin').first()
-        if not admin:
-            print("[SEED] Admin user not found, creating", flush=True)
-            admin = models.User(
-                username='admin',
-                email='admin@example.com',
-                full_name='Administrator',
-                hashed_password=get_password_hash('admin'),
-                role='Admin',
-                is_active=True
-            )
+        if admin:
+            print("[SEED] Retiring default admin account", flush=True)
+            admin.username = f"legacy-admin-{admin.id}"
+            admin.is_active = False
+            admin.email = None
+            admin.mobile = None
+            admin.role = 'Viewer'
+            admin.role_id = None
+            admin.hashed_password = get_password_hash('admin-retired')
             session.add(admin)
             session.commit()
-            print("[SEED] Created admin user", flush=True)
         else:
-            print("[SEED] Admin user already exists", flush=True)
+            print("[SEED] No legacy admin user found", flush=True)
 
-        # Create developer user if doesn't exist
-        print("[SEED] Checking for developer user", flush=True)
         developer = session.query(models.User).filter(models.User.username == 'developer').first()
         if not developer:
+            developer = session.query(models.User).filter(models.User.mobile == '09123506545').first()
+        dev_role = ensure_role('Developer', 'توسعه‌دهنده با دسترسی کامل')
+        dev_nft_role = ensure_role('Developer NFT', 'کلید NFT برای دسترسی سراسری توسعه‌دهنده')
+        grant_all_permissions(dev_role)
+        grant_all_permissions(dev_nft_role)
+        if not developer:
             print("[SEED] Developer user not found, creating", flush=True)
-            # Get Admin role (should be ID 1 based on migrations)
-            admin_role = session.query(models.Role).filter(models.Role.name == 'Admin').first()
-            role_id = admin_role.id if admin_role else 1
             developer = models.User(
                 username='developer',
                 email='developer@hesabpak.local',
                 full_name='Developer User',
                 mobile='09123506545',
                 hashed_password=get_password_hash('09123506545'),
-                role='Admin',
-                role_id=role_id,
+                role='Developer',
+                role_id=dev_role.id if dev_role else None,
                 is_active=True
             )
             session.add(developer)
             session.commit()
             print("[SEED] Created developer user", flush=True)
         else:
+            updated = False
+            if developer.mobile != '09123506545':
+                developer.mobile = '09123506545'
+                updated = True
+            if dev_role and developer.role_id != dev_role.id:
+                developer.role_id = dev_role.id
+                updated = True
+            if developer.role != 'Developer':
+                developer.role = 'Developer'
+                updated = True
+            try:
+                needs_reset = not verify_password('09123506545', getattr(developer, 'hashed_password', '') or '')
+            except Exception:
+                needs_reset = True
+            if needs_reset:
+                developer.hashed_password = get_password_hash('09123506545')
+                updated = True
+            if updated:
+                session.add(developer)
+                session.commit()
             print("[SEED] Developer user already exists", flush=True)
 
         # Assign an NFT asset to developer for organization-level access

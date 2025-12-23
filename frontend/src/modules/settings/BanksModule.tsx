@@ -7,6 +7,9 @@ import {
   retroPanelPadded,
   retroTableHeader,
 } from '../../components/retroTheme'
+import ModulePage from '../../components/layout/ModulePage'
+import { toast } from '../../utils/toast'
+import { toast } from '../../utils/toast'
 
 interface Bank {
   code?: string
@@ -74,7 +77,7 @@ export default function BanksModule() {
         {},
       )
       await load()
-      alert(`به‌روزرسانی انجام شد (بانک‌ها: ${res.banks_count}، شعب: ${res.branches_count})`)
+      toast.success(`به‌روزرسانی انجام شد (بانک‌ها: ${res.banks_count}، شعب: ${res.branches_count})`)
     } catch (e: any) {
       setError(e?.message || 'به‌روزرسانی ناموفق بود')
     } finally {
@@ -87,7 +90,8 @@ export default function BanksModule() {
   }, [])
 
   return (
-    <section className={`${retroPanelPadded} space-y-4`}>
+    <ModulePage eyebrow="Iran Banks" title="بانک‌ها و شعب" description="نمایش و جستجوی بانک‌ها و شعب ایران؛ بروزرسانی از منابع">
+    <section className={`${retroPanelPadded} space-y-4 min-h-[50vh]`}>
       <div className="flex items-center justify-between">
         <div>
           <div className={retroHeading}>بانک‌ها و شعب ایران</div>
@@ -171,5 +175,6 @@ export default function BanksModule() {
         </div>
       </div>
     </section>
+    </ModulePage>
   )
 }

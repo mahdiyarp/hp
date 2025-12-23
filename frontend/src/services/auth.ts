@@ -1,3 +1,5 @@
+import { DEMO_USER, isFrontendOnlyMode, mockFetchResponse } from './mockApi'
+
 const ACCESS_KEY = 'hesabpak_access_token'
 const REFRESH_KEY = 'hesabpak_refresh_token'
 
@@ -40,6 +42,16 @@ export async function login(
   password: string,
   otp?: string,
 ): Promise<LoginResult> {
+  if (isFrontendOnlyMode) {
+    const demoAccess = `${DEMO_USER.username}-access`
+    const demoRefresh = `${DEMO_USER.username}-refresh`
+    setTokens(demoAccess, demoRefresh)
+    return {
+      otpRequired: false,
+      access_token: demoAccess,
+      refresh_token: demoRefresh,
+    }
+  }
   const params = new URLSearchParams()
   params.append('username', username)
   params.append('password', password)
@@ -72,6 +84,12 @@ export async function login(
 }
 
 export async function refreshTokens() {
+  if (isFrontendOnlyMode) {
+    const demoAccess = `${DEMO_USER.username}-access`
+    const demoRefresh = `${DEMO_USER.username}-refresh`
+    setTokens(demoAccess, demoRefresh)
+    return { access_token: demoAccess, refresh_token: demoRefresh }
+  }
   const refresh = getRefreshToken()
   if (!refresh) throw new Error('No refresh token')
   const res = await fetch(apiBase() + '/api/auth/refresh', {
@@ -86,6 +104,9 @@ export async function refreshTokens() {
 }
 
 export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
+  if (isFrontendOnlyMode) {
+    return mockFetchResponse(typeof input === 'string' ? input : input.toString(), init)
+  }
   const access = getAccessToken()
   const refresh = getRefreshToken()
   const headers = new Headers(init?.headers || {})
@@ -139,6 +160,9 @@ export async function fetchWithAuth(input: RequestInfo, init?: RequestInit) {
 export async function loginByPhoneRequest(
   phone: string,
 ): Promise<{ success: boolean; session_id: string; message?: string }> {
+  if (isFrontendOnlyMode) {
+    return { success: true, session_id: 'demo-session', message: 'کد یک‌بار مصرف برای حالت دمو است.' }
+  }
   const res = await fetch(apiBase() + '/api/auth/login-phone', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -156,6 +180,12 @@ export async function verifyPhoneOtp(
   session_id: string,
   otp_code: string,
 ): Promise<{ success: boolean; access_token: string; token_type: string }> {
+  if (isFrontendOnlyMode) {
+    const demoAccess = `${DEMO_USER.username}-access`
+    const demoRefresh = `${DEMO_USER.username}-refresh`
+    setTokens(demoAccess, demoRefresh)
+    return { success: true, access_token: demoAccess, token_type: 'bearer' }
+  }
   const res = await fetch(apiBase() + '/api/auth/verify-phone-otp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -173,12 +203,18 @@ export async function verifyPhoneOtp(
 }
 
 export async function requestOtpSetup() {
+  if (isFrontendOnlyMode) {
+    return { secret: 'DEMO-SECRET', otpauth_url: 'otpauth://demo' }
+  }
   const res = await fetchWithAuth('/api/auth/otp/setup', { method: 'POST' })
   if (!res.ok) throw new Error('Failed to init OTP setup')
   return res.json()
 }
 
 export async function verifyOtp(code: string) {
+  if (isFrontendOnlyMode) {
+    return { success: true }
+  }
   const res = await fetchWithAuth('/api/auth/otp/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -189,6 +225,9 @@ export async function verifyOtp(code: string) {
 }
 
 export async function disableOtp(code?: string) {
+  if (isFrontendOnlyMode) {
+    return { success: true }
+  }
   const res = await fetchWithAuth('/api/auth/otp/disable', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -214,6 +253,13 @@ export default {
 }
 
 export async function loginDeveloper() {
+  if (isFrontendOnlyMode) {
+    const demoAccess = `${DEMO_USER.username}-access`
+    const demoRefresh = `${DEMO_USER.username}-refresh`
+    setTokens(demoAccess, demoRefresh)
+    window.dispatchEvent(new CustomEvent('auth-updated'))
+    return
+  }
   try {
     const res = await fetch(apiBase() + '/api/auth/login-dev', { method: 'POST' })
     if (!res.ok) return

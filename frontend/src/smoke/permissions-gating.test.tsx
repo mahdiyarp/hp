@@ -1,7 +1,12 @@
 import React from 'react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import AppShell from '../components/layout/AppShell'
+import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
+
+vi.mock('../i18n/I18nContext', () => ({
+  useI18n: () => ({ t: (k: string) => k, locale: 'fa', dir: 'rtl' }),
+}))
 
 // Minimal fake module requiring a permission
 const FakeModule: React.FC<any> = () => <div>FAKE REPORTS MODULE</div>
@@ -21,28 +26,32 @@ const modules = [
 describe('Smoke: Permissions gating in AppShell', () => {
   it('hides module when permission is missing', () => {
     render(
-      <AppShell
-        modules={modules as any}
-        sync={null}
-        user={{ username: 'u', role: 'User' }}
-        onLogout={() => {}}
-        orgFeatures={['reports']}
-        permissions={[]}
-      />,
+      <ConfirmDialogTestWrapper>
+        <AppShell
+          modules={modules as any}
+          sync={null}
+          user={{ username: 'u', role: 'User' }}
+          onLogout={() => {}}
+          orgFeatures={['reports']}
+          permissions={[]}
+        />
+      </ConfirmDialogTestWrapper>,
     )
     expect(screen.queryByText('گزارش‌ها و تحلیل‌ها')).toBeNull()
   })
 
   it('shows module when required permission is present', () => {
     render(
-      <AppShell
-        modules={modules as any}
-        sync={null}
-        user={{ username: 'u', role: 'User' }}
-        onLogout={() => {}}
-        orgFeatures={['reports']}
-        permissions={['reports:view']}
-      />,
+      <ConfirmDialogTestWrapper>
+        <AppShell
+          modules={modules as any}
+          sync={null}
+          user={{ username: 'u', role: 'User' }}
+          onLogout={() => {}}
+          orgFeatures={['reports']}
+          permissions={['reports:view']}
+        />
+      </ConfirmDialogTestWrapper>,
     )
     expect(screen.getByText('گزارش‌ها و تحلیل‌ها')).toBeDefined()
   })

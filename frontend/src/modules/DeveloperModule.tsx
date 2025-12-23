@@ -11,6 +11,7 @@ import {
   retroLabel,
   retroTableHeader,
 } from '../components/retroTheme'
+import { useConfirmDialog } from '../context/ConfirmDialogContext'
 
 interface ApiKey {
   id: number
@@ -35,6 +36,7 @@ interface ApiKey {
 }
 
 export default function DeveloperModule() {
+  const confirmDialog = useConfirmDialog()
   const [keys, setKeys] = useState<ApiKey[]>([])
 
   const [loading, setLoading] = useState(false)
@@ -136,12 +138,12 @@ export default function DeveloperModule() {
   }
 
   async function revoke(keyId: number) {
-    if (
-      !window.confirm(
-        'ط·آ·ط¢آ¹ط·آ¢ط¢آ©ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط·â€؛ط·آ¥أ¢â‚¬â„¢ط·آ·ط¢آ·ط·آ¢ط¢آ¯ ط·آ·ط¢آ¸ط£آ¢أ¢â€ڑآ¬أ¢â‚¬ع†ط·آ·ط¢آ·ط·آ·أ¢â‚¬ط›ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ  ط·آ·ط¢آ·ط·آ¢ط¢آ´ط·آ·ط¢آ¸ط·آ«أ¢â‚¬آ ط·آ·ط¢آ·ط·آ¢ط¢آ¯ط·آ·ط¢آ·ط·آ¹ط·â€؛',
-      )
-    )
-      return
+    const confirmed = await confirmDialog({
+      message: 'کلید انتخاب‌شده غیرفعال و از دسترس خارج شود؟',
+      confirmText: 'لغو دسترسی',
+      tone: 'danger',
+    })
+    if (!confirmed) return
 
     try {
       await apiDelete(`/api/developer/keys/${keyId}`)

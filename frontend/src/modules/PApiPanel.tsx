@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { apiPost } from '../services/api'
 import { setTokens } from '../services/auth'
 import { PApi } from '../services/papi'
+import ModulePage from '../components/layout/ModulePage'
 
 export default function PApiPanel() {
   const [mobiles, setMobiles] = useState('09123506545')

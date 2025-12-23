@@ -11,6 +11,7 @@ import {
   retroTableHeader,
 } from '../components/retroTheme'
 import { formatNumberFa, isoToJalali } from '../utils/num'
+import { toast } from '../utils/toast'
 
 interface RoadmapChecklist {
   text: string
@@ -81,9 +82,9 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     if (!data?.markdown) return
     try {
       await navigator.clipboard.writeText(data.markdown)
-      alert('متن نقشه راه کپی شد.')
+      toast.success('متن نقشه راه کپی شد')
     } catch (err) {
-      alert('مرورگر اجازه کپی خودکار نداد.')
+      toast.error('مرورگر اجازه کپی خودکار نداد')
     }
   }
 

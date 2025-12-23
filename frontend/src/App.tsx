@@ -10,6 +10,7 @@ import { fetchWithAuth } from './services/auth'
 import { getAccessToken } from './services/auth'
 import { parseJalaliInput } from './utils/date'
 import ThemeToggle from './components/ThemeToggle'
+import { DEFAULT_TOAST_DURATION } from './utils/toast'
 
 export type SyncRecord = {
   serverUtc: string
@@ -59,7 +60,7 @@ export default function App() {
   const [sync, setSync] = useState<SyncRecord | null>(null)
   const [version, setVersion] = useState<string | null>(null)
   const [smartDateInitialized, setSmartDateInitialized] = useState(false)
-  const { user, modules: userModules, logout } = useAuth()
+  const { user, modules: userModules, permissions, logout } = useAuth()
   const [apiError, setApiError] = useState<{ status: number; message: string } | null>(null)
   const [orgFeatures, setOrgFeatures] = useState<string[] | null>(null)
   const [toast, setToast] = useState<{
@@ -171,7 +172,7 @@ export default function App() {
       const ce = e as CustomEvent
       const d = ce.detail || {}
       if (typeof d?.message === 'string') {
-        const duration = Number(d?.duration) || 3000
+        const duration = Number(d?.duration) || DEFAULT_TOAST_DURATION
         const position = d?.position || 'bl'
         setToast({
           type: d.type || 'info',
@@ -314,6 +315,10 @@ export default function App() {
     // اگر بک‌اند لیست ندهد، همان ماژول‌های پیش‌فرض را نشان می‌دهیم تا تم کلاسیک حفظ شود.
     // تشخیص سریع کاربر دولوپر از روی JWT
     const isDeveloper = (() => {
+      const developerRoles = ['Admin', 'Developer', 'Developer NFT']
+      if (user && developerRoles.includes(user.role)) {
+        return true
+      }
       try {
         const tok = getAccessToken()
         if (!tok) return false
@@ -325,7 +330,8 @@ export default function App() {
         const p = JSON.parse(payload)
         const sub = String(p.sub || '')
         const role = String(p.role || p['x-role'] || '')
-        return sub === '09123506545' || sub === 'developer' || role === 'Admin'
+        if (developerRoles.includes(role)) return true
+        return sub === '09123506545' || sub === 'developer'
       } catch {
         return false
       }
@@ -355,6 +361,7 @@ export default function App() {
             user={user ? { username: user.username, role: user.role } : null}
             onLogout={logout}
             orgFeatures={orgFeatures || undefined}
+            permissions={(permissions || []).map((p) => p.name)}
           />
           {toast && (
             <div

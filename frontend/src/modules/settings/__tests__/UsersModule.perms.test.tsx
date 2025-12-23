@@ -1,6 +1,14 @@
+import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, act } from '@testing-library/react'
 import UsersModule from '../UsersModule'
+import { ConfirmDialogTestWrapper } from '../../../tests/ConfirmDialogTestWrapper'
+
+const RtlWrapper = ({ children }: { children: React.ReactNode }) => (
+  <ConfirmDialogTestWrapper>
+    <div dir="rtl">{children}</div>
+  </ConfirmDialogTestWrapper>
+)
 
 vi.mock('../../../services/api', () => {
   const mock = {
@@ -28,31 +36,34 @@ vi.mock('../../../services/api', () => {
 
 describe('UsersModule permission save to role', () => {
   it('collects checked perms and posts to role endpoint', async () => {
-    render(<UsersModule />)
-    await screen.findByText('کاربران')
+    render(<UsersModule />, { wrapper: RtlWrapper as any })
+    await screen.findByRole('heading', { name: 'کاربران' })
+    await screen.findByText('ali')
+    vi.useFakeTimers()
+    try {
+      // Expand permission editor for the user row
+      const row = screen.getByText('ali').closest('tr') as HTMLTableRowElement
+      const permsCell = row.querySelectorAll('td')[7] // column index for permission editor
+      const details = within(permsCell).getByText('مشاهده/ویرایش مجوزها')
+      fireEvent.click(details)
 
-    // Expand permission editor for the user row
-    const row = screen.getByText('ali').closest('tr') as HTMLTableRowElement
-    const permsCell = row.querySelectorAll('td')[7] // column index for permission editor
-    const details = within(permsCell).getByText('مشاهده/ویرایش مجوزها')
-    fireEvent.click(details)
+      // Toggle both permissions
+      const permA = screen.getByLabelText('permA')
+      const permB = screen.getByLabelText('permB')
+      fireEvent.click(permA)
+      fireEvent.click(permB)
 
-    // Toggle both permissions
-    const permA = await screen.findByLabelText('permA')
-    const permB = await screen.findByLabelText('permB')
-    fireEvent.click(permA)
-    fireEvent.click(permB)
+      await act(async () => {
+        vi.runAllTimers()
+      })
 
-    // Click save button (next column after perms)
-    const saveCell = row.querySelectorAll('td')[8]
-    const saveBtn = within(saveCell).getByText('ذخیره به نقش')
-    fireEvent.click(saveBtn)
-
-    await waitFor(() => {
+      await Promise.resolve()
       expect((globalThis as any).__users_api_mock_perms.apiPost).toHaveBeenCalledWith(
         '/api/roles/1/permissions',
         [10, 11],
       )
-    })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

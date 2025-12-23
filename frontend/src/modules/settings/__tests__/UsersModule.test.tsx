@@ -2,6 +2,7 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import UsersModule from '../UsersModule'
+import { ConfirmDialogTestWrapper } from '../../../tests/ConfirmDialogTestWrapper'
 
 vi.mock('../../../services/api', async () => {
   const actual = await vi.importActual<any>('../../../services/api')
@@ -33,7 +34,11 @@ vi.mock('../../../services/api', async () => {
 })
 
 function Wrapper({ children }: { children: React.ReactNode }) {
-  return <div dir="rtl">{children}</div>
+  return (
+    <ConfirmDialogTestWrapper>
+      <div dir="rtl">{children}</div>
+    </ConfirmDialogTestWrapper>
+  )
 }
 
 describe('UsersModule', () => {

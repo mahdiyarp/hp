@@ -12,40 +12,7 @@ import {
   retroTableHeader,
   retroMuted,
 } from '../components/retroTheme'
-
-interface Product {
-  id: string
-  name: string
-  group: string | null
-  unit: string | null
-  inventory: number | null | undefined
-  description?: string | null
-  last_purchase_price?: number | null
-  avg_purchase_price?: number | null
-  last_sale_price?: number | null
-  avg_sale_price?: number | null
-}
-
-interface ProductMovement {
-  id: number
-  invoice_id: number
-  invoice_number: string
-  invoice_date: string
-  direction: string
-  type: string
-  quantity: number
-  quantity_change: number
-  unit_price: number
-  total_price: number
-  stock_before: number
-  stock_after: number
-  party: {
-    id: string
-    name: string
-    kind: string | null
-  } | null
-  status: string
-}
+import ModulePage from '../components/layout/ModulePage'
 
 interface ProductMovementData {
   product: {
@@ -379,78 +346,89 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
     return { totalInventory, uniqueGroups, lowStockCount, shortageCount }
   }, [products, groups])
 
+  const pageDescription = `تاریخ مرجع: ${smartDate.jalali ?? '—'} (ISO ${smartDate.isoDate ?? '—'})`
+  const pageActions = (
+    <div className="flex flex-wrap gap-3 items-center">
+      <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={() => loadProducts()}>
+        بروزرسانی
+      </button>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={hideZeroInventory}
+          onChange={(e) => setHideZeroInventory(e.target.checked)}
+        />
+        عدم نمایش موجودی صفر
+      </label>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          checked={hideNegativeInventory}
+          onChange={(e) => setHideNegativeInventory(e.target.checked)}
+        />
+        عدم نمایش منفی
+      </label>
+    </div>
+  )
+
   if (loading) {
     return (
-      <div className={`${retroPanel} p-10 flex items-center justify-center`}>
-        <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
-          <p className={`${retroHeading} text-[#1f2e3b]`}>در حال دریافت موجودی...</p>
+      <ModulePage eyebrow="Stockroom" title="انبار و کالاها" description={pageDescription} actions={pageActions}>
+        <div className={`${retroPanel} p-10 flex items-center justify-center`}>
+          <div className="space-y-3 text-center">
+            <div className="mx-auto h-8 w-8 border-4 border-[#1f2e3b] border-dashed rounded-full animate-spin"></div>
+            <p className={`${retroHeading} text-[#1f2e3b]`}>در حال دریافت موجودی...</p>
+          </div>
         </div>
-      </div>
+      </ModulePage>
     )
   }
 
   return (
-    <div className="space-y-8">
-      {error && (
-        <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
-          {error}
-        </div>
-      )}
+    <ModulePage eyebrow="Stockroom" title="انبار و کالاها" description={pageDescription} actions={pageActions}>
+      <div className="space-y-8">
+        {error && (
+          <div className="border-2 border-[#c35c5c] bg-[#f9e6e6] text-[#5b1f1f] px-4 py-3 shadow-[4px_4px_0_#c35c5c]">
+            {error}
+          </div>
+        )}
 
-      <section className={`${retroPanelPadded} space-y-4`}>
-        <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
+        <section className={`${retroPanelPadded} space-y-4`}>
+          <div className="space-y-1 text-right">
             <p className={retroHeading}>Inventory Board</p>
-            <h2 className="text-2xl font-semibold mt-2">مدیریت موجودی کالا</h2>
-            <p className={`text-xs ${retroMuted} mt-2`}>
+            <h2 className="text-2xl font-semibold">مدیریت موجودی کالا</h2>
+            <p className={`text-xs ${retroMuted} mt-1`}>
               تاریخ مرجع: {smartDate.jalali ?? 'نامشخص'} | {smartDate.isoDate ?? 'ISO TBD'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button className={`${retroButton} !bg-[#1f2e3b]`} onClick={loadProducts}>
-              بروزرسانی موجودی
-            </button>
-            <button
-              className={retroButton}
-              onClick={() => {
-                resetForm()
-                setShowForm(true)
-              }}
-            >
-              افزودن کالای جدید
-            </button>
-            <button className={retroButton}>ورود انبار</button>
-          </div>
-        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>تعداد کالاها</p>
-            <p className="text-lg font-semibold">{formatNumberFa(products.length)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>تعداد کالاها</p>
+              <p className="text-lg font-semibold">{formatNumberFa(products.length)}</p>
+            </div>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>جمع موجودی</p>
+              <p className="text-lg font-semibold">{formatNumberFa(totals.totalInventory)}</p>
+            </div>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>گروه‌ها</p>
+              <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
+            </div>
+            <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
+              <p className={retroHeading}>کالاهای کم‌موجودی (≤۵)</p>
+              <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#a35c2c]' : ''}`}>
+                {formatNumberFa(totals.lowStockCount)}
+              </p>
+              <p className="text-[11px] text-[#7a6b4f]">
+                کمبود (منفی):{' '}
+                <span className={`font-semibold ${totals.shortageCount ? 'text-[#c35c5c]' : ''}`}>
+                  {formatNumberFa(totals.shortageCount)}
+                </span>
+              </p>
+            </div>
           </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>جمع موجودی</p>
-            <p className="text-lg font-semibold">{formatNumberFa(totals.totalInventory)}</p>
-          </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>گروه‌ها</p>
-            <p className="text-lg font-semibold">{formatNumberFa(totals.uniqueGroups)}</p>
-          </div>
-          <div className="border border-[#bfb69f] bg-[#f6f1df] px-4 py-3 shadow-inner space-y-1">
-            <p className={retroHeading}>کالاهای کم‌موجودی (≤۵)</p>
-            <p className={`text-lg font-semibold ${totals.lowStockCount ? 'text-[#a35c2c]' : ''}`}>
-              {formatNumberFa(totals.lowStockCount)}
-            </p>
-            <p className="text-[11px] text-[#7a6b4f]">
-              کمبود (منفی):{' '}
-              <span className={`font-semibold ${totals.shortageCount ? 'text-[#c35c5c]' : ''}`}>
-                {formatNumberFa(totals.shortageCount)}
-              </span>
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
 
       {showForm && (
         <section className={`${retroPanelPadded} space-y-4`}>
@@ -620,6 +598,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <select
+                  aria-label="گروه سطح ۱"
                   value={groupL1Filter}
                   onChange={(e) => {
                     setGroupL1Filter(e.target.value)
@@ -638,6 +617,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
               </div>
               <div>
                 <select
+                  aria-label="گروه سطح ۲"
                   value={groupL2Filter}
                   onChange={(e) => {
                     setGroupL2Filter(e.target.value)
@@ -656,6 +636,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
               </div>
               <div>
                 <select
+                  aria-label="گروه سطح ۳"
                   value={groupL3Filter}
                   onChange={(e) => setGroupL3Filter(e.target.value)}
                   className={`${retroInput} w-full`}
@@ -701,6 +682,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
             <label className={retroHeading}>مرتب‌سازی</label>
             <div className="grid grid-cols-2 gap-2">
               <select
+                aria-label="ستون مرتب‌سازی"
                 value={sortKey}
                 onChange={(e) => setSortKey(e.target.value as any)}
                 className={`${retroInput} w-full`}
@@ -715,6 +697,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
                 <option value="avg_sale_price">میانگین فروش</option>
               </select>
               <select
+                aria-label="جهت مرتب‌سازی"
                 value={sortDir}
                 onChange={(e) => setSortDir(e.target.value as any)}
                 className={`${retroInput} w-full`}
@@ -1094,5 +1077,6 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
         </div>
       )}
     </div>
+  </ModulePage>
   )
 }

@@ -1,6 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import React from 'react'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import UsersModule from '../UsersModule'
+import { ConfirmDialogTestWrapper } from '../../../tests/ConfirmDialogTestWrapper'
 
 // Mock API layer used by UsersModule (define inside factory to avoid hoist issues)
 vi.mock('../../../services/api', () => {
@@ -49,9 +51,25 @@ vi.mock('../../../services/api', () => {
   return mock
 })
 
+const alertMock = vi.fn()
+
+beforeAll(() => {
+  vi.stubGlobal('alert', alertMock)
+})
+
+beforeEach(() => {
+  alertMock.mockClear()
+})
+
+const RtlWrapper = ({ children }: { children: React.ReactNode }) => (
+  <ConfirmDialogTestWrapper>
+    <div dir="rtl">{children}</div>
+  </ConfirmDialogTestWrapper>
+)
+
 describe('UsersModule behavior', () => {
   it('creates a role and resets form', async () => {
-    render(<UsersModule />)
+    render(<UsersModule />, { wrapper: RtlWrapper as any })
     // Wait initial section
     await screen.findByText('نقش‌ها')
     const nameInput = screen.getByPlaceholderText('نام نقش') as HTMLInputElement
@@ -72,8 +90,9 @@ describe('UsersModule behavior', () => {
   })
 
   it('saves SMS settings by writing keys', async () => {
-    render(<UsersModule />)
+    render(<UsersModule />, { wrapper: RtlWrapper as any })
     await screen.findByText('پنل SMS و ناتیفیکیشن‌ها')
+    vi.useFakeTimers()
     const apiKey = screen.getAllByPlaceholderText('API Key')[0] as HTMLInputElement
     const lineInput = screen.getByPlaceholderText('شماره ارسال کننده') as HTMLInputElement
     const otpTpl = screen.getByPlaceholderText('OTP Template ID (sms.ir)') as HTMLInputElement
@@ -82,19 +101,24 @@ describe('UsersModule behavior', () => {
     fireEvent.change(lineInput, { target: { value: '3000' } })
     fireEvent.change(otpTpl, { target: { value: '42' } })
 
-    fireEvent.click(screen.getByText('ذخیره تنظیمات'))
+    try {
+      await act(async () => {
+        vi.runAllTimers()
+      })
 
-    await waitFor(() => {
+      await Promise.resolve()
       const m = (globalThis as any).__users_api_mock
       expect(m.apiPut).toHaveBeenCalledWith('/api/admin/settings/smsir_api_key', { value: 'KEY123' })
       expect(m.apiPut).toHaveBeenCalledWith('/api/admin/settings/smsir_line_number', { value: '3000' })
       expect(m.apiPut).toHaveBeenCalledWith('/api/admin/settings/smsir_otp_template_id', { value: '42' })
       expect(m.apiPut).toHaveBeenCalledWith('/api/admin/settings/smsir_enabled', { value: 'true' })
-    })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sends test SMS via sms.ir when configured', async () => {
-    render(<UsersModule />)
+    render(<UsersModule />, { wrapper: RtlWrapper as any })
     await screen.findByText('پنل SMS و ناتیفیکیشن‌ها')
     const providerSelect = screen.getAllByDisplayValue('sms.ir')[0] as HTMLSelectElement
     const apiKey = screen.getAllByPlaceholderText('API Key')[0] as HTMLInputElement
