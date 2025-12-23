@@ -1,27 +1,35 @@
 import { test, expect } from '@playwright/test'
 
+const base = process.env.BASE_URL || 'http://localhost:3000'
+const backend = process.env.BACKEND_URL || 'http://localhost:8000'
+
 // Roles/Permissions UI in Settings → Users
 // Navigates to #settings-users and verifies core UI elements.
 
 test.describe('Settings → Users: roles & permissions', () => {
-  test.skip(!process.env.BASE_URL || !process.env.BACKEND_URL, 'Skipping: BASE_URL or BACKEND_URL not set')
-
   test('renders roles/users tables and permissions editor', async ({ page }) => {
-    const base = process.env.BASE_URL as string
     // Login as developer to unlock Settings → Users (Admin/Developer-only)
-    const backend = process.env.BACKEND_URL as string
+    // Skip gracefully if backend isn't reachable.
+    try {
+      const health = await page.request.get(`${backend}/health`)
+      if (!health.ok()) {
+        test.skip(true, 'Skipping users permissions E2E: backend not healthy')
+      }
+    } catch {
+      test.skip(true, 'Skipping users permissions E2E: backend not reachable')
+    }
+
     const res = await page.request.post(`${backend}/api/auth/login-dev`, {
-      data: { mobile: '09123506545', password: '09123506545' },
+      data: { username: 'developer', password: 'developer' },
     })
     const json = await res.json()
     const token = json?.access_token as string
     expect(token && token.length > 10).toBeTruthy()
 
-    await page.goto(base)
-    await page.waitForLoadState('domcontentloaded')
-    await page.evaluate((t) => { localStorage.setItem('hesabpak_access_token', t as any) }, token)
-    await page.reload()
-    await page.evaluate(() => { window.location.hash = '#settings-users' })
+    await page.addInitScript(t => {
+      try { localStorage.setItem('hesabpak_access_token', t as string) } catch {}
+    }, token)
+    await page.goto(`${base}/#settings-users`)
 
     // Heading and basic sections (top heading)
     await expect(page.getByText('کاربران و دسترسی‌ها')).toBeVisible()
