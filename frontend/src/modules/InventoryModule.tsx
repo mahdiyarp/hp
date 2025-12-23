@@ -14,6 +14,42 @@ import {
 } from '../components/retroTheme'
 import ModulePage from '../components/layout/ModulePage'
 
+interface Product {
+  id: string
+  name: string
+  group: string | null
+  unit: string | null
+  inventory: number | null | undefined
+  description?: string | null
+  last_purchase_price?: number | null
+  avg_purchase_price?: number | null
+  last_sale_price?: number | null
+  avg_sale_price?: number | null
+}
+
+interface ProductMovement {
+  id: number
+  invoice_id: number
+  invoice_number: string
+  invoice_date: string
+  direction: string
+  type: string
+  quantity: number
+  quantity_change: number
+  unit_price: number
+  total_price: number
+  stock_before: number
+  stock_after: number
+  party:
+    | {
+        id: string
+        name: string
+        kind: string | null
+      }
+    | null
+  status: string
+}
+
 interface ProductMovementData {
   product: {
     id: string
@@ -245,7 +281,7 @@ export default function InventoryModule({ smartDate }: ModuleComponentProps) {
       if (groupL1Filter || groupL2Filter || groupL3Filter) {
         const parts: string[] = (prod.group || '')
           .split('/')
-          .map((s) => s.trim())
+          .map((s: string) => s.trim())
           .filter(Boolean)
         if (groupL1Filter && parts[0] !== groupL1Filter) return false
         if (groupL2Filter && parts[1] !== groupL2Filter) return false

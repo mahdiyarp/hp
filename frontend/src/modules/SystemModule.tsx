@@ -944,6 +944,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2 font-mono text-xs">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="کلید روش پرداخت"
                           className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
                           value={draftPm.key ?? m.key}
                           onChange={(e) => setDraftPm({ ...draftPm, key: e.target.value })}
@@ -955,6 +956,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="نام روش پرداخت"
                           className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
                           value={draftPm.name ?? m.name}
                           onChange={(e) => setDraftPm({ ...draftPm, name: e.target.value })}
@@ -966,6 +968,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="حساب روش پرداخت"
                           className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
                           value={draftPm.account ?? (m.account || '')}
                           onChange={(e) => setDraftPm({ ...draftPm, account: e.target.value })}
@@ -977,6 +980,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="چک"
                           type="checkbox"
                           checked={draftPm.is_cheque ?? !!m.is_cheque}
                           onChange={(e) => setDraftPm({ ...draftPm, is_cheque: e.target.checked })}
@@ -990,6 +994,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="فعال/غیرفعال"
                           type="checkbox"
                           checked={draftPm.enabled ?? !!m.enabled}
                           onChange={(e) => setDraftPm({ ...draftPm, enabled: e.target.checked })}
@@ -1008,6 +1013,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                     <td className="px-3 py-2 text-center">
                       {editingPmId === m.id ? (
                         <input
+                          aria-label="ترتیب"
                           type="number"
                           className="border border-[#c5bca5] px-2 py-1 bg-white text-xs w-20"
                           value={draftPm.order ?? m.order}
@@ -1148,6 +1154,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           {entityCatalog.length > 0 && (
             <div className="flex flex-wrap gap-2 text-xs">
               <select
+                aria-label="فیلتر موجودیت‌های زنجیره"
                 className="border border-[#c5bca5] bg-[#faf4de] px-2 py-1"
                 value={
                   chainEntityType && chainEntityId ? `${chainEntityType}::${chainEntityId}` : ''
@@ -1196,6 +1203,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                   <tr key={entry.id} className="border-b border-[#d9cfb6]">
                     <td className="px-3 py-2 text-center">
                       <input
+                        aria-label={`انتخاب رکورد ${entry.id}`}
                         type="radio"
                         checked={selectedEntryId === entry.id}
                         onChange={() => {
@@ -1278,6 +1286,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
             </p>
             <div className="mt-3 flex items-center gap-2">
               <select
+                aria-label="جهت منو"
                 className="border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de] text-sm"
                 value={sidebarSide}
                 onChange={(e) => scheduleSidebarSideSave(e.target.value)}
@@ -1295,6 +1304,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
           <div>
             <p className={retroHeading}>دسته</p>
             <select
+              aria-label="دسته تنظیمات"
               className="w-full border-2 border-[#c5bca5] px-3 py-2 bg-[#faf4de]"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
@@ -1330,6 +1340,7 @@ export default function SystemModule({ smartDate, onSmartDateChange, sync }: Mod
                       <td className="px-3 py-2">
                         {editingKey === setting.key ? (
                           <input
+                            aria-label={`مقدار تنظیم ${setting.key}`}
                             type={setting.is_secret ? 'password' : 'text'}
                             className="border border-[#c5bca5] px-2 py-1 bg-white text-xs"
                             value={editValue}

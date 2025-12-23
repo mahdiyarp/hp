@@ -9,7 +9,6 @@ import {
 } from '../../components/retroTheme'
 import ModulePage from '../../components/layout/ModulePage'
 import { toast } from '../../utils/toast'
-import { toast } from '../../utils/toast'
 
 interface Bank {
   code?: string

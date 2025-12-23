@@ -354,7 +354,7 @@ function normalizePath(path: string) {
   return path
 }
 
-function jsonResponse<T>(payload: T) {
+function jsonResponse(payload: any): any {
   return deepClone(payload)
 }
 

@@ -220,7 +220,10 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
       {asideElement}
       <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720] min-h-screen" dir="rtl">
         <header className="sticky top-0 z-20 border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a] w-full">
-          <div className="hp-container hp-container-right py-5 flex flex-col gap-4">
+          <div
+            className="hp-container hp-container-right py-5 flex flex-col gap-4"
+            data-testid="hp-header-container"
+          >
             <div className="grid w-full gap-4 items-start lg:grid-cols-[minmax(0,1.4fr)_minmax(240px,0.8fr)] xl:grid-cols-[minmax(0,1.5fr)_minmax(260px,0.8fr)]">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[#fff4d8] justify-start text-right">
                 <span className={`${retroHeading} text-[#ffe7bd]`}>ماژول فعال</span>
@@ -315,7 +318,10 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
           </div>
         </header>
         <main className="flex-1">
-          <div className="hp-container hp-container-right py-4 space-y-6">
+          <div
+            className="hp-container hp-container-right py-4 space-y-6"
+            data-testid="hp-main-container"
+          >
             <ErrorBoundary>
               <React.Suspense
                 fallback={

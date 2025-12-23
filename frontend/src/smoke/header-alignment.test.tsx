@@ -36,10 +36,10 @@ describe('Header alignment (RTL right-anchored)', () => {
       </ConfirmDialogTestWrapper>,
     )
 
-    const headerRightContainer = container.querySelector('header .hp-container.hp-container-right')
+    const headerRightContainer = container.querySelector('[data-testid="hp-header-container"]')
     expect(headerRightContainer).toBeTruthy()
 
-    const mainRightContainer = container.querySelector('main .hp-container.hp-container-right')
+    const mainRightContainer = container.querySelector('[data-testid="hp-main-container"]')
     expect(mainRightContainer).toBeTruthy()
   })
 })

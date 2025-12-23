@@ -24,8 +24,14 @@ test('header container is right-anchored and matches main', async ({ page }) => 
   await expect(page.locator('button:has-text("خروج از سیستم")')).toBeVisible({ timeout: 15_000 })
   await page.waitForLoadState('networkidle')
 
-  const headerContainer = page.locator('header .hp-container.hp-container-right').first()
-  const mainContainer = page.locator('main .hp-container.hp-container-right').first()
+  // Ensure fonts/layout are settled before measuring seams
+  await page.waitForFunction(() => {
+    // @ts-expect-error - document.fonts may be undefined in some browsers
+    return !document.fonts || document.fonts.status === 'loaded'
+  })
+
+  const headerContainer = page.locator('[data-testid="hp-header-container"]').first()
+  const mainContainer = page.locator('[data-testid="hp-main-container"]').first()
 
   await expect(headerContainer).toBeVisible()
   await expect(mainContainer).toBeVisible()
