@@ -15,3 +15,31 @@
 ## کارهای باقی‌مانده
 - رفع خطاهای pytest (۱۲ مورد) شامل سناریوهای داشبورد، کنترل دسترسی ماژول‌ها، فیسال‌یرو، لاگین تلفنی و SMS template طبق [tests/test_dashboard_endpoints.py](backend/tests/test_dashboard_endpoints.py#L1-L220)، [tests/test_endpoints.py](backend/tests/test_endpoints.py#L1-L70)، [tests/test_fiscal_year_module.py](backend/tests/test_fiscal_year_module.py#L1-L120)، [tests/test_invoice_finalize_integration.py](backend/tests/test_invoice_finalize_integration.py#L1-L60)، [tests/test_phone_login_normalization.py](backend/tests/test_phone_login_normalization.py#L1-L100) و [tests/test_sms_settings_api.py](backend/tests/test_sms_settings_api.py#L200-L320).
 - پس از رفع خطاها، اجرای مجدد pytest و به‌روزرسانی گزارش.
+
+---
+
+## وضعیت فعلی (آماده برای Merge)
+
+### شاخه/کامیت
+- Branch: `copilot/header-right-align`
+- Remote: `origin/copilot/header-right-align`
+
+### تغییرات کلیدی
+- امنیت backend: به‌روزرسانی وابستگی‌ها و مهاجرت JWT از `python-jose` به `PyJWT` برای حذف ریسک وابسته به `ecdsa`
+- E2E: تنظیم پیش‌فرض Playwright `baseURL` روی `http://localhost:3000` برای اجرای بدون تنظیم دستی
+
+### تأییدهای سریع محلی
+- `./check-frontend-headers.ps1` → OK (ETag + security headers present)
+- Playwright E2E: 10/10 پاس (طبق آخرین اجرای ثبت‌شده در گفتگو)
+- `pip-audit` برای `backend/requirements.txt`: بدون آسیب‌پذیری شناخته‌شده (طبق آخرین اجرای ثبت‌شده در گفتگو)
+- `npm audit`: 0 vulnerability (طبق آخرین اجرای ثبت‌شده در گفتگو)
+
+### اقدام باقی‌مانده
+- فقط عملیات GitHub: ساخت/باز کردن PR و Merge به default branch تا Security alerts روی `main` به‌روزرسانی شوند.
+
+### متن پیشنهادی PR
+- Title: `chore(security): patch backend vulns + stabilize e2e defaults`
+- Body:
+	- Bump backend deps and switch JWT to `PyJWT` (removes `ecdsa`-driven risk via `python-jose`)
+	- Default Playwright `baseURL` to `http://localhost:3000` for consistent E2E
+	- Verified: backend tests pass, `pip-audit` clean, `npm audit` clean, E2E passes, frontend headers check OK
