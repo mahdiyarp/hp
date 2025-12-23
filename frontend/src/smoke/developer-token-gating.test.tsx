@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import AppShell from '../components/layout/AppShell'
 import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
@@ -40,33 +40,36 @@ describe('Smoke: Developer gating by token', () => {
     localStorage.removeItem(refreshKey)
   })
 
-  it('shows modules even when permissions are missing if token indicates developer', () => {
+  it('shows modules even when permissions are missing if token indicates developer', async () => {
     localStorage.setItem(accessKey, makeJwt({ sub: 'developer', role: 'User' }))
     localStorage.setItem(refreshKey, 'R')
 
-    render(
-      <ConfirmDialogTestWrapper>
-        <AppShell
-          modules={[
-            {
-              id: 'reports',
-              label: 'گزارش‌ها و تحلیل‌ها',
-              description: '...',
-              component: FakeModule as any,
-              badge: 'REPORTS',
-              feature: 'reports',
-              requiredPermissions: ['reports:view'],
-            },
-          ] as any}
-          sync={null}
-          user={{ username: 'u', role: 'User' }}
-          onLogout={() => {}}
-          orgFeatures={[]}
-          permissions={[]}
-        />
-      </ConfirmDialogTestWrapper>,
-    )
+    await act(async () => {
+      render(
+        <ConfirmDialogTestWrapper>
+          <AppShell
+            modules={[
+              {
+                id: 'reports',
+                label: 'گزارش‌ها و تحلیل‌ها',
+                description: '...',
+                component: FakeModule as any,
+                badge: 'REPORTS',
+                feature: 'reports',
+                requiredPermissions: ['reports:view'],
+              },
+            ] as any}
+            sync={null}
+            user={{ username: 'u', role: 'User' }}
+            onLogout={() => {}}
+            orgFeatures={[]}
+            permissions={[]}
+          />
+        </ConfirmDialogTestWrapper>,
+      )
+    })
 
-    expect(screen.getByText(/گزارش‌ها و تحلیل‌ها/)).toBeInTheDocument()
+    const nav = screen.getByRole('navigation')
+    expect(within(nav).getByRole('button', { name: /گزارش‌ها و تحلیل‌ها/ })).toBeInTheDocument()
   })
 })
