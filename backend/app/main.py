@@ -118,8 +118,11 @@ PAGE_BUILDER_CATEGORY = 'page_builder'
 PAGE_BUILDER_DISPLAY = 'Page builder templates'
 PAGE_BUILDER_ALLOWED_ROLES = ['Admin', 'Developer', 'Developer NFT']
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-ROADMAP_DIR = PROJECT_ROOT / 'roadmap'
+_here = Path(__file__).resolve()
+_repo_root_candidate = _here.parents[2]
+_backend_root_candidate = _here.parents[1]
+_repo_roadmap = _repo_root_candidate / 'roadmap'
+ROADMAP_DIR = _repo_roadmap if _repo_roadmap.exists() else (_backend_root_candidate / 'roadmap')
 ROADMAP_JSON_PATH = ROADMAP_DIR / 'roadmap.json'
 ROADMAP_STATUS_PATH = ROADMAP_DIR / 'status.json'
 ROADMAP_MARKDOWN_PATH = ROADMAP_DIR / 'roadmap.md'

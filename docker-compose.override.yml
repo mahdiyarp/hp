@@ -1,5 +1,9 @@
 version: '3.9'
 services:
+  backend:
+    volumes:
+      - ./roadmap:/app/roadmap:ro
+
   frontend:
     volumes:
       - ./frontend/dist:/usr/share/nginx/html:ro

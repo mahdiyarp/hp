@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import type { ModuleComponentProps } from '../components/layout/AppShell'
-import { apiGet } from '../services/api'
-import { fetchWithAuth } from '../services/auth'
+import { fetchWithAuth, loginDeveloper } from '../services/auth'
 import {
   retroButton,
   retroHeading,
@@ -45,7 +44,11 @@ export default function RoadmapModule({ onNavigate }: ModuleComponentProps) {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      let res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      if (res.status === 401 || res.status === 403) {
+        await loginDeveloper()
+        res = await fetchWithAuth('/api/roadmap', { method: 'GET' })
+      }
       if (res.status === 404) {
         setHidden(true)
         return
