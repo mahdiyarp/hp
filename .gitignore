@@ -44,6 +44,15 @@ site/id_rsa*
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/screenshots/
+frontend/coverage/
+
+# Local nested repo copies (should not be committed)
+.githubhp/
+hp/
 
 # Misc
 *.log
