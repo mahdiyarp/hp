@@ -1042,7 +1042,7 @@ export default function DashboardModule({
                   return (
                     <div
                       key={section.title}
-                      className="border border-[#c5bca5] bg-[#faf4de] p-3 rounded-sm shadow-inner"
+                      className="border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] p-3 rounded-sm shadow-inner"
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <p className={`${retroHeading} text-sm`}>{section.title}</p>
@@ -1050,7 +1050,7 @@ export default function DashboardModule({
                           {percent}% انجام شده
                         </span>
                       </div>
-                      <p className="text-xs text-[#4b3d2d] leading-5">{paragraph}</p>
+                      <p className="text-xs text-[var(--retro-table-header-text)] leading-5">{paragraph}</p>
                       {section.checklists.length > 0 && (
                         <ul className="mt-2 space-y-1 text-[11px]">
                           {section.checklists.slice(0, 3).map((item, idx) => (
@@ -1098,7 +1098,7 @@ export default function DashboardModule({
               </label>
             </header>
             {invoices.length > 0 ? (
-              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+              <table className="w-full border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] text-sm">
                 <thead>
                   <tr className="text-right">
                     <th className={retroTableHeader}>شماره</th>
@@ -1110,10 +1110,10 @@ export default function DashboardModule({
                 </thead>
                 <tbody>
                   {invoices.slice(0, invoiceLimit).map((inv) => (
-                    <tr key={inv.id} className="border-b border-[#d9cfb6]">
+                    <tr key={inv.id} className="border-b border-[var(--retro-table-header-border)]">
                       <td className="px-3 py-2">
                         {inv.invoice_number || `#${inv.id}`}
-                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                        <span className="block text-[10px] text-[var(--retro-muted-text)] mt-1">
                           {inv.server_time ? isoToJalali(inv.server_time) : '-'}
                         </span>
                       </td>
@@ -1132,7 +1132,7 @@ export default function DashboardModule({
                 </tbody>
               </table>
             ) : (
-              <p className="text-xs text-[#7a6b4f]">هیچ فاکتور ثبت نشده است.</p>
+              <p className="text-xs text-[var(--retro-muted-text)]">هیچ فاکتور ثبت نشده است.</p>
             )}
             <div className="mt-4 flex justify-end">
               <button className={`${retroButton} text-[11px]`} onClick={() => onNavigate('sales')}>
@@ -1163,7 +1163,7 @@ export default function DashboardModule({
               </label>
             </header>
             {products.length > 0 ? (
-              <table className="w-full border border-[#c5bca5] bg-[#faf4de] text-sm">
+              <table className="w-full border border-[var(--retro-border)] bg-[var(--retro-panel-bg)] text-sm">
                 <thead>
                   <tr className="text-right">
                     <th className={retroTableHeader}>نام</th>
@@ -1173,10 +1173,10 @@ export default function DashboardModule({
                 </thead>
                 <tbody>
                   {products.slice(0, productLimit).map((prod) => (
-                    <tr key={prod.id} className="border-b border-[#d9cfb6]">
+                    <tr key={prod.id} className="border-b border-[var(--retro-table-header-border)]">
                       <td className="px-3 py-2">
                         {prod.name}
-                        <span className="block text-[10px] text-[#7a6b4f] mt-1">
+                        <span className="block text-[10px] text-[var(--retro-muted-text)] mt-1">
                           واحد: {prod.unit || 'عدد'}
                         </span>
                       </td>
@@ -1187,7 +1187,7 @@ export default function DashboardModule({
                 </tbody>
               </table>
             ) : (
-              <p className="text-xs text-[#7a6b4f]">محصولی ثبت نشده است.</p>
+              <p className="text-xs text-[var(--retro-muted-text)]">محصولی ثبت نشده است.</p>
             )}
             <div className="mt-4 flex justify-end">
               <button

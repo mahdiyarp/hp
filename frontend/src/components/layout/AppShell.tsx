@@ -166,15 +166,15 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
   }, [sync])
   const asideElement = (
     <aside
-      className="border-l-4 border-[#d7caa4] bg-[#111821] flex flex-col sticky top-0 self-start h-screen overflow-y-auto flex-shrink-0"
+      className="border-l-4 border-[var(--hp-sidebar-border-accent)] bg-[var(--hp-sidebar-bg)] flex flex-col sticky top-0 self-start h-screen overflow-y-auto flex-shrink-0"
       style={{ width: 'var(--hp-sidebar-width)' }}
     >
-      <div className="p-4 border-b border-[#2d3b45] flex items-center justify-between gap-2">
+      <div className="p-4 border-b border-[var(--hp-sidebar-divider)] flex items-center justify-between gap-2">
         <div>
-          <p className={`${retroHeading} text-[#d7caa4]`}>{t('app_name')}</p>
+          <p className={`${retroHeading} text-[var(--hp-sidebar-border-accent)]`}>{t('app_name')}</p>
           <div>
             <h1 className="text-2xl font-semibold mt-2">کنسول کلاسیک</h1>
-            <p className="text-xs text-[#aeb4b9] mt-3 leading-6">
+            <p className="text-xs text-[var(--hp-sidebar-muted)] mt-3 leading-6">
               ماژول‌های اصلی سیستم حسابداری را از این منو انتخاب کنید. رابط کاربری با تم کلاسیک برای
               کارایی و یادآوری سیستم‌های قدیمی طراحی شده است.
             </p>
@@ -194,19 +194,19 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
         onNavigate={navigate}
       />
 
-      <div className="p-4 border-t border-[#2d3b45] space-y-3 text-xs">
+      <div className="p-4 border-t border-[var(--hp-sidebar-divider)] space-y-3 text-xs">
         <div>
-          <p className={`${retroHeading} text-[#d7caa4]`}>{t('smart_date')}</p>
+          <p className={`${retroHeading} text-[var(--hp-sidebar-border-accent)]`}>{t('smart_date')}</p>
           <p className="mt-1">{smartDate.jalali ? smartDate.jalali : 'تاریخ انتخاب نشده'}</p>
-          {smartDate.isoDate && <p className="text-[#aeb4b9] mt-1">ISO: {smartDate.isoDate}</p>}
+          {smartDate.isoDate && <p className="text-[var(--hp-sidebar-muted)] mt-1">ISO: {smartDate.isoDate}</p>}
         </div>
         {sync && (
           <div>
-            <p className={`${retroHeading} text-[#d7caa4]`}>SYNC</p>
-            <p className="mt-1 text-[#aeb4b9] text-[11px] leading-5">
+            <p className={`${retroHeading} text-[var(--hp-sidebar-border-accent)]`}>SYNC</p>
+            <p className="mt-1 text-[var(--hp-sidebar-muted)] text-[11px] leading-5">
               UTC سرور: {sync.serverUtc.slice(0, 19).replace('T', ' ')}
             </p>
-            <p className="text-[#aeb4b9] text-[11px] leading-5">
+            <p className="text-[var(--hp-sidebar-muted)] text-[11px] leading-5">
               اختلاف: {sync.serverOffsetSeconds}s
             </p>
           </div>
@@ -216,7 +216,7 @@ export default function AppShell({ modules, sync, user, onLogout, orgFeatures, p
   )
 
   return (
-    <div className="min-h-screen bg-[#141d24] text-[#f5f1e6] flex items-start" dir="rtl">
+    <div className="min-h-screen bg-[var(--hp-shell-bg)] text-[var(--hp-shell-text)] flex items-start" dir="rtl">
       {asideElement}
       <div className="flex-1 min-w-0 flex flex-col bg-[#e9e4d8] text-[#2e2720] min-h-screen" dir="rtl">
         <header className="sticky top-0 z-20 border-b-4 border-[#d7caa4] bg-[#1f2e3b] text-[#f5f1e6] shadow-[0_6px_0_#b7a77a] w-full">

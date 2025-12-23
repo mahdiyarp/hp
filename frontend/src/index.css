@@ -27,6 +27,20 @@
   --hp-container-px: 1.5rem; /* px-6 (24px) */
   --hp-container-py: 1.25rem; /* py-5 (20px) */
   --hp-sidebar-width: 288px; /* w-72 */
+
+  /* Shell / Sidebar theme primitives (keeps existing palette but avoids hard-coded hex scattered in components) */
+  --hp-shell-bg: #141d24;
+  --hp-shell-text: #f5f1e6;
+  --hp-sidebar-bg: #111821;
+  --hp-sidebar-border-accent: #d7caa4;
+  --hp-sidebar-divider: #2d3b45;
+  --hp-sidebar-text: #d4d8dc;
+  --hp-sidebar-text-hover: #f5f1e6;
+  --hp-sidebar-muted: #aeb4b9;
+  --hp-sidebar-hover-bg: #0f1720;
+  --hp-sidebar-active-bg: #d7caa4;
+  --hp-sidebar-active-border: #b7a77a;
+  --hp-sidebar-active-shadow: #b7a77a;
   /* Finance (Receipts & Payments) theme variables */
   --retro-border: #c5bca5;
   --retro-panel-bg: #faf4df;

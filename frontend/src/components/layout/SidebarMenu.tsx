@@ -148,9 +148,9 @@ export default function SidebarMenu({
         const base =
           'w-full text-right border-2 rounded-sm px-4 py-3 transition-all duration-150 text-sm'
         const activeClass =
-          'bg-[#d7caa4] text-[var(--retro-table-header-text)] border-[#b7a77a] shadow-[3px_3px_0_#b7a77a]'
+          'bg-[var(--hp-sidebar-active-bg)] text-[var(--retro-table-header-text)] border-[var(--hp-sidebar-active-border)] shadow-[3px_3px_0_var(--hp-sidebar-active-shadow)]'
         const idleClass =
-          'border-[#2d3b45] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]'
+          'border-[var(--hp-sidebar-divider)] text-[var(--hp-sidebar-text)] hover:border-[var(--hp-sidebar-border-accent)] hover:text-[var(--hp-sidebar-text-hover)]'
         return (
           <div
             key={mod.id}
@@ -169,7 +169,7 @@ export default function SidebarMenu({
               <span className="text-lg font-semibold transition-opacity duration-200">
                 {mod.label}
               </span>
-              <span className="block text-[11px] mt-1 text-[#aeb4b9] transition-opacity duration-200">
+              <span className="block text-[11px] mt-1 text-[var(--hp-sidebar-muted)] transition-opacity duration-200">
                 {mod.description}
               </span>
             </button>
@@ -178,9 +178,9 @@ export default function SidebarMenu({
       })}
 
       {settingsChildren.length > 0 && (
-        <div className="pt-3 border-t border-[#2d3b45]">
+        <div className="pt-3 border-t border-[var(--hp-sidebar-divider)]">
           <button
-            className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[#0f1720]"
+            className="w-full text-right border-2 rounded-sm px-4 py-3 text-sm bg-transparent hover:bg-[var(--hp-sidebar-hover-bg)]"
             onClick={() => setExpandedSettings((s) => !s)}
           >
               <div className="flex justify-between items-center">
@@ -188,7 +188,7 @@ export default function SidebarMenu({
                   <p className={`${retroHeading} text-[11px]`}>تنظیمات</p>
                   <div className="text-lg font-semibold">پنل تنظیمات</div>
                 </div>
-                <div className="text-sm text-[#aeb4b9]">{expandedSettings ? '–' : '+'}</div>
+                <div className="text-sm text-[var(--hp-sidebar-muted)]">{expandedSettings ? '–' : '+'}</div>
               </div>
             </button>
 
@@ -203,40 +203,40 @@ export default function SidebarMenu({
                   onDrop={(e) => onDrop(e, s.id)}
                 >
                   <button
-                    className={`w-full text-right border-2 rounded-sm px-4 py-2 text-sm border-[#28333a] text-[#d4d8dc] hover:border-[#d7caa4] hover:text-[#f5f1e6]`}
+                    className={`w-full text-right border-2 rounded-sm px-4 py-2 text-sm border-[var(--hp-sidebar-divider)] text-[var(--hp-sidebar-text)] hover:border-[var(--hp-sidebar-border-accent)] hover:text-[var(--hp-sidebar-text-hover)]`}
                     onClick={() => onNavigate(s.id)}
                   >
                     <span className={`${retroHeading} block text-[11px]`}>{s.badge ?? 'SET'}</span>
                     <span className="text-sm font-semibold">{s.label}</span>
-                    <span className="block text-[11px] mt-1 text-[#aeb4b9]">{s.description}</span>
+                    <span className="block text-[11px] mt-1 text-[var(--hp-sidebar-muted)]">{s.description}</span>
                   </button>
                 </div>
               ))}
 
               {devChildren.length > 0 && (
-                <div className="border border-[#2d3b45] rounded-sm">
+                <div className="border border-[var(--hp-sidebar-divider)] rounded-sm">
                   <button
-                    className={`w-full text-right px-4 py-3 text-sm text-[#d4d8dc] hover:bg-[#0f1720] border-b border-[#2d3b45]`}
+                    className={`w-full text-right px-4 py-3 text-sm text-[var(--hp-sidebar-text)] hover:bg-[var(--hp-sidebar-hover-bg)] border-b border-[var(--hp-sidebar-divider)]`}
                     onClick={() => onNavigate('developer')}
                   >
                     <span className={`${retroHeading} block text-[11px]`}>DEV</span>
                     <span className="text-sm font-semibold">کنسول توسعه‌دهنده</span>
-                    <span className="block text-[11px] mt-1 text-[#aeb4b9]">
+                    <span className="block text-[11px] mt-1 text-[var(--hp-sidebar-muted)]">
                       پنل کامل دیباگ و ابزارها
                     </span>
                   </button>
-                  <div className="divide-y divide-[#2d3b45]">
+                  <div className="divide-y divide-[var(--hp-sidebar-divider)]">
                     {devChildren
                       .filter((c) => c.id !== 'developer')
                       .map((c) => (
                         <button
                           key={c.id}
-                          className={`w-full text-right px-4 py-2 text-sm text-[#d4d8dc] hover:bg-[#0f1720]`}
+                          className={`w-full text-right px-4 py-2 text-sm text-[var(--hp-sidebar-text)] hover:bg-[var(--hp-sidebar-hover-bg)]`}
                           onClick={() => onNavigate(c.id)}
                         >
                           <span className={`${retroHeading} block text-[11px]`}>{c.badge ?? 'DEV'}</span>
                           <span className="text-sm font-semibold">{c.label}</span>
-                          <span className="block text-[11px] mt-1 text-[#aeb4b9]">{c.description}</span>
+                          <span className="block text-[11px] mt-1 text-[var(--hp-sidebar-muted)]">{c.description}</span>
                         </button>
                       ))}
                   </div>
