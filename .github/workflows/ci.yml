@@ -1,4 +1,4 @@
-name: CI (legacy)
+name: Backend CI
 
 on:
   push:
@@ -42,48 +42,3 @@ jobs:
       - name: Run pytest (repo root)
         run: |
           pytest -q
-
-  frontend-build-and-smoke:
-    name: Frontend (build + headless smoke)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install root deps (playwright)
-        run: |
-          npm ci
-
-      - name: Install frontend deps
-        run: |
-          npm ci --prefix frontend
-
-      - name: Build frontend
-        run: |
-          npm run build --prefix frontend
-
-      - name: Start preview server
-        run: |
-          nohup npx --yes vite preview --port 3000 --strictPort --host 0.0.0.0 --base / > preview.log 2>&1 &
-          sleep 2
-          curl -sSf http://localhost:3000 || (echo "Preview not up" && cat preview.log && exit 1)
-
-      - name: Run headless smoke
-        env:
-          BASE_URL: http://localhost:3000
-        run: |
-          node scripts/headless_test.js
-
-      - name: Upload preview log (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: preview-log
-          path: preview.log
