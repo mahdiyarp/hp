@@ -3,8 +3,22 @@ name: Backend CI
 on:
   push:
     branches: [ main, master, develop, 'copilot/**' ]
+    paths:
+      - 'backend/**'
+      - 'app/**'
+      - 'tests/**'
+      - 'pytest.ini'
+      - 'backend/requirements*.txt'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main, master, develop ]
+    paths:
+      - 'backend/**'
+      - 'app/**'
+      - 'tests/**'
+      - 'pytest.ini'
+      - 'backend/requirements*.txt'
+      - '.github/workflows/ci.yml'
 
 jobs:
   backend-tests:

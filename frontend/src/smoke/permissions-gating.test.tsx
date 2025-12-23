@@ -4,6 +4,10 @@ import { render, screen } from '@testing-library/react'
 import AppShell from '../components/layout/AppShell'
 import { ConfirmDialogTestWrapper } from '../tests/ConfirmDialogTestWrapper'
 
+vi.mock('../components/StatusBar', () => ({
+  default: () => <div />,
+}))
+
 vi.mock('../i18n/I18nContext', () => ({
   useI18n: () => ({ t: (k: string) => k, locale: 'fa', dir: 'rtl' }),
 }))
