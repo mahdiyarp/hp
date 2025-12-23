@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import pyotp
-from jose import jwt, JWTError
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 
 from dotenv import load_dotenv
@@ -52,7 +53,7 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError:
+    except PyJWTError:
         raise
 
 
