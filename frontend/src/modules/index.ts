@@ -10,6 +10,7 @@ import ReportsModule from './ReportsModule'
 const SystemModule = React.lazy(() => import('./SystemModule'))
 const PageBuilderModule = React.lazy(() => import('./PageBuilderModule'))
 import UsersModule from './settings/UsersModule'
+import AccessControlModule from './settings/AccessControlModule'
 import BanksModule from './settings/BanksModule'
 import DevConsole from './developer/DevConsole'
 import AssistantModule from './developer/AssistantModule'
@@ -153,6 +154,15 @@ export const modules: ModuleDefinition[] = [
     description: 'مدیریت کاربران، نقش‌ها، مجوزها و گزارش فعالیت',
     component: UsersModule,
     badge: 'USERS',
+    feature: 'settings',
+    requiredPermissions: ['settings:manage'],
+  },
+  {
+    id: 'access-control',
+    label: 'نقش‌ها و دسترسی‌ها',
+    description: 'مدیریت نقش‌ها، مجوزها، دسترسی کاربران و تنظیمات پیامک',
+    component: AccessControlModule,
+    badge: 'ACCESS',
     feature: 'settings',
     requiredPermissions: ['settings:manage'],
   },
