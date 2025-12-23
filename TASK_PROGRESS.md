@@ -25,14 +25,18 @@
 - Remote: `origin/copilot/header-right-align`
 
 ### تغییرات کلیدی
+
 - امنیت backend: به‌روزرسانی وابستگی‌ها و مهاجرت JWT از `python-jose` به `PyJWT` برای حذف ریسک وابسته به `ecdsa`
 - E2E: تنظیم پیش‌فرض Playwright `baseURL` روی `http://localhost:3000` برای اجرای بدون تنظیم دستی
+- PageBuilder: اصلاح متن‌های فارسی (رفع mojibake)، اعمال RTL (`dir="rtl"` + `direction: rtl` در canvas) و هم‌راستاسازی استایل با retro theme
+- Smoke test: افزودن تست سبک برای جلوگیری از رگرسیون PageBuilder در [frontend/src/smoke/pagebuilder-load.test.tsx](frontend/src/smoke/pagebuilder-load.test.tsx)
 
 ### تأییدهای سریع محلی
 - `./check-frontend-headers.ps1` → OK (ETag + security headers present)
 - Playwright E2E: 10/10 پاس (طبق آخرین اجرای ثبت‌شده در گفتگو)
 - `pip-audit` برای `backend/requirements.txt`: بدون آسیب‌پذیری شناخته‌شده (طبق آخرین اجرای ثبت‌شده در گفتگو)
 - `npm audit`: 0 vulnerability (طبق آخرین اجرای ثبت‌شده در گفتگو)
+- Smoke: `npm run test -- src/smoke/navigation.test.tsx src/smoke/pagebuilder-load.test.tsx` → OK
 
 ### اقدام باقی‌مانده
 - فقط عملیات GitHub: ساخت/باز کردن PR و Merge به default branch تا Security alerts روی `main` به‌روزرسانی شوند.
