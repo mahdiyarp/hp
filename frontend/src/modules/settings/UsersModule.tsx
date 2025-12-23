@@ -200,6 +200,8 @@ export default function UsersModule(): JSX.Element {
   const [userPerms, setUserPerms] = useState<Record<number, Record<number, boolean>>>({})
   const [orgFeatures, setOrgFeatures] = useState<OrgFeatureInfo | null>(null)
   const [userNfts, setUserNfts] = useState<UserNftAsset[]>([])
+  const [orgFeaturesError, setOrgFeaturesError] = useState<string | null>(null)
+  const [userNftsError, setUserNftsError] = useState<string | null>(null)
   const [smsSettings, setSmsSettings] = useState<SmsSettingsPayload>({
     provider: 'sms.ir',
     api_key: '',
@@ -362,13 +364,21 @@ export default function UsersModule(): JSX.Element {
         setActivities(a)
       } catch (e) {}
       try {
+        setOrgFeaturesError(null)
         const org = await apiGet<OrgFeatureInfo>('/api/org/features')
         setOrgFeatures(org)
-      } catch (e) {}
+      } catch (e) {
+        setOrgFeatures(null)
+        setOrgFeaturesError('دریافت ویژگی‌های NFT سازمان ناموفق بود. لطفاً لاگ‌های بک‌اند را بررسی کنید.')
+      }
       try {
+        setUserNftsError(null)
         const nftItems = await apiGet<UserNftAsset[]>('/api/users/me/nfts')
         setUserNfts(Array.isArray(nftItems) ? nftItems : [])
-      } catch (e) {}
+      } catch (e) {
+        setUserNfts([])
+        setUserNftsError('دریافت دارایی‌های NFT کاربر ناموفق بود. لطفاً لاگ‌های بک‌اند را بررسی کنید.')
+      }
     } catch (e) {
       setError('بارگذاری ماژول کاربران با مشکل مواجه شد')
     } finally {
@@ -864,21 +874,24 @@ export default function UsersModule(): JSX.Element {
             </div>
           ))}
         </div>
-        {orgFeatures ? (
+        {true ? (
           <div className={`${retroPanel} p-4 space-y-3`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className={`${retroHeading} text-base text-[#1f2e3b]`}>ویژگی‌های فعال NFT</p>
+                <p className={`${retroHeading} text-base text-[var(--retro-table-header-text)]`}>
+                  ویژگی‌های فعال NFT
+                </p>
                 <p className={`${retroMuted} text-xs`}>
                   این لیست بر اساس دارایی‌های NFT سازمان ساخته می‌شود.
                 </p>
               </div>
               <span className={retroBadge}>
-                NFT فعال · {formatNumberFa(orgFeatures.nft_count)}
+                NFT فعال · {formatNumberFa(orgFeatures?.nft_count ?? 0)}
               </span>
             </div>
+            {orgFeaturesError ? <p className={`${retroMuted} text-xs`}>{orgFeaturesError}</p> : null}
             <div className="flex flex-wrap gap-2">
-              {(orgFeatures.features ?? []).map((feature) => (
+              {(orgFeatures?.features ?? []).map((feature) => (
                 <span
                   key={feature}
                   className="text-xs px-3 py-1 rounded-full border border-[var(--retro-border)] bg-[var(--retro-panel-bg)]"
@@ -886,19 +899,19 @@ export default function UsersModule(): JSX.Element {
                   {feature}
                 </span>
               ))}
-              {(!orgFeatures.features || orgFeatures.features.length === 0) && (
+              {(!orgFeatures?.features || orgFeatures.features.length === 0) && (
                 <span className={retroMuted}>هیچ ویژگی فعالی گزارش نشده است.</span>
               )}
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
               {ORG_FEATURE_FLAGS.map((flag) => {
-                const enabled = !!orgFeatures[flag.key]
+                const enabled = !!orgFeatures?.[flag.key]
                 return (
                   <div
                     key={flag.key}
                     className={`${
                       enabled
-                        ? 'bg-[#1f2e3b] text-white border-[#1f2e3b]'
+                        ? 'bg-[var(--retro-button-bg)] text-[var(--retro-button-text)] border-[var(--retro-button-border)]'
                         : 'bg-[var(--retro-panel-bg)] text-[var(--retro-muted-text)] border-[var(--retro-border)]'
                     } border rounded-md px-3 py-2 flex flex-col gap-1 transition`}
                   >
@@ -913,51 +926,58 @@ export default function UsersModule(): JSX.Element {
             </div>
           </div>
         ) : null}
-        {userNfts.length > 0 ? (
+        {true ? (
           <div className={`${retroPanel} p-4 space-y-2`}>
             <div className="flex items-center justify-between">
-              <p className={`${retroHeading} text-base text-[#1f2e3b]`}>دارایی‌های NFT شما</p>
+              <p className={`${retroHeading} text-base text-[var(--retro-table-header-text)]`}>
+                دارایی‌های NFT شما
+              </p>
               <span className={`${retroBadge}`}>توکن · {formatNumberFa(userNfts.length)}</span>
             </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className={retroTableHeader}>
-                  <th>توکن</th>
-                  <th>زنجیره</th>
-                  <th>قرارداد</th>
-                  <th>وضعیت</th>
-                  <th>ویژگی‌ها</th>
-                </tr>
-              </thead>
-              <tbody>
-                {userNfts.map((asset) => {
-                  const featureList = Array.isArray(asset.metadata?.features)
-                    ? asset.metadata?.features
-                    : []
-                  return (
-                    <tr key={asset.token_id}>
-                      <td className="font-mono text-[11px]">{asset.token_id}</td>
-                      <td>{asset.chain ?? '—'}</td>
-                      <td className="font-mono text-[11px]">{asset.contract_address ?? '—'}</td>
-                      <td>{asset.is_active ? 'فعال' : 'غیرفعال'}</td>
-                      <td>
-                        {featureList.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {featureList.map((f: string) => (
-                              <span key={f} className="px-2 py-0.5 border rounded-full text-[10px]">
-                                {f}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className={retroMuted}>بدون ویژگی</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            {userNftsError ? <p className={`${retroMuted} text-xs`}>{userNftsError}</p> : null}
+            {userNfts.length === 0 ? (
+              <p className={retroMuted}>هیچ دارایی NFT برای این کاربر ثبت نشده است.</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className={retroTableHeader}>
+                    <th>توکن</th>
+                    <th>زنجیره</th>
+                    <th>قرارداد</th>
+                    <th>وضعیت</th>
+                    <th>ویژگی‌ها</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userNfts.map((asset) => {
+                    const featureList = Array.isArray(asset.metadata?.features)
+                      ? asset.metadata?.features
+                      : []
+                    return (
+                      <tr key={asset.token_id}>
+                        <td className="font-mono text-[11px]">{asset.token_id}</td>
+                        <td>{asset.chain ?? '—'}</td>
+                        <td className="font-mono text-[11px]">{asset.contract_address ?? '—'}</td>
+                        <td>{asset.is_active ? 'فعال' : 'غیرفعال'}</td>
+                        <td>
+                          {featureList.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {featureList.map((f: string) => (
+                                <span key={f} className="px-2 py-0.5 border rounded-full text-[10px]">
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className={retroMuted}>بدون ویژگی</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         ) : null}
         <div className="space-y-2">

@@ -182,6 +182,7 @@ export const modules: ModuleDefinition[] = [
     component: DevConsole,
     badge: 'DEV',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'page-builder',
@@ -190,6 +191,7 @@ export const modules: ModuleDefinition[] = [
     component: PageBuilderModule,
     badge: 'BUILDER',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'dev-assistant',
@@ -198,6 +200,7 @@ export const modules: ModuleDefinition[] = [
     component: AssistantModule,
     badge: 'ASSIST',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'sms-panel',
@@ -206,6 +209,7 @@ export const modules: ModuleDefinition[] = [
     component: SmsPanel,
     badge: 'SMS',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'papi-panel',
@@ -214,6 +218,7 @@ export const modules: ModuleDefinition[] = [
     component: PApiPanel,
     badge: 'PAPI',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
   {
     id: 'audit',
@@ -222,5 +227,6 @@ export const modules: ModuleDefinition[] = [
     component: AuditModule,
     badge: 'AUDIT',
     feature: 'settings',
+    requiredPermissions: ['settings:manage'],
   },
 ]
