@@ -192,7 +192,7 @@ npm --prefix frontend run -s test:e2e
 
 - تست‌ها:
   - ناوبری: `frontend/e2e/navigation.spec.ts`
-  - دستیار توسعه‌دهنده: `frontend/e2e/dev-assistant.spec.ts` (با `BACKEND_URL` در غیر این‌صورت skip)
+  - دستیار توسعه‌دهنده: `frontend/e2e/dev-assistant.spec.ts` (به‌صورت پیش‌فرض localhost؛ فقط وقتی بک‌اند واقعاً در دسترس/سالم نباشد skip می‌شود)
   - چیدمان RTL و سایدبار راست: `frontend/e2e/layout-rtl.spec.ts`
   - نقش‌ها/مجوزها (Users): `frontend/e2e/users-permissions.spec.ts`
   - گزارش فعالیت و خروجی CSV: `frontend/e2e/users-activity.spec.ts`

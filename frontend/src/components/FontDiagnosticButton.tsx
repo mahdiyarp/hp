@@ -28,7 +28,8 @@ export default function FontDiagnosticButton() {
 
         const txt = el.textContent || ''
 
-        if (/?|ط·آ·ط¢آ¸ط·آ¸أ¢â€ڑآ¬|ط·آ·ط¢آ·ط·آ¸أ¢â€ڑآ¬|\ufffd/.test(txt)) results.corruption = true
+  // Detect common mojibake/replacement-char patterns without flagging normal Persian text.
+  if (/(\ufffd|أ¢â€|â‚¬آ|ط·آ|طآ)/.test(txt)) results.corruption = true
 
         const dir = (el as HTMLElement).dir || window.getComputedStyle(el).direction
 
@@ -37,23 +38,10 @@ export default function FontDiagnosticButton() {
 
       const fonts = Array.from(results.fonts).join(', ')
 
-      let color = 'green'
-
-      if (results.corruption) color = 'red'
-      else if (!/Vazirmatn|Yekan|IRANSansX/i.test(fonts)) color = 'yellow'
-
       const statusEl = document.getElementById('font-diag-status')
 
       if (statusEl) {
-        statusEl.textContent = `ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ ط·آ·ط¹آ¾: ${fonts} | RTL: ${results.rtl ? 'OK' : 'MISSING'} | corruption: ${results.corruption}`
-
-        statusEl.style.background = color
-
-        statusEl.style.color = '#fff'
-
-        statusEl.style.padding = '6px 8px'
-
-        statusEl.style.borderRadius = '4px'
+        statusEl.textContent = `فونت‌ها: ${fonts || '(نامشخص)'} | RTL: ${results.rtl ? 'OK' : 'MISSING'} | خرابی متن: ${results.corruption ? 'YES' : 'NO'}`
       }
     } catch (e) {
       console.error('diag fail', e)
@@ -61,13 +49,12 @@ export default function FontDiagnosticButton() {
   }
 
   return (
-    <div style={{ display: 'inline-block', marginLeft: 8 }}>
-      <button onClick={runDiag} style={{ padding: '6px 10px' }}>
-        ?? ط·آ·ط¹آ¾ط·آ·ط¢آ³ط·آ·ط¹آ¾ ط·آ¸ط¸آ¾ط·آ¸ط«â€ ط·آ¸أ¢â‚¬آ ط·آ·ط¹آ¾ ط·آ¸ط«â€ 
-        ط·آ¹أ¢â‚¬آ ط·آ·ط¢آ§ط·آ¸ط¢آ¾
+    <div className="inline-flex items-center gap-2">
+      <button type="button" onClick={runDiag} className="hp-btn">
+        بررسی فونت و RTL
       </button>
 
-      <span id="font-diag-status" style={{ marginLeft: 8 }}></span>
+      <span id="font-diag-status" className="text-xs text-[var(--retro-muted-text)]"></span>
     </div>
   )
 }
