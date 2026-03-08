@@ -11,6 +11,7 @@
 - Playbook Merge
 - Merge Status یک صفحه ای
 - Post-Merge Verify (5 تست حیاتی)
+- One-Click Release Flow (60s)
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 
@@ -20,3 +21,4 @@
 2. برای انتشار، `MERGE_PLAYBOOK_FA_2026_03_08.md` را قدم به قدم اجرا کن.
 3. وضعیت اجرای Merge را در `MERGE_STATUS_FA.md` تیک بزن.
 4. برای بهره برداری روزانه، `OPERATOR_FINAL_HANDOFF_FA_2026_03_08.md` را مبنا قرار بده.
+5. مسیر خیلی سریع را در `ONE_CLICK_RELEASE_FLOW_FA.md` ببین.
