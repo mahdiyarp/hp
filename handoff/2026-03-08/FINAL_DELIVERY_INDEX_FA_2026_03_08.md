@@ -30,6 +30,7 @@
 - `GO_LIVE_CHECKLIST_FA_2026_03_08.md`
 - `RELEASE_ANNOUNCEMENT_FA_2026_03_08.md`
 - `MERGE_PLAYBOOK_FA_2026_03_08.md`
+- `MERGE_STATUS_FA.md`
 
 ## اسناد اپراتور (بدون کدنویسی)
 
@@ -56,6 +57,7 @@
 1. PR branch روی remote به‌روز باشد.
 2. Reviewer checklist مرور شود.
 3. Go-Live checklist اجرا شود.
-4. Merge انجام شود.
+4. `MERGE_STATUS_FA.md` کامل تیک بخورد.
+5. Merge انجام شود.
 
 این بسته آماده تحویل و انتشار است.

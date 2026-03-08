@@ -9,6 +9,7 @@
 - هندآف اپراتور بدون کدنویسی
 - چک لیست Go-Live
 - Playbook Merge
+- Merge Status یک صفحه ای
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 
@@ -16,4 +17,5 @@
 
 1. `FINAL_DELIVERY_INDEX_FA_2026_03_08.md` را باز کن.
 2. برای انتشار، `MERGE_PLAYBOOK_FA_2026_03_08.md` را قدم به قدم اجرا کن.
-3. برای بهره برداری روزانه، `OPERATOR_FINAL_HANDOFF_FA_2026_03_08.md` را مبنا قرار بده.
+3. وضعیت اجرای Merge را در `MERGE_STATUS_FA.md` تیک بزن.
+4. برای بهره برداری روزانه، `OPERATOR_FINAL_HANDOFF_FA_2026_03_08.md` را مبنا قرار بده.
