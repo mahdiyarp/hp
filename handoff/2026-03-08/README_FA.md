@@ -15,6 +15,7 @@
 - Release Done Record
 - Handoff Manifest
 - Manifest Verification Report
+- Handoff Snapshot (file inventory)
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 

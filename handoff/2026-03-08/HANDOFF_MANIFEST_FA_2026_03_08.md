@@ -5,13 +5,15 @@
 ## Release Metadata
 
 - branch: `copilot/readiness-ui-hardening-publish`
-- head commit: `eeb74b7b`
+- verification baseline commit: `0fad7260`
 - PR link: `https://github.com/mahdiyarp/hp/pull/new/copilot/readiness-ui-hardening-publish`
 
-## Required Files (16)
+## Required Files (18)
 
 - `README_FA.md`
 - `HANDOFF_MANIFEST_FA_2026_03_08.md`
+- `MANIFEST_VERIFICATION_FA.md`
+- `HANDOFF_SNAPSHOT_2026_03_08.txt`
 - `FINAL_DELIVERY_INDEX_FA_2026_03_08.md`
 - `MISSION_COMPLETION_FINAL_2026_03_08_FA.md`
 - `EXECUTIVE_STATUS_2026_03_08_FA.md`
@@ -29,7 +31,7 @@
 
 ## Integrity Check
 
-- [ ] همه 15 فایل بالا وجود دارند.
+- [ ] همه 18 فایل بالا وجود دارند.
 - [ ] `FINAL_DELIVERY_INDEX_FA_2026_03_08.md` با فهرست بالا همسان است.
 - [ ] `README_FA.md` مسیر شروع سریع را به One-Click و Merge/Post-Merge ارجاع می‌دهد.
 - [ ] قبل از بستن انتشار، `RELEASE_DONE_FA.md` تکمیل شده است.

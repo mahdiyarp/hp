@@ -36,6 +36,7 @@
 - `RELEASE_DONE_FA.md`
 - `HANDOFF_MANIFEST_FA_2026_03_08.md`
 - `MANIFEST_VERIFICATION_FA.md`
+- `HANDOFF_SNAPSHOT_2026_03_08.txt`
 
 ## اسناد اپراتور (بدون کدنویسی)
 
