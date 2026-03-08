@@ -8,9 +8,10 @@
 - head commit: `eeb74b7b`
 - PR link: `https://github.com/mahdiyarp/hp/pull/new/copilot/readiness-ui-hardening-publish`
 
-## Required Files (15)
+## Required Files (16)
 
 - `README_FA.md`
+- `HANDOFF_MANIFEST_FA_2026_03_08.md`
 - `FINAL_DELIVERY_INDEX_FA_2026_03_08.md`
 - `MISSION_COMPLETION_FINAL_2026_03_08_FA.md`
 - `EXECUTIVE_STATUS_2026_03_08_FA.md`

@@ -14,6 +14,7 @@
 - One-Click Release Flow (60s)
 - Release Done Record
 - Handoff Manifest
+- Manifest Verification Report
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 
