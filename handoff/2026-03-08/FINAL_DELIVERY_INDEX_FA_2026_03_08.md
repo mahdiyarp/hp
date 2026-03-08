@@ -31,6 +31,7 @@
 - `RELEASE_ANNOUNCEMENT_FA_2026_03_08.md`
 - `MERGE_PLAYBOOK_FA_2026_03_08.md`
 - `MERGE_STATUS_FA.md`
+- `POST_MERGE_VERIFY_FA.md`
 
 ## اسناد اپراتور (بدون کدنویسی)
 

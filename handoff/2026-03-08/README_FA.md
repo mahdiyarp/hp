@@ -10,6 +10,7 @@
 - چک لیست Go-Live
 - Playbook Merge
 - Merge Status یک صفحه ای
+- Post-Merge Verify (5 تست حیاتی)
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 
