@@ -12,6 +12,7 @@
 - Merge Status یک صفحه ای
 - Post-Merge Verify (5 تست حیاتی)
 - One-Click Release Flow (60s)
+- Release Done Record
 - متن آماده PR و Reviewer Checklist
 - اعلان انتشار
 

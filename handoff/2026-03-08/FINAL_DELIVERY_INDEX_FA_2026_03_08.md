@@ -33,6 +33,7 @@
 - `MERGE_STATUS_FA.md`
 - `POST_MERGE_VERIFY_FA.md`
 - `ONE_CLICK_RELEASE_FLOW_FA.md`
+- `RELEASE_DONE_FA.md`
 
 ## اسناد اپراتور (بدون کدنویسی)
 
