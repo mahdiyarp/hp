@@ -1,0 +1,13 @@
+feat(developer): wire operator readiness end-to-end in /developer
+
+- add operator readiness query wiring from core queries to card props
+- render readiness summary, next action, and readiness score in smart control center
+- normalize readiness score (round + clamp to 0..100) for robust UI display
+- add three-state readiness tone mapping (green/yellow/red)
+- refresh readiness/mission/status after key operator actions to reduce UI staleness
+- add integration and unit coverage for readiness pass-through, rendering, tone and normalization
+- sync operator docs and changelog with readiness UX semantics
+
+Validation:
+- npx vitest run src/app/developer
+- 49 passed files, 223 passed tests
