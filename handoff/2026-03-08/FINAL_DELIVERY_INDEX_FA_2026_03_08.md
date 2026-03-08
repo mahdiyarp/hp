@@ -34,6 +34,7 @@
 - `POST_MERGE_VERIFY_FA.md`
 - `ONE_CLICK_RELEASE_FLOW_FA.md`
 - `RELEASE_DONE_FA.md`
+- `HANDOFF_MANIFEST_FA_2026_03_08.md`
 
 ## اسناد اپراتور (بدون کدنویسی)
 
