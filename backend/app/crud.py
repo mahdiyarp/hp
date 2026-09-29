@@ -2934,3 +2934,48 @@ def finalize_sale_order(session: Session, so_id: int, client_time: Optional[date
         except Exception:
             pass
         return so
+
+
+# ==================== Demo lifecycle ====================
+
+def cleanup_demo_environment(session: Session) -> bool:
+    """Reset all mutable application data in the isolated demo deployment."""
+    import os
+    from sqlalchemy import inspect, text
+
+    enabled = str(os.getenv("DEMO_MODE", "false")).strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+    if not enabled:
+        return False
+
+    bind = session.get_bind()
+    inspector = inspect(bind)
+    protected = {
+        "users",
+        "roles",
+        "permissions",
+        "role_permissions",
+        "alembic_version",
+    }
+    tables = [name for name in inspector.get_table_names() if name not in protected]
+    if not tables:
+        return True
+
+    try:
+        if bind.dialect.name == "postgresql":
+            quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in tables)
+            session.execute(text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE"))
+        elif bind.dialect.name == "sqlite":
+            session.execute(text("PRAGMA foreign_keys=OFF"))
+            for name in tables:
+                safe = name.replace('"', '""')
+                session.execute(text(f'DELETE FROM "{safe}"'))
+            session.execute(text("PRAGMA foreign_keys=ON"))
+        else:
+            raise RuntimeError(f"Unsupported demo reset database dialect: {bind.dialect.name}")
+        session.commit()
+        return True
+    except Exception:
+        session.rollback()
+        raise
