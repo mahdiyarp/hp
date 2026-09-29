@@ -91,7 +91,8 @@ def seed():
                 full_name='Administrator',
                 hashed_password=get_password_hash('admin'),
                 role='Admin',
-                is_active=True
+                is_active=True,
+                is_demo=True
             )
             session.add(admin)
             session.commit()
@@ -115,7 +116,8 @@ def seed():
                 hashed_password=get_password_hash('09123506545'),
                 role='Admin',
                 role_id=role_id,
-                is_active=True
+                is_active=True,
+                is_demo=True
             )
             session.add(developer)
             session.commit()
