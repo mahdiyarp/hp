@@ -45,6 +45,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     refresh_token_hash = Column(String(512), nullable=True)
     assistant_enabled = Column(Boolean, nullable=False, default=False)
+    # Disposable demo account marker; demo deployments reset mutable data on logout.
+    is_demo = Column(Boolean, nullable=False, default=False, index=True)
     otp_secret = Column(String(64), nullable=True)
     otp_enabled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
