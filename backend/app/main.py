@@ -1971,7 +1971,7 @@ def logout(current_user = Depends(get_current_user), session: Session = Depends(
         try:
             demo_reset = crud.cleanup_demo_environment(session)
         except Exception as exc:
-            logger.exception("demo cleanup failed: %s", exc)
+            app.logger.exception("demo cleanup failed: %s", exc)
             raise HTTPException(status_code=500, detail='پاک‌سازی دمو انجام نشد')
     return {'ok': True, 'demo_reset': demo_reset}
 
