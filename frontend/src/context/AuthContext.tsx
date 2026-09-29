@@ -163,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .catch(() => null)
       .finally(() => {
         clearTokens()
+        try { localStorage.removeItem('hesabpak_user_id') } catch {}
         setUser(null)
         setModules([])
         setPermissions([])
