@@ -2965,12 +2965,13 @@ def cleanup_demo_environment(session: Session) -> bool:
     try:
         if bind.dialect.name == "postgresql":
             quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in tables)
-            session.execute(text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE"))
+            session.execute(text(f"TRUNCATE TABLE {quoted} RESTART IDENTITY"))
         elif bind.dialect.name == "sqlite":
             session.execute(text("PRAGMA foreign_keys=OFF"))
             for name in tables:
                 safe = name.replace('"', '""')
                 session.execute(text(f'DELETE FROM "{safe}"'))
+            session.commit()
             session.execute(text("PRAGMA foreign_keys=ON"))
         else:
             raise RuntimeError(f"Unsupported demo reset database dialect: {bind.dialect.name}")
