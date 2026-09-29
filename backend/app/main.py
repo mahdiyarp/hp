@@ -1966,7 +1966,14 @@ def refresh_token(payload: dict, session: Session = Depends(db.get_db)):
 @app.post('/api/auth/logout')
 def logout(current_user = Depends(get_current_user), session: Session = Depends(db.get_db)):
     crud.revoke_refresh_token(session, current_user)
-    return {'ok': True}
+    demo_reset = False
+    if getattr(current_user, 'is_demo', False):
+        try:
+            demo_reset = crud.cleanup_demo_environment(session)
+        except Exception as exc:
+            logger.exception("demo cleanup failed: %s", exc)
+            raise HTTPException(status_code=500, detail='پاک‌سازی دمو انجام نشد')
+    return {'ok': True, 'demo_reset': demo_reset}
 
 
 @app.post('/api/auth/otp/setup', response_model=OTPSetupResponse)
